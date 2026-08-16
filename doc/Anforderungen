@@ -1,0 +1,398 @@
+# Anforderungen: Eigene Zeiterfassung mit KI-Unterstützung
+
+**Autor:** Andreas Behrens / ChatGPT (konsolidierte Fassung)  
+**Version:** 10  
+**Erstellungsdatum:** 2026-08-16  
+**Dokumentstatus:** Konsolidierte finale Anforderungen für die MVP-Entwicklung (Version 10)  
+**Ziel:** Entwicklung eines eigenen, mandantenfähigen Zeiterfassungsdienstes als Alternative zur derzeit genutzten kostenlosen Clockify-Version
+
+---
+
+## Änderungshistorie (Changelog)
+
+| Version | Datum | Beschreibung der Änderungen |
+| :--- | :--- | :--- |
+| **v10** | 2026-08-16 | Stammdaten-Lebenszyklus konkretisiert: Editierbarkeit von Auftraggebern (Kunden), Projekten, Aufgaben und Mitarbeitern; echtes Löschen für referenzfreie Entitäten (ohne Zeiteinträge/Forecasts) vs. Archivierung/Deaktivierung bei vorhandenen Buchungen. |
+| **v9** | 2026-08-16 | Präzisierung der Entitätenhierarchie: Mandant (Tenant), Auftraggeber (Kunde), Projekt, Mitarbeiter. Mehrmandantenfähigkeit für Nutzer mit Mandantenauswahl beim Login integriert. |
+| **v8** | 2026-08-16 | Metadaten (Autor, Version, Erstellungsdatum) im Dokumentenkopf fest verankert. |
+| **v7** | 2026-08-16 | Nachtragslogik für laufenden Monat, Projektzuordnungen von Mitarbeitenden durch Admins/Projektleiter, aggregierte Forecast-Tabelle auf Projektebene mit Umsatzwerten. |
+| **v6** | 2026-08-16 | Festpreis-Forecast, Meilensteine, individuelle Arbeitskalender, Über-/Unterstunden, Mehrsprachigkeit (DE/EN), API-Dokumentation. |
+
+---
+
+## 1. Ausgangssituation
+
+Aktuell wird die kostenlose Version von Clockify für die Zeiterfassung genutzt. Aufgrund der Preismodelländerung bei Clockify soll ein eigener, auf die tatsächlichen Anforderungen fokussierter Dienst entwickelt werden. Für die initiale Version werden die Funktionen des Clockify-Basic-Niveaus zugrunde gelegt; KI-Funktionen werden bewusst erst nach der Basisversion ergänzt.
+
+---
+
+## 2. Rahmenbedingungen
+
+- **Nutzerzahl initial:** 20 Mitarbeitende
+- **Mandantenfähigkeit:** ist von Beginn an vorzusehen (Multi-Tenant-Architektur), inklusive Unterstützung von Nutzern, die mehreren Mandanten angehören
+- **Plattform:** responsive Web-Anwendung, die auch auf dem Smartphone (Browser, mobil-optimiert) nutzbar sein muss
+- **Hosting:** verpflichtend in der EU (DSGVO-konform)
+- **Aufbewahrungsfrist:** Zeiterfassungs- und Audit-Daten müssen bis zu 10 Jahre aufbewahrt werden können
+
+---
+
+## 3. Produktziel
+
+Der Dienst soll:
+
+- Arbeitszeiten pro Mandant, Mitarbeiter, Auftraggeber (Kunde), Projekt und Aufgabe erfassen;
+- manuelle und laufende Zeiterfassung (Timer sowie Start-/Endzeit) unterstützen;
+- Stammdaten (Auftraggeber, Projekte, Aufgaben, Mitarbeiter) flexibel editierbar halten und ungenutzte Daten löschbar machen;
+- projektspezifisch konfigurierbare Pflichtfelder und Freigabeprozesse ermöglichen;
+- Änderungen nachvollziehbar protokollieren (Audit-Log), auch nach Freigabe;
+- historische Clockify-Daten inklusive 2025 und laufendem Jahr übernehmen;
+- Daten über eine REST-API für einen beliebigen, frei wählbaren Zeitraum bereitstellen;
+- die Anbindung an Power Automate zur Übertragung nach Excel ermöglichen;
+- Berichte zunächst nicht selbst bauen, sondern die Datenbasis für externe Tools per API bereitstellen.
+
+---
+
+## 4. Authentifizierung, Mandantenauswahl und Nutzerverwaltung
+
+### 4.1 Authentifizierung & Login-Workflow
+- Anmeldung erfolgt über eine globale E-Mail-Adresse und ein persönliches Passwort.
+- Neue Nutzer werden ausschließlich über eine Einladung aus der Applikation heraus zu einem oder mehreren Mandanten hinzugefügt (kein offener Self-Signup).
+- Einladungsprozess umfasst E-Mail-Versand, Einladungslink, Ablaufzeit und Erstpasswortvergabe bzw. Bestätigung des Mandantenbeitritts.
+- Passwort-Reset-Funktion ist mandantenübergreifend für das Benutzerkonto vorzusehen.
+
+### 4.2 Mandantenauswahl (Tenant Switching)
+- **Mandantenzuordnung von Mitarbeitenden:** Ein Mitarbeiter (Nutzerkonto) kann einem oder mehreren Mandanten (Organisationen/Firmen) zugeordnet sein.
+- **Mandantenauswahl beim Login:**
+  - Ist der Benutzer genau einem Mandanten zugeordnet, wird er direkt in dessen Arbeitsumgebung eingeloggt.
+  - Ist der Benutzer mehreren Mandanten zugeordnet, erscheint unmittelbar nach erfolgreicher Authentifizierung eine **Mandantenauswahl (Tenant Selector)**.
+  - Ein Mandantenwechsel ist auch während einer laufenden Sitzung über das Benutzerprofil/die Navigationsleiste ohne Neuanmeldung möglich.
+- **Sitzungskontext:** Alle erfassten Daten, Projektlisten, Stundensätze und Einstellungen werden strikt im Kontext des aktuell ausgewählten Mandanten geladen und verarbeitet.
+
+### 4.3 Berechtigungsrollen je Mandant
+- Ein Benutzer kann in verschiedenen Mandanten unterschiedliche Rollen und Berechtigungen besitzen:
+  - **Administrator:** Voller Zugriff auf Stammdaten, interne Kostensätze, Margen, Nutzer- und Mandantenverwaltung sowie Löschberechtigungen.
+  - **Projektverantwortlicher:** Verwaltung zugewiesener Projekte, Teamzuordnung, Freigaben, Aufgabenpflege, Forecasts inkl. Umsätze.
+  - **Mitarbeitender:** Erfassung von Zeiten auf zugeordnete Projekte und allgemeiner Arbeitszeit.
+
+---
+
+## 5. Mandantenfähigkeit und Datenisolierung
+
+- Jede Organisation (Mandant) verwaltet eigene Auftraggeber (Kunden), Projekte, Zeiteinträge, Stundensätze und Einstellungen vollständig isoliert.
+- Datenbankseitige und anwendungsseitige Trennung stellt sicher, dass keinerlei Daten zwischen Mandanten sichtbar oder vermischbar sind.
+- API-Zugänge sind dediziert je Mandant zu vergeben und greifen ausschließlich auf die Daten des jeweiligen Mandanten zu.
+- Die Architektur erlaubt das Hinzufügen weiterer Mandanten und die organisationsübergreifende Nutzerzugehörigkeit ohne strukturellen Umbau.
+
+---
+
+## 6. Fachliche Entitätenhierarchie und Stammdatenverwaltung
+
+### 6.1 Kernhierarchie
+1. **Mandant (Tenant / Organisation):** Oberste juristische bzw. organisatorische Einheit (z. B. Insight Arcs GmbH).
+2. **Auftraggeber (Kunde / Client):** Dem Mandanten zugeordneter externer oder interner Kunde / Rechnungsempfänger.
+3. **Projekt:** Dem Auftraggeber zugeordnetes Vorhaben mit Budget, Abrechnungsmodell (T&M oder Festpreis) und Konfiguration.
+4. **Aufgabe & Tätigkeit (Task):** Spezifische Arbeitspakete oder Tätigkeitskategorien innerhalb eines Projekts.
+5. **Mitarbeiter (User):** Dem Mandanten zugeordnete Person, die einem oder mehreren konkreten Projekten mit Gültigkeitszeitraum zugewiesen werden kann.
+
+### 6.2 Editierbarkeit von Stammdaten
+- **Auftraggeber (Kunden):** Name, Kontaktdaten, Adressdaten, Notizen und Status sind durch Administratoren jederzeit änderbar.
+- **Projekte:** Projektname, Auftraggeberzuordnung, Beschreibungen, Abrechnungsmodell (T&M / Festpreis), Budgets, Stundensätze, Pflichtfeldkonfigurationen und Freigabeeinstellungen sind durch Administratoren und Projektverantwortliche editierbar.
+- **Aufgaben & Tätigkeiten:** Bezeichnungen, Beschreibungen und Schätzungen sind durch Administratoren und Projektverantwortliche editierbar.
+- **Mitarbeiter:** Profildaten, Rollenzuordnungen, individuelle Stundensätze (Kostensätze/Abrechnungssätze), Soll-Arbeitszeiten und Arbeitskalender sind durch Administratoren editierbar.
+
+### 6.3 Lösch- und Deaktivierungsregeln (Referenzintegrität)
+- **Echtes Löschen (Hard Delete):**
+  - **Projekte, Mitarbeiter, Auftraggeber sowie Aufgaben & Tätigkeiten**, für die noch **keinerlei verknüpfte Einträge** (keine Zeiteinträge, keine Forecast-Einträge, keine Audit-Logs) im System existieren, können vollständig und unwiderruflich gelöscht werden.
+  - Dies verhindert Datenmüll durch versehentlich angelegte oder nicht genutzte Test- und Fehleinträge.
+- **Archivierung & Deaktivierung (Soft Delete / Deactivation bei vorhandenen Buchungen):**
+  - Sobald für eine Entität (Projekt, Mitarbeiter, Auftraggeber, Aufgabe) mindestens ein Zeiteintrag oder Forecast-Eintrag existiert, ist das **physische Löschen blockiert**, um die historische Nachvollziehbarkeit, Berichtskonsistenz und die 10-jährige Aufbewahrungspflicht zu garantieren.
+  - Stattdessen werden diese Entitäten **archiviert bzw. deaktiviert**:
+    - *Archivierte Projekte / Aufgaben:* Erscheinen nicht mehr in der aktiven Auswahlliste bei der Zeiterfassung, bleiben aber in historischen Reports, Exporten und Revisionsberichten vollständig erhalten.
+    - *Deaktivierte Mitarbeiter:* Werden aus dem Mandanten entfernt oder deaktiviert (kein Login / keine Buchung mehr möglich), historische Buchungen und Stundensatzverläufe bleiben unverändert erhalten.
+    - *Archivierte Auftraggeber:* Können nicht mehr für neue Projekte gewählt werden, bestehende Projekte bleiben unverändert.
+
+### 6.4 Projektzuordnung von Mitarbeitenden
+- Administratoren sowie die jeweiligen Projektverantwortlichen können Mitarbeitende Projekten zuordnen und Zuordnungen beenden.
+- Mitarbeitende sehen und buchen nur auf Projekte, denen sie im aktiven Mandanten zum Buchungszeitpunkt aktiv zugeordnet sind.
+
+---
+
+## 7. Zeiterfassung
+
+- Timer-Funktion (Start, Pause, Fortsetzen, Stopp).
+- Manuelle Zeiterfassung sowohl über reine Dauer als auch über Start- und Endzeit.
+- Pausen können erfasst werden, sind aber nicht zwingend verpflichtend (projektabhängig konfigurierbar).
+- Zuordnung zu Mandant (über aktiven Kontext), Auftraggeber (Kunde), Projekt und optionaler Aufgabe.
+- Freitextbeschreibung der Tätigkeit.
+- Kennzeichnung als abrechenbar oder nicht abrechenbar.
+- Favorisieren häufig verwendeter Einträge.
+- Aufteilen eines bestehenden Zeiteintrags in mehrere Einträge.
+- Anzeige der Zeiten in Stunden/Minuten sowie im Dezimalformat.
+- Berechtigte Benutzer können Zeiten für andere Mitarbeitende erfassen.
+- Sammelbearbeitung mehrerer Zeiteinträge.
+- **Buchungsberechtigung:** Ein Zeiteintrag darf nur auf ein Projekt gebucht werden, dem der Mitarbeiter im gewählten Mandanten zum Buchungsdatum aktiv zugeordnet ist.
+
+---
+
+## 8. Freigabeprozess und Korrekturregeln
+
+- Freigaben sind nicht grundsätzlich verpflichtend, sondern je Projekt konfigurierbar (aktiviert/deaktiviert).
+- Wenn aktiviert: Administratoren und Projektverantwortliche können Zeiteinträge prüfen und freigeben.
+- **Nachträge und Korrekturen im laufenden Kalendermonat:**
+  - Mitarbeitende dürfen eigene Zeiteinträge für das Datum des laufenden Monats selbstständig anlegen, nachtragen, ändern und löschen.
+  - Auch freigegebene Zeiteinträge können nachträglich korrigiert werden.
+- **Korrekturen für abgeschlossene Kalendermonate:**
+  - Für abgeschlossene Kalendermonate ist die direkte Bearbeitung für reguläre Mitarbeitende gesperrt.
+  - Administratoren und Projektverantwortliche dürfen Einträge in abgeschlossenen Monaten weiterhin anlegen, korrigieren oder stornieren.
+- **Audit-Protokollierung:**
+  - Jede nachträgliche Korrektur eines freigegebenen Eintrags oder eines Eintrags in einem abgeschlossenen Monat wird vollständig protokolliert (wer, wann, welches Feld, alter Wert, neuer Wert, Grund optional).
+  - Der Status korrigierter Einträge bleibt eindeutig gekennzeichnet (z. B. „freigegeben, nachträglich korrigiert am ...").
+
+---
+
+## 9. Stundensätze, Kosten, Abrechnung und Budgets
+
+- Es werden drei fachlich getrennte Werte geführt:
+  - **Interner Kostensatz:** Kosten je Arbeitsstunde eines Mitarbeiters; ausschließlich für Administratoren sichtbar und nur durch diese verwaltbar.
+  - **Kunden-Abrechnungssatz:** Für Time-&-Material-Projekte gegenüber dem Auftraggeber verwendeter Satz je Arbeitsstunde; sichtbar für Administratoren und Projektverantwortliche.
+  - **Festpreis:** Vertraglich vereinbarter Umsatz eines Festpreisprojekts bzw. eines zugehörigen Teilbudgets oder Meilensteins.
+- Interne Kostensätze und Kunden-Abrechnungssätze können je Mitarbeiter, je fachlicher Mitarbeiterrolle (siehe Abschnitt 25) oder je Projekt hinterlegt werden.
+- Alle Sätze werden historisiert, damit vergangene Zeiteinträge, Forecast-Versionen, Kosten, Umsätze und Margen mit dem zum jeweiligen Zeitpunkt gültigen Satz ausgewertet werden können.
+- Für die Ermittlung eines Kunden-Abrechnungssatzes gilt die in Abschnitt 25 beschriebene erweiterte Satzhierarchie.
+- Projekte besitzen ein Abrechnungsmodell: **Time & Material** oder **Festpreis**.
+- Bei Time-&-Material-Projekten werden abrechenbare Beträge aus Dauer und dem gemäß Satzhierarchie gültigen Kunden-Abrechnungssatz berechnet.
+- Bei Festpreisprojekten wird der Umsatz nicht durch zusätzlich geplante oder erfasste Stunden erhöht. Zusätzlicher Aufwand beeinflusst die Kosten und damit die erwartete Marge.
+- Für Festpreisprojekte können zusätzlich ein Gesamtfestpreis sowie Teilbudgets, Meilensteine und/oder monatliche Umsatzverteilungen gepflegt werden.
+- Währung initial EUR.
+
+---
+
+## 10. Datenmigration aus Clockify
+
+- Zu übernehmende Daten: Auftraggeber (Kunden), Projekte, Nutzer, sowie Zeiteinträge aus 2025 und dem laufenden Jahr.
+- Ein anonymisierter Clockify-CSV-Export zur Vorbereitung der Importlogik ist wünschenswert, aber aktuell nicht zugesichert verfügbar.
+- Die Importlogik wird zunächst gegen die von Clockify öffentlich dokumentierten Standard-Exportformate (CSV) konzipiert und beim tatsächlichen Import gegen die realen Exportdateien validiert.
+- Der Import liefert eine Fehlerprüfung und einen Ergebnisbericht (importierte/übersprungene/fehlerhafte Datensätze).
+- Eine Duplikatprüfung beim Import ist vorzusehen, sofern eine eindeutige Kennung aus dem Export vorhanden ist.
+
+---
+
+## 11. Reports und Datenzugriff
+
+- Eigene, tief integrierte grafische Reporting-Oberflächen sind im MVP **nicht** vorgesehen; im Forecast-Bereich genügt eine filterbare tabellarische Übersicht (siehe Abschnitt 28).
+- Ein einfacher Export aller Felder für einen frei wählbaren Zeitraum über die Benutzeroberfläche muss verfügbar sein (z. B. als CSV/Excel-Download).
+- Weiterführende Auswertungen und Berichte erfolgen initial über externe Tools (z. B. Excel, Power BI), die über die API auf die Daten zugreifen.
+
+---
+
+## 12. API-Anforderungen
+
+### 12.1 Grundprinzip
+- Die API muss Daten für **jeden beliebigen, frei wählbaren Zeitraum** liefern können.
+- API-Abrufe erfolgen stets strikt im Kontext des jeweiligen Mandanten.
+- Power Automate wird als primärer, aber nicht einziger Konsument der API vorgesehen.
+
+### 12.2 Funktionsumfang
+- Abruf nach Zeitraum (`from`, `to`).
+- Filterung nach Mitarbeiter, Team, Auftraggeber, Projekt, Aufgabe und Abrechenbarkeit.
+- Filterung nach Freigabestatus.
+- Bereitstellung aggregierter Forecast- und Ist-Daten zur Speisung externer Reportings.
+- Pagination für größere Datenmengen und inkrementeller Abruf via `updatedAt`.
+
+### 12.3 Authentifizierung
+- Zugriff über dedizierten, mandantengebundenen API-Schlüssel bzw. Service-Account.
+- API-Zugänge können erstellt, eingesehen, eingeschränkt und widerrufen werden; alle Zugriffe werden protokolliert.
+
+### 12.4 Datenfelder je Zeiteintrag
+- Mandanten-ID, Zeiteintrags-ID, Mitarbeiter-ID/Name, Datum, Start-/Endzeit, Dauer (Minuten & Dezimalstunden), Pausenminuten, Auftraggeber, Projekt, Aufgabe, Beschreibung, abrechenbar, Stundensatz, Betrag, Freigabestatus, Korrektur-Flag, Änderungszeitpunkt.
+
+---
+
+## 13. KI-Funktionen
+
+- Im initialen Release sind **keine KI-Funktionen** vorgesehen.
+- Die Architektur soll spätere Erweiterungen um KI-gestützte Vorschläge oder Auswertungen nicht verbauen.
+
+---
+
+## 14. Nicht Bestandteil des initialen MVP
+
+- Urlaubs- und Abwesenheitsverwaltung
+- Schichtplanung, GPS-Tracking, automatische Screenshots
+- vollständige Rechnungsstellung und Lohnabrechnung
+- native Desktop-/Mobile-Apps (stattdessen responsive Web-App)
+- mandantenübergreifendes Reporting in einer gemeinsamen Oberfläche (Reporting erfolgt mandantenspezifisch oder extern über API)
+
+---
+
+## 15. Nichtfunktionale Anforderungen
+
+### Sicherheit
+- Strikte Mandantentrennung auf Datenbank- und Anwendungsebene.
+- Sichere Authentifizierung mit sauberer Autorisierung nach Mandantenwechsel.
+- Rollenbasierte Zugriffskontrolle mit rollenspezifischer Sichtbarkeit von Finanzwerten (Kosten/Margen nur für Admins).
+- Schutz vor Dateninkonsistenzen durch Blockade von Löschoperationen bei referenzierten Buchungen.
+- Verschlüsselte Übertragung (HTTPS) und sichere Speicherung aller Secrets.
+
+### Datenschutz
+- Hosting verpflichtend in der EU (DSGVO-konform).
+- Aufbewahrung von Zeiterfassungs- und Audit-Daten bis zu 10 Jahre.
+- Festlegung von Löschregeln nach Ablauf der Aufbewahrungsfrist erforderlich.
+
+### Bedienbarkeit
+- Responsive Web-Anwendung mit schneller Mandantenauswahl.
+- Schneller Start/Stopp eines Timers auf Smartphones.
+- Übersichtliche Stammdatenverwaltung mit klaren Hinweisen zu Editierbarkeit, Löschbarkeit und Archivierungsstatus.
+- Vollständige Verfügbarkeit in Deutsch und Englisch (siehe Abschnitt 23).
+
+---
+
+## 16. Akzeptanzkriterien für den ersten produktiven Einsatz
+
+Der MVP gilt als fachlich ausreichend, wenn:
+
+- Nutzer sich per E-Mail/Passwort anmelden und bei Zugehörigkeit zu mehreren Mandanten den gewünschten Mandanten auswählen können;
+- Mandanten, Auftraggeber, Projekte, Aufgaben und Mitarbeiter vollständig verwaltet und editiert werden können;
+- ungenutzte Projekte, Mitarbeiter, Auftraggeber und Aufgaben (ohne Zeiteinträge/Forecasts) gelöscht werden können;
+- bereits bebuchte Entitäten vor physischem Löschen geschützt und stattdessen archiviert/deaktiviert werden;
+- Mitarbeitende Projekten mit Gültigkeitszeitraum zugeordnet werden können und nur auf zugeordnete Projekte buchen dürfen;
+- Projektverantwortliche Teamzuordnungen für ihre Projekte selbst verwalten können;
+- je Projekt Pflichtfelder und Freigabepflicht konfiguriert werden können;
+- Zeiten per Timer, Dauer oder Start-/Endzeit erfasst werden können;
+- Mitarbeitende Einträge im laufenden Monat nachtragen können;
+- Administratoren und Projektverantwortliche Korrekturen auch in abgeschlossenen Monaten mit Audit-Log vornehmen können;
+- Stundensätze je Mitarbeiter, Mitarbeiterrolle oder Projekt historisiert hinterlegt werden können;
+- Freigaben optional möglich sind und nachträgliche Korrekturen vollständig im Audit-Log erscheinen;
+- Daten aus Clockify importiert werden können;
+- ein einfacher Export aller Felder über die Oberfläche möglich ist;
+- die API mandantenspezifische Daten für beliebige Zeiträume an Power Automate liefert;
+- die Anwendung auf Smartphones vollständig nutzbar ist;
+- Hosting in der EU erfolgt und 10 Jahre Aufbewahrung unterstützt werden.
+
+---
+
+## 17. Verbleibende offene Punkte
+
+- **Clockify-Exportformat:** Reale CSV-Struktur muss beim finalen Import gegen die implementierte Logik geprüft werden.
+- **Löschregeln nach Ablauf der 10-Jahres-Frist:** Konkrete Lösch- oder Archivierungsstrategie ist noch festzulegen.
+- **Konkretes Hosting-Setup:** Spezifischer EU-Hosting-Anbieter / Cloud-Infrastruktur ist festzulegen.
+- **E-Mail-Dienst:** Versanddienst für Einladungen und Passwort-Reset festlegen.
+
+---
+
+## 18. Empfohlene Umsetzungsreihenfolge
+
+1. Globales Nutzerkonto, Mandanten-Datenmodell, Einladungsprozess und Mandantenauswahl (Tenant Selector).
+2. Stammdatenverwaltung: Auftraggeber (Kunden), Projekte, Aufgaben, Mitarbeiter (CRUD: Erstellen, Editieren, Löschen ungenutzter Daten, Archivierung genutzter Daten).
+3. Projektzuordnungen von Mitarbeitenden und projektspezifische Konfiguration.
+4. Zeiterfassung: Timer, manuelle Einträge, Pausen, Favoriten, Split, Nachtragslogik für laufenden Monat.
+5. Stundensätze (historisiert), Satzhierarchie inkl. Mitarbeiterrollen und Projektbudgets.
+6. Freigabeprozess inklusive Audit-Log für Korrekturen (laufender vs. abgeschlossener Monat).
+7. Einfacher Datenexport über die Oberfläche.
+8. Clockify-Import (Auftraggeber, Projekte, Nutzer, Zeiteinträge).
+9. REST-API mit Zeitraum-, Filter- und Freigabestatusabfrage, Pagination, API-Schlüsselverwaltung.
+10. Power-Automate-Testflow mit Excel-Zieltabelle.
+11. Mobile-Optimierung und Sicherheitsprüfung.
+12. Allgemeine Arbeitszeiterfassung inkl. Soll-Arbeitszeiten, individuellen Arbeitskalendern und Über-/Unterstunden.
+13. Forecast-Datenmodell inkl. Versionierung und Abweichungsprüfung.
+14. Aggregierte Forecast-Ansicht (Tabelle) in der Oberfläche mit Filtern und Periodenauswahl.
+15. Forecast- und Ist-Datenanbindung über die API für externes Reporting.
+16. Mehrsprachigkeit (Deutsch/Englisch).
+17. API-Dokumentationsseite.
+
+---
+
+## 19. Zusammenfassung
+
+Die Anforderungen definieren ein mandantenfähiges Zeiterfassungssystem mit globalen Nutzerkonten und flexibler Mandantenauswahl, voller Editierbarkeit von Stammdaten, sauberer Referenzintegrität (Löschen ungenutzter vs. Archivieren bebuchter Entitäten), klarer Trennung von Mandanten, Auftraggebern, Projekten und Aufgaben, konfigurierbaren Buchungs- und Freigaberegeln, historisierten Stundensätzen, vollständigem Audit-Log, Forecast-Planung auf Projektebene sowie REST-API-Schnittstellen für externes Reporting.
+
+---
+
+## 20. Allgemeine Arbeitszeiterfassung (zusätzlich zur Projektzeit)
+
+- **Pflicht für interne Mitarbeitende:** Erfassung der Tagesarbeitszeit (Beginn/Ende/Pausen) unabhängig von der Projektzeit.
+- **Sanity-Check:** Sanfter Warnhinweis, falls Projektzeit die allgemeine Arbeitszeit übersteigt.
+- **Arbeitszeitgesetz-Hinweise:** Pragmatische, konfigurierbare Hinweise bei Überschreitung gesetzlicher Rahmenwerte.
+- **Soll-Arbeitszeiten & Kalender:** Individuelle Sollstunden und Arbeitstage je Mitarbeiter mit Historisierung.
+- **Über-/Unterstunden:** Reine Anzeige der aktuellen Salden in der UI.
+
+---
+
+## 21. Forecast-Planung (Plan vs. Ist)
+
+- Forecasts werden monatlich in **Stunden** pro Mitarbeiter, Projekt und Monat gepflegt.
+- **Umsatz- & Kostenberechnung:**
+  - *Time & Material:* Geplante Stunden × Abrechnungssatz = Umsatz; Stunden × interner Kostensatz = Kosten -> Marge.
+  - *Festpreis:* Umsatz über Festpreis/Meilensteine/Monatsverteilung gedeckelt; zusätzliche Stunden erhöhen Kosten und reduzieren Marge.
+- **Sichtbarkeit:** Kosten und Margen exklusiv für Admins; Projektverantwortliche sehen Stunden und Umsätze.
+- **Versionierung & Abweichungsprüfung:** Jede Forecast-Änderung wird versioniert. Alle 14 Tage erfolgt eine automatische Prüfung; bei Abweichungen > 20 % Benachrichtigung an Admins und Projektleiter bei erstmaliger/verschärfter Überschreitung.
+- **Hochrechnung laufender Monat:** Berechnung pro-rata anhand verstrichener Arbeitstage laut individuellem Arbeitskalender.
+
+---
+
+## 22. Ergänzung der Akzeptanzkriterien (Arbeitszeit und Forecast)
+
+- Interne Mitarbeitende können tägliche Arbeitszeiten unabhängig von Projektzeiten erfassen.
+- Sollzeiten und individuelle Arbeitskalender steuern Über-/Unterstunden und Forecast-Hochrechnungen.
+- Forecasts unterstützen Time & Material sowie Festpreisprojekte mit Meilensteinen/Teilbudgets.
+- Interne Kostensätze bleiben strikt administrativ; Umsätze sind für Projektleiter transparent.
+
+---
+
+## 23. Mehrsprachigkeit und API-Dokumentation
+
+- **Mehrsprachigkeit:** Vollständig in Deutsch und Englisch verfügbar; Sprache nutzerspezifisch im Profil gespeichert (Fallback: Browser-Sprache / Deutsch).
+- **API-Dokumentation:** Integrierte Unterseite in der Web-App für berechtigte Nutzer, basierend auf OpenAPI-Spezifikation.
+
+---
+
+## 24. Konfigurierbare Mitarbeiterrollen und rollenbasierte Stundensätze
+
+- Fachliche Rollen (z. B. Senior Consultant, Projektleiter) können mandantenspezifisch definiert und Mitarbeitenden zeitraumbezogen zugewiesen werden.
+- Rollen dienen als Standard-Fallback für Abrechnungssätze und interne Kostensätze.
+
+---
+
+## 25. Gesamtübersicht Satzhierarchie (Referenz)
+
+Ermittlung des gültigen Stundensatzes zum Buchungs-/Planungsstichtag:
+
+1. **Projektspezifischer Satz** für den konkreten Mitarbeiter
+2. **Individueller Mitarbeitersatz** (im Mandanten)
+3. **Satz der gültigen fachlichen Mitarbeiterrolle**
+4. **Mandantenweiter Standardsatz**
+
+---
+
+## 26. Nachtrags- und Korrekturregeln nach Zeitraum
+
+- **Laufender Monat:** Mitarbeitende können Einträge selbstständig erfassen, ändern und löschen (auch freigegebene, mit Audit-Eintrag).
+- **Abgeschlossene Monate:** Für reguläre Mitarbeitende gesperrt. Korrekturen und Nachträge dürfen nur durch **Administratoren und Projektverantwortliche** mit zwingendem Audit-Log vorgenommen werden.
+
+---
+
+## 27. Projektzuordnung von Mitarbeitenden
+
+- **Zuordnungsrecht:** Administratoren und jeweilige Projektverantwortliche.
+- **Gültigkeit:** Zeitraumbezogen (`gültig_von` bis `gültig_bis`).
+- **Filter:** In der Zeiterfassung erscheinen ausschließlich Projekte, für die zum Buchungsdatum eine aktive Zuordnung im aktuellen Mandanten besteht.
+
+---
+
+## 28. Aggregierte Forecast-Ansicht auf Projektebene
+
+- **Darstellung:** Filterbare Tabelle in der UI mit Zeitraumfiltern (Monat, Quartal, Jahr, frei gewählt).
+- **Kennzahlen:** Geplante vs. Ist-Stunden (inkl. Hochrechnung laufender Monat), geplanter vs. tatsächlicher Umsatz (Admins & Projektleiter), geplante vs. Ist-Kosten & Marge (nur Admins).
+- **Export & API:** Vollständige Bereitstellung aller aggregierten Forecast- und Ist-Daten via REST-API für externe BI-/Reporting-Tools.
+
+---
+
+## 29. Konsolidierte Akzeptanzkriterien für den Gesamtabschluss
+
+- Anmeldung mit Mandantenauswahl bei Mehrfachzugehörigkeit funktioniert einwandfrei.
+- Stammdaten (Auftraggeber, Projekte, Aufgaben, Mitarbeiter) sind vollumfänglich editierbar.
+- Ungenutzte Entitäten ohne Verknüpfungen können physisch gelöscht werden; bebuchte Entitäten werden sauber archiviert/deaktiviert, um Revisions- und Berichtssicherheit zu wahren.
+- Saubere Datenisolierung zwischen Mandanten, Auftraggebern, Projekten und Aufgaben.
+- Mitarbeitende können nur auf zugeordnete Projekte im gewählten Mandanten buchen.
+- Zeitraumbasierte Korrekturregeln (laufender vs. abgeschlossener Monat) werden strikt durchgesetzt und auditiert.
+- Forecast-Tabelle und REST-API stellen aggregierte Plan-/Ist-Kennzahlen mandantenspezifisch bereit.
