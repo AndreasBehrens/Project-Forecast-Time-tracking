@@ -50,6 +50,8 @@ interface AppContextType {
   forecasts: ForecastEntry[];
   apiKeys: ApiKey[];
   isLoading: boolean;
+  login: (credentials: { email?: string; password?: string; userId?: string; orgId?: string }) => Promise<{ success: boolean; error?: string }>;
+  logout: () => Promise<void>;
   // Timer Actions
   activeTimer: ActiveTimer;
   startTimer: (entry?: Partial<ActiveTimer>) => void;
@@ -282,6 +284,49 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     return newOrg;
   };
 
+  // Login Action
+  const login = async (credentials: { email?: string; password?: string; userId?: string; orgId?: string }): Promise<{ success: boolean; error?: string }> => {
+    try {
+      setIsLoading(true);
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(credentials)
+      });
+      const data = await res.json();
+      if (data.success && data.user) {
+        setCurrentUser(data.user);
+        if (data.user.language) setLanguageState(data.user.language);
+        if (data.activeOrgId) setActiveOrgId(data.activeOrgId);
+        if (data.organization) setOrganization(data.organization);
+        localStorage.setItem('insight_arcs_logged_in_user', data.user.id);
+        await refreshAllData();
+        return { success: true };
+      } else {
+        return { success: false, error: data.error || 'Anmeldung fehlgeschlagen' };
+      }
+    } catch (err: any) {
+      return { success: false, error: err.message || 'Verbindungsfehler beim Anmelden' };
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Logout Action
+  const logout = async () => {
+    try {
+      setIsLoading(true);
+      await fetch('/api/auth/logout', { method: 'POST' });
+      localStorage.removeItem('insight_arcs_logged_in_user');
+      setCurrentUser(null);
+    } catch (err) {
+      console.error('Logout error:', err);
+      setCurrentUser(null);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   // Switch Simulated User
   const switchUser = async (userId: string) => {
     const res = await fetch('/api/auth/switch-user', {
@@ -292,6 +337,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const data = await res.json();
     if (data.success && data.activeUser) {
       setCurrentUser(data.activeUser);
+      localStorage.setItem('insight_arcs_logged_in_user', data.activeUser.id);
       if (data.activeUser.language) setLanguageState(data.activeUser.language);
       if (data.activeOrgId) setActiveOrgId(data.activeOrgId);
       if (data.organization) setOrganization(data.organization);
@@ -634,6 +680,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         forecasts,
         apiKeys,
         isLoading,
+        login,
+        logout,
         activeTimer,
         startTimer,
         pauseTimer,

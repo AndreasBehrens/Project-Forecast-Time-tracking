@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { AppProvider, useApp } from './context/AppContext';
 import { Header } from './components/Header';
+import { LoginView } from './components/LoginView';
 import { TimeTrackerView } from './components/TimeTrackerView';
 import { WorkingTimeView } from './components/WorkingTimeView';
 import { ApprovalsAuditView } from './components/ApprovalsAuditView';
@@ -23,7 +24,7 @@ import {
 } from 'lucide-react';
 
 const MainLayout: React.FC = () => {
-  const { t, timeEntries } = useApp();
+  const { t, timeEntries, organization } = useApp();
   const [activeNav, setActiveNav] = useState<
     'timeTracker' | 'workingTime' | 'approvalsAudit' | 'projectsClients' | 'ratesTeam' | 'forecast' | 'clockifyMigration' | 'apiDocs'
   >('timeTracker');
@@ -96,9 +97,9 @@ const MainLayout: React.FC = () => {
           <div className="flex items-center gap-2">
             <span className="font-semibold text-slate-800">Insight Arcs Zeiterfassung</span>
             <span>•</span>
-            <span>Mandant: Insight Arcs GmbH</span>
+            <span>Mandant: {organization?.name || 'Insight Arcs GmbH'}</span>
             <span>•</span>
-            <span>20 Nutzer</span>
+            <span>Multi-Tenant & ArbZG</span>
           </div>
           <div className="flex items-center gap-2">
             <Server className="w-3.5 h-3.5 text-emerald-600" />
@@ -110,10 +111,34 @@ const MainLayout: React.FC = () => {
   );
 };
 
+const AppContent: React.FC = () => {
+  const { currentUser, isLoading } = useApp();
+
+  if (isLoading && !currentUser) {
+    return (
+      <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center text-white space-y-4">
+        <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400 font-bold text-xl animate-pulse">
+          IA
+        </div>
+        <div className="flex items-center gap-2 text-xs text-slate-400">
+          <div className="w-3.5 h-3.5 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" />
+          <span>Insight Arcs Enterprise lädt...</span>
+        </div>
+      </div>
+    );
+  }
+
+  if (!currentUser) {
+    return <LoginView />;
+  }
+
+  return <MainLayout />;
+};
+
 export default function App() {
   return (
     <AppProvider>
-      <MainLayout />
+      <AppContent />
     </AppProvider>
   );
 }

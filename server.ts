@@ -14,11 +14,11 @@ async function startServer() {
   app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
   // Mock session: Current simulated logged in user (defaults to Admin Dr. Andreas Behrens)
-  let currentUserId = 'u-1';
+  let currentUserId: string = 'u-1';
 
   const getActorId = (req: Request): string => {
     const headerUserId = req.headers['x-user-id'] as string;
-    return headerUserId || currentUserId;
+    return headerUserId || currentUserId || 'u-1';
   };
 
   // --- API KEY AUTH MIDDLEWARE FOR EXTERNAL API (Section 12.3) ---
@@ -56,17 +56,72 @@ async function startServer() {
     });
   });
 
-  // Auth / Session Switching & Organization Management
+  // Auth / Session Login, Logout, Switching & Organization Management
   app.get('/api/auth/me', (req, res) => {
+    const headerUserId = req.headers['x-user-id'] as string;
+    const targetId = headerUserId || currentUserId;
     const allUsers = storage.getUsers(true);
-    const user = allUsers.find(u => u.id === currentUserId) || allUsers[0];
+    const user = targetId ? (allUsers.find(u => u.id === targetId) || null) : null;
+    
     res.json({
       user,
-      organization: storage.getOrganization(),
+      organization: user ? storage.getOrganization() : null,
       organizations: storage.getOrganizations(),
       activeOrgId: storage.getActiveOrgId(),
       roles: storage.getJobRoles()
     });
+  });
+
+  app.post('/api/auth/login', (req, res) => {
+    const { email, userId, orgId } = req.body;
+    const allUsers = storage.getUsers(true);
+    let user = null;
+
+    if (userId) {
+      user = allUsers.find(u => u.id === userId);
+    } else if (email) {
+      const cleanEmail = email.trim().toLowerCase();
+      user = allUsers.find(u => u.email.trim().toLowerCase() === cleanEmail);
+    }
+
+    if (!user) {
+      return res.status(401).json({
+        success: false,
+        error: 'Kein Benutzer mit diesen Anmeldedaten gefunden. Bitte prüfen Sie Ihre E-Mail oder nutzen Sie die Profilauswahl.'
+      });
+    }
+
+    currentUserId = user.id;
+
+    // Switch org if specified, or pick user's active org
+    if (orgId) {
+      storage.setActiveOrgId(orgId);
+    } else {
+      const userMemberships = user.memberships || [];
+      const hasCurrentOrg = user.orgId === storage.getActiveOrgId() || userMemberships.some(m => m.orgId === storage.getActiveOrgId());
+      if (!hasCurrentOrg && userMemberships.length > 0) {
+        storage.setActiveOrgId(userMemberships[0].orgId);
+      } else if (!hasCurrentOrg && user.orgId) {
+        storage.setActiveOrgId(user.orgId);
+      }
+    }
+
+    res.json({
+      success: true,
+      user,
+      organization: storage.getOrganization(),
+      activeOrgId: storage.getActiveOrgId()
+    });
+  });
+
+  app.post('/api/auth/logout', (req, res) => {
+    currentUserId = '';
+    res.json({ success: true, message: 'Erfolgreich abgemeldet' });
+  });
+
+  app.get('/api/auth/available-users', (req, res) => {
+    const allUsers = storage.getUsers(true);
+    res.json(allUsers);
   });
 
   app.post('/api/auth/switch-user', (req, res) => {

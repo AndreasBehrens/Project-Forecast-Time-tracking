@@ -1,6 +1,7 @@
 import {
   Organization,
   User,
+  UserOrganizationMembership,
   EmployeeJobRole,
   Client,
   Project,
