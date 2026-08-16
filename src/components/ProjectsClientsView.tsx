@@ -155,8 +155,18 @@ export const ProjectsClientsView: React.FC = () => {
   // Filtered users for project assignment
   const filteredUsers = users.filter(u => {
     const matchesSearch = u.name.toLowerCase().includes(memberSearchQuery.toLowerCase()) ||
-                          u.email.toLowerCase().includes(memberSearchQuery.toLowerCase());
-    const matchesRole = memberRoleFilter === 'ALL' || u.jobRoleId === memberRoleFilter;
+                          u.email.toLowerCase().includes(memberSearchQuery.toLowerCase()) ||
+                          (u.companyName && u.companyName.toLowerCase().includes(memberSearchQuery.toLowerCase()));
+    
+    let matchesRole = true;
+    if (memberRoleFilter === 'INTERNAL_ONLY') {
+      matchesRole = u.employmentType !== 'EXTERNAL';
+    } else if (memberRoleFilter === 'EXTERNAL_ONLY') {
+      matchesRole = u.employmentType === 'EXTERNAL';
+    } else if (memberRoleFilter !== 'ALL') {
+      matchesRole = u.jobRoleId === memberRoleFilter;
+    }
+
     return matchesSearch && matchesRole;
   });
 
@@ -167,12 +177,14 @@ export const ProjectsClientsView: React.FC = () => {
       {/* Top Banner & Quick Actions */}
       <div className="bg-white rounded-2xl border border-slate-200/90 shadow-sm p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
-            <FolderKanban className="w-5 h-5 text-emerald-600" />
-            {t.projectsClientsTitle}
-          </h2>
+          <div className="flex items-center gap-2">
+            <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+              <FolderKanban className="w-5 h-5 text-emerald-600" />
+              {t.projectsClientsTitle}
+            </h2>
+          </div>
           <p className="text-xs text-slate-500 mt-1">
-            Verwalten Sie Mandanten-Kunden, Abrechnungsmodelle (T&M / Festpreis) und projektspezifische Pflichtfelder.
+            Verwalten Sie Auftraggeber, Kundenprojekte, Abrechnungsmodelle (T&M / Festpreis) und Mitarbeiter-Zuordnungen für den aktiven Mandanten.
           </p>
         </div>
 
@@ -449,6 +461,8 @@ export const ProjectsClientsView: React.FC = () => {
                         className="bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs text-slate-700"
                       >
                         <option value="ALL">Alle Rollen</option>
+                        <option value="INTERNAL_ONLY">🏢 Nur Interne</option>
+                        <option value="EXTERNAL_ONLY">🤝 Nur Externe</option>
                         {jobRoles.map(r => (
                           <option key={r.id} value={r.id}>{r.name}</option>
                         ))}
@@ -460,6 +474,7 @@ export const ProjectsClientsView: React.FC = () => {
                       {filteredUsers.map(u => {
                         const isAssigned = (selectedProject.assignedUserIds || []).includes(u.id);
                         const roleObj = jobRoles.find(r => r.id === u.jobRoleId);
+                        const isExternal = u.employmentType === 'EXTERNAL';
 
                         return (
                           <div
@@ -479,11 +494,22 @@ export const ProjectsClientsView: React.FC = () => {
                                 {u.name.charAt(0)}
                               </div>
                               <div className="truncate">
-                                <div className={`text-xs font-semibold truncate ${isAssigned ? 'text-blue-950' : 'text-slate-800'}`}>
-                                  {u.name}
+                                <div className="flex items-center gap-1.5">
+                                  <span className={`text-xs font-semibold truncate ${isAssigned ? 'text-blue-950' : 'text-slate-800'}`}>
+                                    {u.name}
+                                  </span>
+                                  {isExternal ? (
+                                    <span className="text-[9px] font-bold bg-purple-100 text-purple-800 px-1.5 py-0.2 rounded shrink-0">
+                                      Extern
+                                    </span>
+                                  ) : (
+                                    <span className="text-[9px] font-bold bg-emerald-100 text-emerald-800 px-1.5 py-0.2 rounded shrink-0">
+                                      Intern
+                                    </span>
+                                  )}
                                 </div>
                                 <div className="text-[10px] text-slate-400 truncate">
-                                  {roleObj?.name || u.role}
+                                  {roleObj?.name || u.role} {isExternal && u.companyName ? `• ${u.companyName}` : ''}
                                 </div>
                               </div>
                             </div>

@@ -9,12 +9,27 @@ export type Language = 'de' | 'en';
 export interface Organization {
   id: string;
   name: string;
+  code?: string;
   defaultHourlyBillingRate: number;
   defaultHourlyCostRate: number;
   defaultCurrency: string;
   stateLocation?: string; // e.g. 'DE-BE' for Berlin
   locationCity?: string; // e.g. 'Berlin'
+  logoColor?: string;
   createdAt: string;
+}
+
+export type EmploymentType = 'INTERNAL' | 'EXTERNAL';
+
+export interface UserOrganizationMembership {
+  orgId: string;
+  orgName: string;
+  role: UserRole;
+  employmentType?: EmploymentType;
+  jobRoleId?: string;
+  individualBillingRate?: number;
+  individualCostRate?: number;
+  isDefault?: boolean;
 }
 
 export interface GermanState {
@@ -56,6 +71,8 @@ export interface User {
   name: string;
   email: string;
   role: UserRole;
+  employmentType?: EmploymentType; // 'INTERNAL' (Festangestellt / Intern) vs 'EXTERNAL' (Freiberufler / Subunternehmer / Extern)
+  companyName?: string; // Für externe Dienstleister / Subunternehmer (z. B. "TechConsultants GbR")
   jobRoleId?: string;
   individualBillingRate?: number;
   individualCostRate?: number; // Only visible to ADMIN
@@ -67,6 +84,7 @@ export interface User {
   status: 'ACTIVE' | 'INVITED' | 'SUSPENDED';
   invitationToken?: string;
   invitationExpiresAt?: string;
+  memberships?: UserOrganizationMembership[];
   createdAt: string;
 }
 

@@ -10,9 +10,11 @@ import {
   Play,
   Pause,
   Square,
-  MapPin
+  MapPin,
+  Layers
 } from 'lucide-react';
 import { CompanyLocationModal } from './CompanyLocationModal';
+import { OrganizationSwitcherModal } from './OrganizationSwitcherModal';
 
 export const Header: React.FC = () => {
   const {
@@ -27,11 +29,14 @@ export const Header: React.FC = () => {
     resumeTimer,
     stopTimer,
     projects,
-    organization
+    organization,
+    organizations,
+    activeOrgId
   } = useApp();
 
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [showLocationModal, setShowLocationModal] = useState(false);
+  const [showOrgModal, setShowOrgModal] = useState(false);
 
   const formatTimer = (totalSeconds: number) => {
     const hours = Math.floor(totalSeconds / 3600);
@@ -114,19 +119,36 @@ export const Header: React.FC = () => {
             </div>
           )}
 
-          {/* Right Controls: EU Compliance Badge, Language Switcher, User Simulation Switcher */}
-          <div className="flex items-center gap-3">
+          {/* Right Controls: Mandanten-Umschalter, EU Compliance, Location, Language, User */}
+          <div className="flex items-center gap-2.5">
+            {/* Active Organization / Mandanten-Umschalter */}
+            <button
+              id="btn-organization-switcher"
+              onClick={() => setShowOrgModal(true)}
+              className="flex items-center gap-2 text-xs text-slate-800 bg-emerald-50/70 hover:bg-emerald-100/80 border border-emerald-300/70 px-3 py-1.5 rounded-lg transition-all shadow-2xs group"
+              title="Aktiven Mandanten wechseln oder verwalten"
+            >
+              <Building2 className="w-4 h-4 text-emerald-700" />
+              <div className="text-left">
+                <div className="text-[9px] uppercase font-bold text-emerald-700 tracking-wider">Mandant</div>
+                <div className="font-bold text-slate-900 truncate max-w-[130px] sm:max-w-[170px]">
+                  {organization?.name.split(' (')[0] || 'Insight Arcs'}
+                </div>
+              </div>
+              <ChevronDown className="w-3.5 h-3.5 text-emerald-600 group-hover:translate-y-0.5 transition-transform" />
+            </button>
+
             {/* EU Badge */}
-            <div className="hidden lg:flex items-center gap-1.5 text-xs text-slate-600 bg-slate-50 border border-slate-200/80 px-2.5 py-1 rounded-md">
+            <div className="hidden xl:flex items-center gap-1.5 text-xs text-slate-600 bg-slate-50 border border-slate-200/80 px-2.5 py-1.5 rounded-md">
               <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
-              <span>EU DSGVO • 10J Audit</span>
+              <span>EU DSGVO</span>
             </div>
 
             {/* Location & Holiday Badge */}
             <button
               id="btn-header-location"
               onClick={() => setShowLocationModal(true)}
-              className="hidden md:flex items-center gap-1.5 text-xs text-slate-700 hover:text-slate-900 bg-slate-50 hover:bg-slate-100 border border-slate-200/80 px-2.5 py-1 rounded-md transition-colors"
+              className="hidden lg:flex items-center gap-1.5 text-xs text-slate-700 hover:text-slate-900 bg-slate-50 hover:bg-slate-100 border border-slate-200/80 px-2.5 py-1.5 rounded-md transition-colors"
               title="Standort & Feiertagskalender konfigurieren"
             >
               <MapPin className="w-3.5 h-3.5 text-emerald-600" />
@@ -184,29 +206,50 @@ export const Header: React.FC = () => {
                       {t.switchUser}
                     </div>
                     <p className="text-[11px] text-slate-500 mt-0.5">
-                      Wechseln Sie die Rolle zur Prüfung von Berechtigungen & Sätzen:
+                      Wechseln Sie den Benutzer & prüfen Sie dessen Mandantenzugriff:
                     </p>
                   </div>
                   <div className="max-h-64 overflow-y-auto py-1">
-                    {users.slice(0, 10).map(u => (
-                      <button
-                        key={u.id}
-                        id={`btn-switch-user-${u.id}`}
-                        onClick={() => {
-                          switchUser(u.id);
-                          setUserMenuOpen(false);
-                        }}
-                        className={`w-full text-left px-3 py-2 text-xs flex items-center justify-between hover:bg-slate-50 transition-colors ${
-                          u.id === currentUser?.id ? 'bg-emerald-50/70 font-semibold text-emerald-950' : 'text-slate-700'
-                        }`}
-                      >
-                        <div>
-                          <div className="font-medium text-slate-900">{u.name}</div>
-                          <div className="text-[10px] text-slate-400">{u.email}</div>
-                        </div>
-                        {getRoleBadge(u.role)}
-                      </button>
-                    ))}
+                    {users.map(u => {
+                      const isExternal = u.employmentType === 'EXTERNAL';
+                      return (
+                        <button
+                          key={u.id}
+                          id={`btn-switch-user-${u.id}`}
+                          onClick={() => {
+                            switchUser(u.id);
+                            setUserMenuOpen(false);
+                          }}
+                          className={`w-full text-left px-3 py-2 text-xs flex items-center justify-between hover:bg-slate-50 transition-colors ${
+                            u.id === currentUser?.id ? 'bg-emerald-50/70 font-semibold text-emerald-950' : 'text-slate-700'
+                          }`}
+                        >
+                          <div>
+                            <div className="flex items-center gap-1.5">
+                              <span className="font-medium text-slate-900">{u.name}</span>
+                              {isExternal ? (
+                                <span className="text-[9px] font-bold bg-purple-100 text-purple-800 px-1 py-0.2 rounded">
+                                  Extern
+                                </span>
+                              ) : (
+                                <span className="text-[9px] font-medium bg-slate-100 text-slate-600 px-1 py-0.2 rounded">
+                                  Intern
+                                </span>
+                              )}
+                            </div>
+                            <div className="text-[10px] text-slate-400">
+                              {u.email} {isExternal && u.companyName ? `• ${u.companyName}` : ''}
+                            </div>
+                            {u.memberships && u.memberships.length > 1 && (
+                              <div className="text-[9px] text-emerald-700 font-semibold mt-0.5">
+                                {u.memberships.length} Mandanten zugeordnet
+                              </div>
+                            )}
+                          </div>
+                          {getRoleBadge(u.role)}
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
               )}
@@ -214,6 +257,11 @@ export const Header: React.FC = () => {
           </div>
         </div>
       </div>
+
+      <OrganizationSwitcherModal
+        isOpen={showOrgModal}
+        onClose={() => setShowOrgModal(false)}
+      />
 
       <CompanyLocationModal
         isOpen={showLocationModal}

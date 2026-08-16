@@ -32,6 +32,11 @@ export const RateHierarchyView: React.FC = () => {
   const [testProjectId, setTestProjectId] = useState(projects[0]?.id || 'p-1');
   const [resolvedResult, setResolvedResult] = useState<any>(null);
 
+  // Filter States
+  const [empTypeFilter, setEmpTypeFilter] = useState<'ALL' | 'INTERNAL' | 'EXTERNAL'>('ALL');
+  const [inviteEmploymentType, setInviteEmploymentType] = useState<'INTERNAL' | 'EXTERNAL'>('INTERNAL');
+  const [inviteCompanyName, setInviteCompanyName] = useState('');
+
   // Invite Modal
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [inviteName, setInviteName] = useState('');
@@ -54,6 +59,8 @@ export const RateHierarchyView: React.FC = () => {
       name: inviteName,
       email: inviteEmail,
       role: inviteRole,
+      employmentType: inviteEmploymentType,
+      companyName: inviteEmploymentType === 'EXTERNAL' ? inviteCompanyName : undefined,
       jobRoleId: inviteJobRoleId,
       weeklyTargetHours: parseFloat(inviteWeeklyHours) || 40
     });
@@ -196,14 +203,49 @@ export const RateHierarchyView: React.FC = () => {
 
       {/* Team Members List (20 Employees) */}
       <div className="bg-white rounded-2xl border border-slate-200/90 shadow-xs overflow-hidden">
-        <div className="px-5 py-3.5 border-b border-slate-200/80 flex items-center justify-between bg-slate-50/50">
-          <div className="font-bold text-xs text-slate-800 flex items-center gap-2">
-            <Users className="w-4 h-4 text-emerald-600" />
-            {t.teamMembers}
+        <div className="px-5 py-3.5 border-b border-slate-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-50/50">
+          <div className="flex items-center gap-3">
+            <div className="font-bold text-xs text-slate-800 flex items-center gap-2">
+              <Users className="w-4 h-4 text-emerald-600" />
+              {t.teamMembers} ({users.length})
+            </div>
+            <span className="text-[11px] text-slate-500 hidden md:inline">
+              {organization?.name || 'Insight Arcs GmbH'}
+            </span>
           </div>
-          <span className="text-[11px] text-slate-500">
-            Insight Arcs GmbH (Mandant 1)
-          </span>
+
+          {/* Filter: Alle / Intern / Extern */}
+          <div className="flex items-center gap-2">
+            <div className="flex items-center bg-slate-100 p-0.5 rounded-lg border border-slate-200 text-xs">
+              <button
+                type="button"
+                onClick={() => setEmpTypeFilter('ALL')}
+                className={`px-2.5 py-1 font-semibold rounded-md transition-colors ${
+                  empTypeFilter === 'ALL' ? 'bg-white text-slate-900 shadow-2xs' : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                Alle ({users.length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setEmpTypeFilter('INTERNAL')}
+                className={`px-2.5 py-1 font-semibold rounded-md transition-colors ${
+                  empTypeFilter === 'INTERNAL' ? 'bg-white text-slate-900 shadow-2xs' : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                Intern ({users.filter(u => u.employmentType !== 'EXTERNAL').length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setEmpTypeFilter('EXTERNAL')}
+                className={`px-2.5 py-1 font-semibold rounded-md transition-colors ${
+                  empTypeFilter === 'EXTERNAL' ? 'bg-white text-slate-900 shadow-2xs' : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                Extern ({users.filter(u => u.employmentType === 'EXTERNAL').length})
+              </button>
+            </div>
+          </div>
         </div>
 
         <div className="overflow-x-auto">
@@ -211,6 +253,7 @@ export const RateHierarchyView: React.FC = () => {
             <thead className="bg-slate-50 text-slate-500 border-b border-slate-200 font-semibold">
               <tr>
                 <th className="px-4 py-3">Mitarbeiter</th>
+                <th className="px-4 py-3">Typ</th>
                 <th className="px-4 py-3">Berechtigungsrolle</th>
                 <th className="px-4 py-3">Fachliche Rolle</th>
                 <th className="px-4 py-3">Sollstunden</th>
@@ -220,48 +263,72 @@ export const RateHierarchyView: React.FC = () => {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {users.map(u => {
-                const jobRole = jobRoles.find(r => r.id === u.jobRoleId);
-                return (
-                  <tr key={u.id} className="hover:bg-slate-50/60">
-                    <td className="px-4 py-3">
-                      <div className="font-semibold text-slate-900">{u.name}</div>
-                      <div className="text-[10px] text-slate-400">{u.email}</div>
-                    </td>
-                    <td className="px-4 py-3">
-                      <span className={`text-[10px] font-semibold px-2 py-0.5 rounded ${
-                        u.role === 'ADMIN' ? 'bg-amber-100 text-amber-800' :
-                        u.role === 'PROJECT_MANAGER' ? 'bg-blue-100 text-blue-800' : 'bg-slate-100 text-slate-700'
-                      }`}>
-                        {u.role}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 font-medium text-slate-800">
-                      {jobRole?.name || '—'}
-                    </td>
-                    <td className="px-4 py-3 text-slate-700">
-                      <strong>{u.weeklyTargetHours}h</strong> / Woche ({u.dailyTargetHours}h/Tag)
-                    </td>
-                    <td className="px-4 py-3">
-                      {u.individualBillingRate ? (
-                        <span className="font-bold text-slate-900">{u.individualBillingRate} €/h (Override)</span>
-                      ) : (
-                        <span className="text-slate-400 italic">Gemäß Rolle ({jobRole?.standardBillingRate || 130} €/h)</span>
-                      )}
-                    </td>
-                    {currentUser?.role === 'ADMIN' && (
-                      <td className="px-4 py-3 text-slate-600 font-mono">
-                        {u.individualCostRate || jobRole?.standardCostRate || 65} €/h
+              {users
+                .filter(u => {
+                  if (empTypeFilter === 'INTERNAL') return u.employmentType !== 'EXTERNAL';
+                  if (empTypeFilter === 'EXTERNAL') return u.employmentType === 'EXTERNAL';
+                  return true;
+                })
+                .map(u => {
+                  const jobRole = jobRoles.find(r => r.id === u.jobRoleId);
+                  const isExternal = u.employmentType === 'EXTERNAL';
+
+                  return (
+                    <tr key={u.id} className="hover:bg-slate-50/60">
+                      <td className="px-4 py-3">
+                        <div className="font-semibold text-slate-900">{u.name}</div>
+                        <div className="text-[10px] text-slate-400">{u.email}</div>
+                        {isExternal && u.companyName && (
+                          <div className="text-[10px] text-purple-700 font-medium mt-0.5">
+                            Firma: {u.companyName}
+                          </div>
+                        )}
                       </td>
-                    )}
-                    <td className="px-4 py-3 text-right">
-                      <span className="text-[10px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200/60">
-                        Aktiv
-                      </span>
-                    </td>
-                  </tr>
-                );
-              })}
+                      <td className="px-4 py-3">
+                        {isExternal ? (
+                          <span className="inline-flex items-center gap-1 text-[10px] font-bold bg-purple-100 text-purple-800 border border-purple-200/60 px-2 py-0.5 rounded">
+                            Extern (Sub/Freelancer)
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200/60 px-2 py-0.5 rounded">
+                            Intern (Festangestellt)
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className={`text-[10px] font-semibold px-2 py-0.5 rounded ${
+                          u.role === 'ADMIN' ? 'bg-amber-100 text-amber-800' :
+                          u.role === 'PROJECT_MANAGER' ? 'bg-blue-100 text-blue-800' : 'bg-slate-100 text-slate-700'
+                        }`}>
+                          {u.role}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 font-medium text-slate-800">
+                        {jobRole?.name || '—'}
+                      </td>
+                      <td className="px-4 py-3 text-slate-700">
+                        <strong>{u.weeklyTargetHours}h</strong> / Woche ({u.dailyTargetHours}h/Tag)
+                      </td>
+                      <td className="px-4 py-3">
+                        {u.individualBillingRate ? (
+                          <span className="font-bold text-slate-900">{u.individualBillingRate} €/h (Override)</span>
+                        ) : (
+                          <span className="text-slate-400 italic">Gemäß Rolle ({jobRole?.standardBillingRate || 130} €/h)</span>
+                        )}
+                      </td>
+                      {currentUser?.role === 'ADMIN' && (
+                        <td className="px-4 py-3 text-slate-600 font-mono">
+                          {u.individualCostRate || jobRole?.standardCostRate || 65} €/h
+                        </td>
+                      )}
+                      <td className="px-4 py-3 text-right">
+                        <span className="text-[10px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200/60">
+                          Aktiv
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })}
             </tbody>
           </table>
         </div>
@@ -278,8 +345,52 @@ export const RateHierarchyView: React.FC = () => {
 
             {!invitationLinkResult ? (
               <form onSubmit={handleSendInvite} className="space-y-3 text-xs">
+                {/* Intern vs. Extern Selection */}
                 <div>
-                  <label className="font-semibold text-slate-700 block mb-1">{t.fullName}</label>
+                  <label className="font-semibold text-slate-700 block mb-1">Mitarbeitertyp *</label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setInviteEmploymentType('INTERNAL')}
+                      className={`p-2 rounded-xl border text-xs font-semibold text-left transition-all ${
+                        inviteEmploymentType === 'INTERNAL'
+                          ? 'border-emerald-600 bg-emerald-50 text-emerald-900 ring-1 ring-emerald-600'
+                          : 'border-slate-200 text-slate-600 hover:bg-slate-50'
+                      }`}
+                    >
+                      <div className="font-bold">🏢 Intern</div>
+                      <div className="text-[10px] font-normal text-slate-500 mt-0.5">Festangestellter Mitarbeiter</div>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setInviteEmploymentType('EXTERNAL')}
+                      className={`p-2 rounded-xl border text-xs font-semibold text-left transition-all ${
+                        inviteEmploymentType === 'EXTERNAL'
+                          ? 'border-purple-600 bg-purple-50 text-purple-900 ring-1 ring-purple-600'
+                          : 'border-slate-200 text-slate-600 hover:bg-slate-50'
+                      }`}
+                    >
+                      <div className="font-bold">🤝 Extern</div>
+                      <div className="text-[10px] font-normal text-slate-500 mt-0.5">Freelancer / Subunternehmer</div>
+                    </button>
+                  </div>
+                </div>
+
+                {inviteEmploymentType === 'EXTERNAL' && (
+                  <div>
+                    <label className="font-semibold text-slate-700 block mb-1">Dienstleister / Firmenname (optional)</label>
+                    <input
+                      type="text"
+                      value={inviteCompanyName}
+                      onChange={e => setInviteCompanyName(e.target.value)}
+                      placeholder="z. B. TechConsultants GmbH / Freiberufler"
+                      className="w-full border border-slate-200 rounded-xl px-3 py-2 text-xs"
+                    />
+                  </div>
+                )}
+
+                <div>
+                  <label className="font-semibold text-slate-700 block mb-1">{t.fullName} *</label>
                   <input
                     id="input-invite-name"
                     type="text"
@@ -292,7 +403,7 @@ export const RateHierarchyView: React.FC = () => {
                 </div>
 
                 <div>
-                  <label className="font-semibold text-slate-700 block mb-1">{t.emailAddress}</label>
+                  <label className="font-semibold text-slate-700 block mb-1">{t.emailAddress} *</label>
                   <input
                     id="input-invite-email"
                     type="email"

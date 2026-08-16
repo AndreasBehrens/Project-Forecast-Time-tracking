@@ -17,7 +17,8 @@ import {
 import { getGermanHolidays, getWorkingDaysInRange, GERMAN_STATES, HolidayInfo } from './holidays.js';
 
 export class StorageService {
-  private organization: Organization;
+  private organizations: Organization[] = [];
+  private activeOrgId: string = 'org-insight-arcs-01';
   private users: User[] = [];
   private jobRoles: EmployeeJobRole[] = [];
   private clients: Client[] = [];
@@ -31,87 +32,164 @@ export class StorageService {
   private thresholdPercent: number = 20;
 
   constructor() {
-    this.organization = {
-      id: 'org-insight-arcs-01',
-      name: 'Insight Arcs GmbH',
-      defaultHourlyBillingRate: 130,
-      defaultHourlyCostRate: 65,
-      defaultCurrency: 'EUR',
-      stateLocation: 'DE-BE', // Berlin (Hauptsitz)
-      locationCity: 'Berlin',
-      createdAt: '2025-01-01T08:00:00.000Z'
-    };
+    this.organizations = [
+      {
+        id: 'org-insight-arcs-01',
+        name: 'Insight Arcs GmbH (Hauptmandant)',
+        code: 'IA-BERLIN',
+        defaultHourlyBillingRate: 130,
+        defaultHourlyCostRate: 65,
+        defaultCurrency: 'EUR',
+        stateLocation: 'DE-BE', // Berlin (Hauptsitz)
+        locationCity: 'Berlin',
+        logoColor: 'emerald',
+        createdAt: '2025-01-01T08:00:00.000Z'
+      },
+      {
+        id: 'org-novatech-solutions-02',
+        name: 'NovaTech Solutions GmbH',
+        code: 'NOV-MUC',
+        defaultHourlyBillingRate: 150,
+        defaultHourlyCostRate: 75,
+        defaultCurrency: 'EUR',
+        stateLocation: 'DE-BY', // Bayern (München)
+        locationCity: 'München',
+        logoColor: 'blue',
+        createdAt: '2025-02-01T08:00:00.000Z'
+      },
+      {
+        id: 'org-helios-consulting-03',
+        name: 'Helios Digital Advisory AG',
+        code: 'HEL-HAM',
+        defaultHourlyBillingRate: 180,
+        defaultHourlyCostRate: 90,
+        defaultCurrency: 'EUR',
+        stateLocation: 'DE-HH', // Hamburg
+        locationCity: 'Hamburg',
+        logoColor: 'amber',
+        createdAt: '2025-03-01T08:00:00.000Z'
+      }
+    ];
 
     this.seedInitialData();
   }
 
-  private seedInitialData() {
-    const orgId = this.organization.id;
+  private get organization(): Organization {
+    return this.organizations.find(o => o.id === this.activeOrgId) || this.organizations[0];
+  }
 
-    // 1. Fachliche Mitarbeiterrollen
+  private seedInitialData() {
+    const org1 = this.organizations[0].id;
+    const org2 = this.organizations[1].id;
+    const org3 = this.organizations[2].id;
+
+    // 1. Fachliche Mitarbeiterrollen für Org 1
     this.jobRoles = [
-      { id: 'role-jr', orgId, name: 'Junior Consultant / Developer', standardBillingRate: 95, standardCostRate: 45, status: 'ACTIVE' },
-      { id: 'role-mid', orgId, name: 'Consultant / Engineer', standardBillingRate: 130, standardCostRate: 65, status: 'ACTIVE' },
-      { id: 'role-sr', orgId, name: 'Senior Consultant / Specialist', standardBillingRate: 165, standardCostRate: 85, status: 'ACTIVE' },
-      { id: 'role-lead', orgId, name: 'Lead Architect / Principal', standardBillingRate: 200, standardCostRate: 105, status: 'ACTIVE' },
+      { id: 'role-jr', orgId: org1, name: 'Junior Consultant / Developer', standardBillingRate: 95, standardCostRate: 45, status: 'ACTIVE' },
+      { id: 'role-mid', orgId: org1, name: 'Consultant / Engineer', standardBillingRate: 130, standardCostRate: 65, status: 'ACTIVE' },
+      { id: 'role-sr', orgId: org1, name: 'Senior Consultant / Specialist', standardBillingRate: 165, standardCostRate: 85, status: 'ACTIVE' },
+      { id: 'role-lead', orgId: org1, name: 'Lead Architect / Principal', standardBillingRate: 200, standardCostRate: 105, status: 'ACTIVE' },
+      
+      // Org 2 Job Roles
+      { id: 'role-nova-dev', orgId: org2, name: 'Senior Cloud Engineer', standardBillingRate: 155, standardCostRate: 75, status: 'ACTIVE' },
+      { id: 'role-nova-pm', orgId: org2, name: 'Agile Delivery Lead', standardBillingRate: 170, standardCostRate: 85, status: 'ACTIVE' },
+
+      // Org 3 Job Roles
+      { id: 'role-hel-adv', orgId: org3, name: 'Strategy Advisor', standardBillingRate: 210, standardCostRate: 100, status: 'ACTIVE' },
     ];
 
     // 2. 20 Users
     const team = [
-      { id: 'u-1', name: 'Dr. Andreas Behrens', email: 'andreas.behrens@insightarcs.de', role: 'ADMIN', jobRoleId: 'role-lead', targetH: 40, indBilling: 220, indCost: 110 },
-      { id: 'u-2', name: 'Laura Klein', email: 'laura.klein@insightarcs.de', role: 'PROJECT_MANAGER', jobRoleId: 'role-sr', targetH: 40 },
-      { id: 'u-3', name: 'Markus Weber', email: 'markus.weber@insightarcs.de', role: 'PROJECT_MANAGER', jobRoleId: 'role-lead', targetH: 40 },
-      { id: 'u-4', name: 'Sophie Becker', email: 'sophie.becker@insightarcs.de', role: 'EMPLOYEE', jobRoleId: 'role-sr', targetH: 40 },
-      { id: 'u-5', name: 'Tobias Fischer', email: 'tobias.fischer@insightarcs.de', role: 'EMPLOYEE', jobRoleId: 'role-mid', targetH: 40 },
-      { id: 'u-6', name: 'Julia Hoffmann', email: 'julia.hoffmann@insightarcs.de', role: 'EMPLOYEE', jobRoleId: 'role-sr', targetH: 32 }, // part time
-      { id: 'u-7', name: 'Dennis Wagner', email: 'dennis.wagner@insightarcs.de', role: 'EMPLOYEE', jobRoleId: 'role-mid', targetH: 40 },
-      { id: 'u-8', name: 'Elena Meyer', email: 'elena.meyer@insightarcs.de', role: 'EMPLOYEE', jobRoleId: 'role-mid', targetH: 40 },
-      { id: 'u-9', name: 'Jan Richter', email: 'jan.richter@insightarcs.de', role: 'EMPLOYEE', jobRoleId: 'role-mid', targetH: 40 },
-      { id: 'u-10', name: 'Sarah Koch', email: 'sarah.koch@insightarcs.de', role: 'EMPLOYEE', jobRoleId: 'role-mid', targetH: 40 },
-      { id: 'u-11', name: 'Felix Bauer', email: 'felix.bauer@insightarcs.de', role: 'EMPLOYEE', jobRoleId: 'role-sr', targetH: 40 },
-      { id: 'u-12', name: 'Miriam Wolf', email: 'miriam.wolf@insightarcs.de', role: 'EMPLOYEE', jobRoleId: 'role-mid', targetH: 30 },
-      { id: 'u-13', name: 'Patrick Schwarz', email: 'patrick.schwarz@insightarcs.de', role: 'EMPLOYEE', jobRoleId: 'role-jr', targetH: 40 },
-      { id: 'u-14', name: 'Hanna Zimmermann', email: 'hanna.zimmermann@insightarcs.de', role: 'EMPLOYEE', jobRoleId: 'role-jr', targetH: 40 },
-      { id: 'u-15', name: 'Christian Braun', email: 'christian.braun@insightarcs.de', role: 'EMPLOYEE', jobRoleId: 'role-sr', targetH: 40 },
-      { id: 'u-16', name: 'Lisa Krüger', email: 'lisa.krueger@insightarcs.de', role: 'EMPLOYEE', jobRoleId: 'role-mid', targetH: 40 },
-      { id: 'u-17', name: 'David Schmitt', email: 'david.schmitt@insightarcs.de', role: 'EMPLOYEE', jobRoleId: 'role-mid', targetH: 40 },
-      { id: 'u-18', name: 'Anja Frank', email: 'anja.frank@insightarcs.de', role: 'EMPLOYEE', jobRoleId: 'role-mid', targetH: 20 },
-      { id: 'u-19', name: 'Stefan Lange', email: 'stefan.lange@insightarcs.de', role: 'EMPLOYEE', jobRoleId: 'role-mid', targetH: 40 },
-      { id: 'u-20', name: 'Vanessa Hartmann', email: 'vanessa.hartmann@insightarcs.de', role: 'EMPLOYEE', jobRoleId: 'role-jr', targetH: 40 },
+      { id: 'u-1', name: 'Dr. Andreas Behrens', email: 'andreas.behrens@insightarcs.de', role: 'ADMIN', jobRoleId: 'role-lead', targetH: 40, indBilling: 220, indCost: 110, empType: 'INTERNAL' },
+      { id: 'u-2', name: 'Laura Klein', email: 'laura.klein@insightarcs.de', role: 'PROJECT_MANAGER', jobRoleId: 'role-sr', targetH: 40, empType: 'INTERNAL' },
+      { id: 'u-3', name: 'Markus Weber', email: 'markus.weber@insightarcs.de', role: 'PROJECT_MANAGER', jobRoleId: 'role-lead', targetH: 40, empType: 'INTERNAL' },
+      { id: 'u-4', name: 'Sophie Becker', email: 'sophie.becker@insightarcs.de', role: 'EMPLOYEE', jobRoleId: 'role-sr', targetH: 40, empType: 'INTERNAL' },
+      { id: 'u-5', name: 'Tobias Fischer', email: 'tobias.fischer@insightarcs.de', role: 'EMPLOYEE', jobRoleId: 'role-mid', targetH: 40, empType: 'INTERNAL' },
+      { id: 'u-6', name: 'Julia Hoffmann', email: 'julia.hoffmann@insightarcs.de', role: 'EMPLOYEE', jobRoleId: 'role-sr', targetH: 32, empType: 'INTERNAL' }, // part time
+      { id: 'u-7', name: 'Dennis Wagner', email: 'dennis.wagner@insightarcs.de', role: 'EMPLOYEE', jobRoleId: 'role-mid', targetH: 40, empType: 'INTERNAL' },
+      { id: 'u-8', name: 'Elena Meyer', email: 'elena.meyer@insightarcs.de', role: 'EMPLOYEE', jobRoleId: 'role-mid', targetH: 40, empType: 'INTERNAL' },
+      { id: 'u-9', name: 'Jan Richter', email: 'jan.richter@insightarcs.de', role: 'EMPLOYEE', jobRoleId: 'role-mid', targetH: 40, empType: 'INTERNAL' },
+      { id: 'u-10', name: 'Sarah Koch', email: 'sarah.koch@insightarcs.de', role: 'EMPLOYEE', jobRoleId: 'role-mid', targetH: 40, empType: 'INTERNAL' },
+      { id: 'u-11', name: 'Felix Bauer', email: 'felix.bauer@freelance-tech.de', role: 'EMPLOYEE', jobRoleId: 'role-sr', targetH: 40, empType: 'EXTERNAL', company: 'Bauer Cloud Consulting' },
+      { id: 'u-12', name: 'Miriam Wolf', email: 'miriam.wolf@insightarcs.de', role: 'EMPLOYEE', jobRoleId: 'role-mid', targetH: 30, empType: 'INTERNAL' },
+      { id: 'u-13', name: 'Patrick Schwarz', email: 'patrick.schwarz@insightarcs.de', role: 'EMPLOYEE', jobRoleId: 'role-jr', targetH: 40, empType: 'INTERNAL' },
+      { id: 'u-14', name: 'Hanna Zimmermann', email: 'hanna.zimmermann@insightarcs.de', role: 'EMPLOYEE', jobRoleId: 'role-jr', targetH: 40, empType: 'INTERNAL' },
+      { id: 'u-15', name: 'Christian Braun', email: 'c.braun@braun-security.com', role: 'EMPLOYEE', jobRoleId: 'role-sr', targetH: 40, empType: 'EXTERNAL', company: 'Braun IT-Security Services' },
+      { id: 'u-16', name: 'Lisa Krüger', email: 'lisa.krueger@insightarcs.de', role: 'EMPLOYEE', jobRoleId: 'role-mid', targetH: 40, empType: 'INTERNAL' },
+      { id: 'u-17', name: 'David Schmitt', email: 'd.schmitt@devcontractors.eu', role: 'EMPLOYEE', jobRoleId: 'role-mid', targetH: 40, empType: 'EXTERNAL', company: 'DevContractors EU' },
+      { id: 'u-18', name: 'Anja Frank', email: 'anja.frank@insightarcs.de', role: 'EMPLOYEE', jobRoleId: 'role-mid', targetH: 20, empType: 'INTERNAL' },
+      { id: 'u-19', name: 'Stefan Lange', email: 'stefan.lange@insightarcs.de', role: 'EMPLOYEE', jobRoleId: 'role-mid', targetH: 40, empType: 'INTERNAL' },
+      { id: 'u-20', name: 'Vanessa Hartmann', email: 'v.hartmann@external-expert.de', role: 'EMPLOYEE', jobRoleId: 'role-jr', targetH: 40, empType: 'EXTERNAL', company: 'Hartmann Consulting & Support' },
     ];
 
-    this.users = team.map((t, idx) => ({
-      id: t.id,
-      orgId,
-      name: t.name,
-      email: t.email,
-      role: t.role as any,
-      jobRoleId: t.jobRoleId,
-      individualBillingRate: (t as any).indBilling,
-      individualCostRate: (t as any).indCost,
-      weeklyTargetHours: t.targetH,
-      dailyTargetHours: t.targetH / 5,
-      workDays: [1, 2, 3, 4, 5],
-      holidayCalendar: 'DE-BY', // Bayern / Bundesweit
-      language: idx % 3 === 2 ? 'en' : 'de',
-      status: 'ACTIVE',
-      createdAt: '2025-01-01T09:00:00.000Z'
-    }));
+    this.users = team.map((t, idx) => {
+      // Dr. Andreas Behrens, Laura Klein, Markus Weber, Tobias Fischer sind mehreren Mandanten zugeordnet
+      let memberships: UserOrganizationMembership[] = [
+        { orgId: org1, orgName: 'Insight Arcs GmbH (Hauptmandant)', role: t.role as any, employmentType: (t as any).empType || 'INTERNAL', jobRoleId: t.jobRoleId, individualBillingRate: (t as any).indBilling, individualCostRate: (t as any).indCost, isDefault: true }
+      ];
+
+      if (t.id === 'u-1') {
+        memberships.push(
+          { orgId: org2, orgName: 'NovaTech Solutions GmbH', role: 'ADMIN', employmentType: 'INTERNAL', individualBillingRate: 240, individualCostRate: 120 },
+          { orgId: org3, orgName: 'Helios Digital Advisory AG', role: 'ADMIN', employmentType: 'INTERNAL', individualBillingRate: 260, individualCostRate: 130 }
+        );
+      } else if (t.id === 'u-2' || t.id === 'u-3') {
+        memberships.push(
+          { orgId: org2, orgName: 'NovaTech Solutions GmbH', role: 'PROJECT_MANAGER', employmentType: 'INTERNAL', jobRoleId: 'role-nova-pm', individualBillingRate: 180, individualCostRate: 90 }
+        );
+      } else if (t.id === 'u-5' || t.id === 'u-8') {
+        memberships.push(
+          { orgId: org2, orgName: 'NovaTech Solutions GmbH', role: 'EMPLOYEE', employmentType: 'INTERNAL', jobRoleId: 'role-nova-dev', individualBillingRate: 160, individualCostRate: 80 },
+          { orgId: org3, orgName: 'Helios Digital Advisory AG', role: 'EMPLOYEE', employmentType: 'EXTERNAL', individualBillingRate: 190, individualCostRate: 95 }
+        );
+      }
+
+      return {
+        id: t.id,
+        orgId: org1,
+        name: t.name,
+        email: t.email,
+        role: t.role as any,
+        employmentType: ((t as any).empType || 'INTERNAL') as any,
+        companyName: (t as any).company,
+        jobRoleId: t.jobRoleId,
+        individualBillingRate: (t as any).indBilling,
+        individualCostRate: (t as any).indCost,
+        weeklyTargetHours: t.targetH,
+        dailyTargetHours: t.targetH / 5,
+        workDays: [1, 2, 3, 4, 5],
+        holidayCalendar: 'DE-BE',
+        language: idx % 3 === 2 ? 'en' : 'de',
+        status: 'ACTIVE',
+        memberships,
+        createdAt: '2025-01-01T09:00:00.000Z'
+      };
+    });
+
+    const orgId = org1;
 
     // 3. Clients
     this.clients = [
-      { id: 'c-1', orgId, name: 'MedTech Solutions AG', clientNumber: 'KND-1001', contactPerson: 'Dr. Michael Hansen', email: 'hansen@medtech-sol.de', status: 'ACTIVE', createdAt: '2025-01-10T10:00:00Z' },
-      { id: 'c-2', orgId, name: 'FinSecure Bank SE', clientNumber: 'KND-1002', contactPerson: 'Claudia von Berg', email: 'c.berg@finsecure.de', status: 'ACTIVE', createdAt: '2025-01-12T11:00:00Z' },
-      { id: 'c-3', orgId, name: 'LogiChain Mobility GmbH', clientNumber: 'KND-1003', contactPerson: 'Ralf Richter', email: 'r.richter@logichain.com', status: 'ACTIVE', createdAt: '2025-01-15T09:30:00Z' },
-      { id: 'c-4', orgId, name: 'GreenEnergy Systems AG', clientNumber: 'KND-1004', contactPerson: 'Sarah Vogt', email: 'vogt@greenenergy.de', status: 'ACTIVE', createdAt: '2025-02-01T08:00:00Z' },
-      { id: 'c-5', orgId, name: 'Insight Arcs (Intern)', clientNumber: 'INT-0001', contactPerson: 'Internal Operations', email: 'ops@insightarcs.de', status: 'ACTIVE', createdAt: '2025-01-01T08:00:00Z' },
+      // Org 1 (Insight Arcs) Clients
+      { id: 'c-1', orgId: org1, name: 'MedTech Solutions AG', clientNumber: 'KND-1001', contactPerson: 'Dr. Michael Hansen', email: 'hansen@medtech-sol.de', status: 'ACTIVE', createdAt: '2025-01-10T10:00:00Z' },
+      { id: 'c-2', orgId: org1, name: 'FinSecure Bank SE', clientNumber: 'KND-1002', contactPerson: 'Claudia von Berg', email: 'c.berg@finsecure.de', status: 'ACTIVE', createdAt: '2025-01-12T11:00:00Z' },
+      { id: 'c-3', orgId: org1, name: 'LogiChain Mobility GmbH', clientNumber: 'KND-1003', contactPerson: 'Ralf Richter', email: 'r.richter@logichain.com', status: 'ACTIVE', createdAt: '2025-01-15T09:30:00Z' },
+      { id: 'c-4', orgId: org1, name: 'GreenEnergy Systems AG', clientNumber: 'KND-1004', contactPerson: 'Sarah Vogt', email: 'vogt@greenenergy.de', status: 'ACTIVE', createdAt: '2025-02-01T08:00:00Z' },
+      { id: 'c-5', orgId: org1, name: 'Insight Arcs (Intern)', clientNumber: 'INT-0001', contactPerson: 'Internal Operations', email: 'ops@insightarcs.de', status: 'ACTIVE', createdAt: '2025-01-01T08:00:00Z' },
+
+      // Org 2 (NovaTech Solutions) Clients
+      { id: 'c-nov-1', orgId: org2, name: 'Bavaria Automotive Group', clientNumber: 'NOV-KND-01', contactPerson: 'Maximilian Huber', email: 'm.huber@bavaria-auto.de', status: 'ACTIVE', createdAt: '2025-02-05T09:00:00Z' },
+      { id: 'c-nov-2', orgId: org2, name: 'Munich Quantum Labs', clientNumber: 'NOV-KND-02', contactPerson: 'Prof. Dr. Clara Eder', email: 'eder@quantum-muc.de', status: 'ACTIVE', createdAt: '2025-02-10T10:00:00Z' },
+
+      // Org 3 (Helios Digital Advisory) Clients
+      { id: 'c-hel-1', orgId: org3, name: 'Hanseatic Port Logistics AG', clientNumber: 'HEL-KND-01', contactPerson: 'Thorsten Jensen', email: 'jensen@hanse-port.de', status: 'ACTIVE', createdAt: '2025-03-05T09:00:00Z' },
     ];
 
     // 4. Projects
     this.projects = [
       {
         id: 'p-1',
-        orgId,
+        orgId: org1,
         clientId: 'c-1',
         clientName: 'MedTech Solutions AG',
         name: 'AI-Clinical-Workflow Assistant',
@@ -131,7 +209,7 @@ export class StorageService {
       },
       {
         id: 'p-2',
-        orgId,
+        orgId: org1,
         clientId: 'c-2',
         clientName: 'FinSecure Bank SE',
         name: 'Banking Core Cloud Migration',
@@ -154,7 +232,7 @@ export class StorageService {
       },
       {
         id: 'p-3',
-        orgId,
+        orgId: org1,
         clientId: 'c-3',
         clientName: 'LogiChain Mobility GmbH',
         name: 'Fleet Telematics Cloud Hub',
@@ -171,7 +249,7 @@ export class StorageService {
       },
       {
         id: 'p-4',
-        orgId,
+        orgId: org1,
         clientId: 'c-4',
         clientName: 'GreenEnergy Systems AG',
         name: 'Solar Yield Forecast Engine',
@@ -188,7 +266,7 @@ export class StorageService {
       },
       {
         id: 'p-5',
-        orgId,
+        orgId: org1,
         clientId: 'c-5',
         clientName: 'Insight Arcs (Intern)',
         name: 'Allgemeine Verwaltung & Weiterbildung',
@@ -201,6 +279,47 @@ export class StorageService {
         assignedUserIds: [],
         memberRates: [],
         createdAt: '2025-01-01T08:00:00Z'
+      },
+
+      // Org 2 (NovaTech) Projects
+      {
+        id: 'p-nov-1',
+        orgId: org2,
+        clientId: 'c-nov-1',
+        clientName: 'Bavaria Automotive Group',
+        name: 'Autonomous Driving Sensor Data Ingestion',
+        projectNumber: 'NOV-2025-01',
+        billingModel: 'TIME_AND_MATERIAL',
+        budgetHours: 400,
+        status: 'ACTIVE',
+        requireApproval: true,
+        requiredFields: { description: true, task: true, breaks: false },
+        restrictToAssignedMembers: true,
+        assignedUserIds: ['u-1', 'u-2', 'u-5'],
+        memberRates: [
+          { id: 'pmr-nov-1', projectId: 'p-nov-1', userId: 'u-1', hourlyBillingRate: 240, hourlyCostRate: 120 }
+        ],
+        createdAt: '2025-02-15T08:00:00Z'
+      },
+
+      // Org 3 (Helios) Projects
+      {
+        id: 'p-hel-1',
+        orgId: org3,
+        clientId: 'c-hel-1',
+        clientName: 'Hanseatic Port Logistics AG',
+        name: 'Digital Port Twin Strategy & Roadmap',
+        projectNumber: 'HEL-2025-01',
+        billingModel: 'FIXED_PRICE',
+        totalFixedPrice: 120000,
+        budgetHours: 600,
+        status: 'ACTIVE',
+        requireApproval: true,
+        requiredFields: { description: true, task: true, breaks: false },
+        restrictToAssignedMembers: true,
+        assignedUserIds: ['u-1', 'u-8'],
+        memberRates: [],
+        createdAt: '2025-03-10T08:00:00Z'
       }
     ];
 
@@ -218,6 +337,13 @@ export class StorageService {
       { id: 't-10', projectId: 'p-4', name: 'ML-Modelltraining & Validierung', isBillableDefault: true, budgetHours: 130, status: 'ACTIVE' },
       { id: 't-11', projectId: 'p-5', name: 'Interne Teambesprechung & Standup', isBillableDefault: false, status: 'ACTIVE' },
       { id: 't-12', projectId: 'p-5', name: 'Zertifizierung & Schulung', isBillableDefault: false, status: 'ACTIVE' },
+
+      // Org 2 Tasks
+      { id: 't-nov-1', projectId: 'p-nov-1', name: 'Sensor Telemetrie Architektur', isBillableDefault: true, budgetHours: 80, status: 'ACTIVE' },
+      { id: 't-nov-2', projectId: 'p-nov-1', name: 'Edge Gateway Protokolle', isBillableDefault: true, budgetHours: 120, status: 'ACTIVE' },
+
+      // Org 3 Tasks
+      { id: 't-hel-1', projectId: 'p-hel-1', name: 'Strategie-Workshop & Stakeholder-Interviews', isBillableDefault: true, budgetHours: 150, status: 'ACTIVE' },
     ];
 
     // 6. Time Entries (Sample 2025 and 2026 data)
@@ -921,66 +1047,146 @@ export class StorageService {
     };
   }
 
-  // --- CRUD getters ---
+  // --- Multi-Organization / Tenant Switcher ---
+  public getOrganizations(): Organization[] {
+    return this.organizations;
+  }
+
+  public getActiveOrgId(): string {
+    return this.activeOrgId;
+  }
+
+  public setActiveOrgId(orgId: string): Organization | null {
+    const org = this.organizations.find(o => o.id === orgId);
+    if (!org) return null;
+    this.activeOrgId = orgId;
+    return org;
+  }
+
+  public addOrganization(orgData: Partial<Organization>, actorId: string): Organization {
+    const newOrg: Organization = {
+      id: 'org-' + Math.random().toString(36).substring(2, 9),
+      name: orgData.name || 'Neuer Mandant',
+      code: orgData.code || `MND-${this.organizations.length + 1}`,
+      defaultHourlyBillingRate: orgData.defaultHourlyBillingRate || 130,
+      defaultHourlyCostRate: orgData.defaultHourlyCostRate || 65,
+      defaultCurrency: orgData.defaultCurrency || 'EUR',
+      stateLocation: orgData.stateLocation || 'DE-BE',
+      locationCity: orgData.locationCity || 'Berlin',
+      logoColor: orgData.logoColor || 'indigo',
+      createdAt: new Date().toISOString()
+    };
+    this.organizations.push(newOrg);
+
+    // Add actor as admin membership
+    const user = this.users.find(u => u.id === actorId);
+    if (user) {
+      if (!user.memberships) user.memberships = [];
+      user.memberships.push({
+        orgId: newOrg.id,
+        orgName: newOrg.name,
+        role: 'ADMIN',
+        isDefault: false
+      });
+    }
+
+    this.logAudit({
+      entityType: 'ORGANIZATION',
+      entityId: newOrg.id,
+      action: 'CREATE',
+      userId: actorId,
+      userName: user?.name || 'Admin',
+      changes: [{ field: 'name', oldValue: null, newValue: newOrg.name }],
+      reason: 'Neuer Mandant im System angelegt'
+    });
+
+    return newOrg;
+  }
+
+  // --- CRUD getters (Filtered by active tenant) ---
   public getOrganization() { return this.organization; }
   public updateOrganization(updates: Partial<Organization>, actorId: string): Organization {
-    const oldState = this.organization.stateLocation;
-    const oldCity = this.organization.locationCity;
+    const idx = this.organizations.findIndex(o => o.id === this.activeOrgId);
+    if (idx === -1) return this.organization;
+
+    const oldState = this.organizations[idx].stateLocation;
+    const oldCity = this.organizations[idx].locationCity;
     const stateObj = updates.stateLocation ? GERMAN_STATES.find(s => s.code === updates.stateLocation) : undefined;
     
-    this.organization = {
-      ...this.organization,
+    this.organizations[idx] = {
+      ...this.organizations[idx],
       ...updates,
-      locationCity: updates.locationCity || (stateObj ? stateObj.name : this.organization.locationCity)
+      locationCity: updates.locationCity || (stateObj ? stateObj.name : this.organizations[idx].locationCity)
     };
 
     if (updates.stateLocation && updates.stateLocation !== oldState) {
       this.logAudit({
         entityType: 'ORGANIZATION',
-        entityId: this.organization.id,
+        entityId: this.organizations[idx].id,
         action: 'UPDATE',
         userId: actorId,
         userName: this.users.find(u => u.id === actorId)?.name || 'Admin',
         changes: [
           { field: 'stateLocation', oldValue: oldState, newValue: updates.stateLocation },
-          { field: 'locationCity', oldValue: oldCity, newValue: this.organization.locationCity }
+          { field: 'locationCity', oldValue: oldCity, newValue: this.organizations[idx].locationCity }
         ],
         reason: 'Unternehmensstandort und Feiertagskalender angepasst'
       });
     }
 
-    return this.organization;
+    return this.organizations[idx];
   }
-  public getUsers() { return this.users; }
-  public getJobRoles() { return this.jobRoles; }
-  public getClients() { return this.clients; }
-  public getProjects() { return this.projects; }
+  
+  public getUsers(allOrgs: boolean = false) { 
+    if (allOrgs) return this.users;
+    // Return users that are either directly in this org or have a membership for this org
+    return this.users.filter(u => u.orgId === this.activeOrgId || u.memberships?.some(m => m.orgId === this.activeOrgId));
+  }
+  
+  public getJobRoles() { return this.jobRoles.filter(r => r.orgId === this.activeOrgId); }
+  public getClients() { return this.clients.filter(c => c.orgId === this.activeOrgId); }
+  public getProjects() { return this.projects.filter(p => p.orgId === this.activeOrgId); }
   public getTasks(projectId?: string) {
+    const allowedProjects = this.getProjects().map(p => p.id);
     if (projectId) return this.tasks.filter(t => t.projectId === projectId);
-    return this.tasks;
+    return this.tasks.filter(t => allowedProjects.includes(t.projectId));
   }
-  public getApiKeys() { return this.apiKeys; }
-  public getAuditLogs() { return this.auditLogs; }
+  public getApiKeys() { return this.apiKeys.filter(k => k.orgId === this.activeOrgId); }
+  public getAuditLogs() { return this.auditLogs.filter(a => a.orgId === this.activeOrgId); }
 
   // --- User / Auth ---
   public addUser(userData: Partial<User>, inviterId: string): User {
     const newUser: User = {
       id: 'u-' + (this.users.length + 1),
-      orgId: this.organization.id,
+      orgId: this.activeOrgId || this.organization.id,
       name: userData.name || 'Neuer Mitarbeiter',
       email: userData.email || '',
       role: userData.role || 'EMPLOYEE',
+      employmentType: userData.employmentType || 'INTERNAL',
+      companyName: userData.companyName,
       jobRoleId: userData.jobRoleId || 'role-mid',
       individualBillingRate: userData.individualBillingRate,
       individualCostRate: userData.individualCostRate,
       weeklyTargetHours: userData.weeklyTargetHours || 40,
       dailyTargetHours: (userData.weeklyTargetHours || 40) / 5,
       workDays: userData.workDays || [1, 2, 3, 4, 5],
-      holidayCalendar: userData.holidayCalendar || 'DE-BY',
+      holidayCalendar: userData.holidayCalendar || 'DE-BE',
       language: userData.language || 'de',
       status: userData.status || 'INVITED',
       invitationToken: 'inv-' + Math.random().toString(36).substring(2, 12),
       invitationExpiresAt: new Date(Date.now() + 7 * 24 * 3600 * 1000).toISOString(),
+      memberships: [
+        {
+          orgId: this.activeOrgId || this.organization.id,
+          orgName: this.organization?.name || 'Mandant',
+          role: userData.role || 'EMPLOYEE',
+          employmentType: userData.employmentType || 'INTERNAL',
+          jobRoleId: userData.jobRoleId,
+          individualBillingRate: userData.individualBillingRate,
+          individualCostRate: userData.individualCostRate,
+          isDefault: true
+        }
+      ],
       createdAt: new Date().toISOString()
     };
     this.users.push(newUser);
@@ -1137,7 +1343,7 @@ export class StorageService {
     limit?: number;
     updatedAfter?: string;
   }): { data: TimeEntry[]; total: number; page: number; limit: number } {
-    let list = [...this.timeEntries];
+    let list = this.timeEntries.filter(e => e.orgId === this.activeOrgId);
 
     if (params?.from) {
       list = list.filter(e => e.date >= params.from!);
@@ -1382,7 +1588,7 @@ export class StorageService {
 
   // --- Working Time (Allgemeine Tagesarbeitszeit - Section 20) ---
   public getWorkingTimeEntries(params?: { from?: string; to?: string; userId?: string }): WorkingTimeEntry[] {
-    let list = [...this.workingTimeEntries];
+    let list = this.workingTimeEntries.filter(w => w.orgId === this.activeOrgId);
     if (params?.from) list = list.filter(w => w.date >= params.from!);
     if (params?.to) list = list.filter(w => w.date <= params.to!);
     if (params?.userId) list = list.filter(w => w.userId === params.userId);
@@ -1506,7 +1712,7 @@ export class StorageService {
 
   // --- Forecast Planning (Plan vs. Ist - Section 21) ---
   public getForecasts(month?: string, projectId?: string): ForecastEntry[] {
-    let list = [...this.forecasts];
+    let list = this.forecasts.filter(f => f.orgId === this.activeOrgId);
     if (month) list = list.filter(f => f.month === month);
     if (projectId) list = list.filter(f => f.projectId === projectId);
     return list;

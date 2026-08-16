@@ -56,28 +56,67 @@ async function startServer() {
     });
   });
 
-  // Auth / Session Switching
+  // Auth / Session Switching & Organization Management
   app.get('/api/auth/me', (req, res) => {
-    const users = storage.getUsers();
-    const user = users.find(u => u.id === currentUserId) || users[0];
+    const allUsers = storage.getUsers(true);
+    const user = allUsers.find(u => u.id === currentUserId) || allUsers[0];
     res.json({
       user,
       organization: storage.getOrganization(),
+      organizations: storage.getOrganizations(),
+      activeOrgId: storage.getActiveOrgId(),
       roles: storage.getJobRoles()
     });
   });
 
   app.post('/api/auth/switch-user', (req, res) => {
     const { userId } = req.body;
-    const user = storage.getUsers().find(u => u.id === userId);
+    const allUsers = storage.getUsers(true);
+    const user = allUsers.find(u => u.id === userId);
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
     }
     currentUserId = userId;
-    res.json({ success: true, activeUser: user });
+    // Check if user has membership in current activeOrgId, if not switch to user's default/first org
+    const userMemberships = user.memberships || [];
+    const hasCurrentOrg = user.orgId === storage.getActiveOrgId() || userMemberships.some(m => m.orgId === storage.getActiveOrgId());
+    if (!hasCurrentOrg && userMemberships.length > 0) {
+      storage.setActiveOrgId(userMemberships[0].orgId);
+    } else if (!hasCurrentOrg && user.orgId) {
+      storage.setActiveOrgId(user.orgId);
+    }
+    res.json({ 
+      success: true, 
+      activeUser: user, 
+      organization: storage.getOrganization(),
+      activeOrgId: storage.getActiveOrgId()
+    });
   });
 
-  // Organization & Settings
+  // Organization & Multi-Tenant Switcher (Section 2, 4)
+  app.get('/api/organizations', (req, res) => {
+    res.json(storage.getOrganizations());
+  });
+
+  app.post('/api/organizations', (req, res) => {
+    const actorId = getActorId(req);
+    const newOrg = storage.addOrganization(req.body, actorId);
+    res.status(201).json(newOrg);
+  });
+
+  app.post('/api/organizations/switch', (req, res) => {
+    const { orgId } = req.body;
+    const org = storage.setActiveOrgId(orgId);
+    if (!org) {
+      return res.status(404).json({ error: 'Organization not found' });
+    }
+    res.json({
+      success: true,
+      activeOrgId: orgId,
+      organization: org
+    });
+  });
+
   app.get('/api/organization', (req, res) => {
     res.json(storage.getOrganization());
   });

@@ -38,6 +38,8 @@ interface AppContextType {
   setCurrentUser: (user: User) => void;
   users: User[];
   organization: Organization | null;
+  organizations: Organization[];
+  activeOrgId: string;
   jobRoles: EmployeeJobRole[];
   clients: Client[];
   projects: Project[];
@@ -58,6 +60,8 @@ interface AppContextType {
   // Data actions
   refreshAllData: () => Promise<void>;
   switchUser: (userId: string) => Promise<void>;
+  switchOrganization: (orgId: string) => Promise<void>;
+  createOrganization: (orgData: Partial<Organization>) => Promise<Organization>;
   createTimeEntry: (entry: Partial<TimeEntry>) => Promise<TimeEntry>;
   updateTimeEntry: (id: string, updates: Partial<TimeEntry>, reason?: string) => Promise<void>;
   deleteTimeEntry: (id: string) => Promise<void>;
@@ -132,6 +136,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [users, setUsers] = useState<User[]>([]);
   const [organization, setOrganization] = useState<Organization | null>(null);
+  const [organizations, setOrganizations] = useState<Organization[]>([]);
+  const [activeOrgId, setActiveOrgId] = useState<string>('org-insight-arcs-01');
   const [jobRoles, setJobRoles] = useState<EmployeeJobRole[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
@@ -194,8 +200,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const refreshAllData = useCallback(async () => {
     try {
       setIsLoading(true);
-      const [authRes, usersRes, rolesRes, clientsRes, projectsRes, tasksRes, timeRes, workRes, auditRes, fcRes, keysRes] = await Promise.all([
+      const [authRes, orgsRes, usersRes, rolesRes, clientsRes, projectsRes, tasksRes, timeRes, workRes, auditRes, fcRes, keysRes] = await Promise.all([
         fetch('/api/auth/me').then(r => r.json()),
+        fetch('/api/organizations').then(r => r.json()),
         fetch('/api/users').then(r => r.json()),
         fetch('/api/employee-roles').then(r => r.json()),
         fetch('/api/clients').then(r => r.json()),
@@ -213,6 +220,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         if (authRes.user.language) setLanguageState(authRes.user.language);
       }
       if (authRes.organization) setOrganization(authRes.organization);
+      if (authRes.activeOrgId) setActiveOrgId(authRes.activeOrgId);
+      setOrganizations(orgsRes || authRes.organizations || []);
       setUsers(usersRes || []);
       setJobRoles(rolesRes || []);
       setClients(clientsRes || []);
@@ -225,7 +234,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       setApiKeys(keysRes || []);
 
       // If active timer project is empty, select first project
-      if (!activeTimer.projectId && projectsRes && projectsRes.length > 0) {
+      if (projectsRes && projectsRes.length > 0 && !projectsRes.some((p: any) => p.id === activeTimer.projectId)) {
         setActiveTimer(prev => ({ ...prev, projectId: projectsRes[0].id }));
       }
     } catch (err) {
@@ -239,6 +248,40 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     refreshAllData();
   }, [refreshAllData]);
 
+  // Switch Active Organization / Mandant
+  const switchOrganization = async (orgId: string) => {
+    try {
+      const res = await fetch('/api/organizations/switch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orgId })
+      });
+      const data = await res.json();
+      if (data.success) {
+        setActiveOrgId(orgId);
+        if (data.organization) setOrganization(data.organization);
+        await refreshAllData();
+      }
+    } catch (err) {
+      console.error('Failed to switch organization:', err);
+    }
+  };
+
+  // Create New Organization / Mandant
+  const createOrganization = async (orgData: Partial<Organization>): Promise<Organization> => {
+    const res = await fetch('/api/organizations', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-user-id': currentUser?.id || 'u-1'
+      },
+      body: JSON.stringify(orgData)
+    });
+    const newOrg = await res.json();
+    await refreshAllData();
+    return newOrg;
+  };
+
   // Switch Simulated User
   const switchUser = async (userId: string) => {
     const res = await fetch('/api/auth/switch-user', {
@@ -250,6 +293,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     if (data.success && data.activeUser) {
       setCurrentUser(data.activeUser);
       if (data.activeUser.language) setLanguageState(data.activeUser.language);
+      if (data.activeOrgId) setActiveOrgId(data.activeOrgId);
+      if (data.organization) setOrganization(data.organization);
       await refreshAllData();
     }
   };
@@ -577,6 +622,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         setCurrentUser,
         users,
         organization,
+        organizations,
+        activeOrgId,
         jobRoles,
         clients,
         projects,
@@ -595,6 +642,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         updateTimerState,
         refreshAllData,
         switchUser,
+        switchOrganization,
+        createOrganization,
         createTimeEntry,
         updateTimeEntry,
         deleteTimeEntry,
