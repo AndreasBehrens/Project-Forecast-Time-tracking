@@ -160,3 +160,34 @@ export function getWorkingDaysInRange(
     workdayDates
   };
 }
+
+/**
+ * Resolves the applicable Bundesland code for holiday calculations according to tenant rules:
+ * - Free/External workers (`employmentType: 'EXTERNAL'`): ALWAYS uses the tenant's primary location.
+ * - Fixed/Internal employees (`employmentType: 'INTERNAL'`):
+ *   - If tenant offers mobile workplaces (`allowMobileWorkplaces === true`) and employee has an individual state configured, uses employee's state.
+ *   - Otherwise uses the tenant's primary location.
+ */
+export function resolveUserHolidayState(
+  user?: { employmentType?: string; stateLocation?: string; holidayCalendar?: string } | null,
+  organization?: { stateLocation?: string; allowMobileWorkplaces?: boolean } | null
+): string {
+  const defaultOrgState = organization?.stateLocation || 'DE-BE';
+  if (!user) return defaultOrgState;
+
+  // External / Freelance workers ALWAYS adhere strictly to the tenant's primary location
+  if (user.employmentType === 'EXTERNAL') {
+    return defaultOrgState;
+  }
+
+  // Internal employees: only if tenant has mobile workplaces activated and user has a configured state
+  if (organization?.allowMobileWorkplaces) {
+    const userState = user.stateLocation || user.holidayCalendar;
+    if (userState && GERMAN_STATES.some(s => s.code === userState)) {
+      return userState;
+    }
+  }
+
+  return defaultOrgState;
+}
+

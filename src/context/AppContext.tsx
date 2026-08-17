@@ -87,6 +87,9 @@ interface AppContextType {
   createApiKey: (name: string) => Promise<ApiKey>;
   revokeApiKey: (id: string) => Promise<void>;
   importClockify: (rows: any[]) => Promise<ClockifyImportReport>;
+  createJobRole: (roleData: Partial<EmployeeJobRole>) => Promise<EmployeeJobRole>;
+  updateJobRole: (id: string, updates: Partial<EmployeeJobRole>) => Promise<EmployeeJobRole>;
+  deleteJobRole: (id: string) => Promise<{ success: boolean; error?: string }>;
   resolveRate: (userId: string, projectId?: string) => Promise<{
     billingRate: number;
     costRate: number;
@@ -96,6 +99,7 @@ interface AppContextType {
   }>;
   getPlanVsActual: (month: string) => Promise<ForecastComparisonItem[]>;
   updateOrganization: (updates: Partial<Organization>) => Promise<Organization>;
+  updateOrganizationById: (id: string, updates: Partial<Organization>) => Promise<Organization>;
   getProjectForecastSummary: (params: {
     periodType?: string;
     periodKey?: string;
@@ -735,6 +739,49 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     return data.comparison || [];
   };
 
+  const createJobRole = async (roleData: Partial<EmployeeJobRole>): Promise<EmployeeJobRole> => {
+    const res = await fetch('/api/employee-roles', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-user-id': currentUser?.id || 'u-1'
+      },
+      body: JSON.stringify(roleData)
+    });
+    const created = await res.json();
+    await refreshAllData();
+    return created;
+  };
+
+  const updateJobRole = async (id: string, updates: Partial<EmployeeJobRole>): Promise<EmployeeJobRole> => {
+    const res = await fetch(`/api/employee-roles/${id}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-user-id': currentUser?.id || 'u-1'
+      },
+      body: JSON.stringify(updates)
+    });
+    const updated = await res.json();
+    await refreshAllData();
+    return updated;
+  };
+
+  const deleteJobRole = async (id: string): Promise<{ success: boolean; error?: string }> => {
+    const res = await fetch(`/api/employee-roles/${id}`, {
+      method: 'DELETE',
+      headers: {
+        'x-user-id': currentUser?.id || 'u-1'
+      }
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      return { success: false, error: data.error || 'Fehler beim Löschen der Rolle' };
+    }
+    await refreshAllData();
+    return { success: true };
+  };
+
   const updateOrganization = async (updates: Partial<Organization>): Promise<Organization> => {
     const res = await fetch('/api/organization', {
       method: 'PUT',
@@ -746,6 +793,20 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     });
     const updated = await res.json();
     setOrganization(updated);
+    await refreshAllData();
+    return updated;
+  };
+
+  const updateOrganizationById = async (id: string, updates: Partial<Organization>): Promise<Organization> => {
+    const res = await fetch(`/api/organizations/${id}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-user-id': currentUser?.id || 'u-1'
+      },
+      body: JSON.stringify(updates)
+    });
+    const updated = await res.json();
     await refreshAllData();
     return updated;
   };
@@ -827,9 +888,13 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         createApiKey,
         revokeApiKey,
         importClockify,
+        createJobRole,
+        updateJobRole,
+        deleteJobRole,
         resolveRate,
         getPlanVsActual,
         updateOrganization,
+        updateOrganizationById,
         getProjectForecastSummary
       }}
     >

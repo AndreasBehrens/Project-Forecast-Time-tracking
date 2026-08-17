@@ -44,6 +44,7 @@ export class StorageService {
         defaultCurrency: 'EUR',
         stateLocation: 'DE-BE', // Berlin (Hauptsitz)
         locationCity: 'Berlin',
+        allowMobileWorkplaces: true, // Mobile Arbeitsplätze für feste Mitarbeiter aktiv
         logoColor: 'emerald',
         createdAt: '2025-01-01T08:00:00.000Z'
       },
@@ -56,6 +57,7 @@ export class StorageService {
         defaultCurrency: 'EUR',
         stateLocation: 'DE-BY', // Bayern (München)
         locationCity: 'München',
+        allowMobileWorkplaces: false, // Fixer Standort Bayern
         logoColor: 'blue',
         createdAt: '2025-02-01T08:00:00.000Z'
       },
@@ -68,6 +70,7 @@ export class StorageService {
         defaultCurrency: 'EUR',
         stateLocation: 'DE-HH', // Hamburg
         locationCity: 'Hamburg',
+        allowMobileWorkplaces: true,
         logoColor: 'amber',
         createdAt: '2025-03-01T08:00:00.000Z'
       }
@@ -103,7 +106,7 @@ export class StorageService {
     // 2. 20 Users
     const team = [
       { id: 'u-1', name: 'Dr. Andreas Behrens', email: 'andreas.behrens@insightarcs.de', role: 'SUPERADMIN', jobRoleId: 'role-lead', targetH: 40, indBilling: 220, indCost: 110, empType: 'INTERNAL' },
-      { id: 'u-2', name: 'Laura Klein', email: 'laura.klein@insightarcs.de', role: 'PROJECT_MANAGER', jobRoleId: 'role-sr', targetH: 40, empType: 'INTERNAL' },
+      { id: 'u-2', name: 'Laura Klein', email: 'laura.klein@insightarcs.de', role: 'ADMIN', jobRoleId: 'role-sr', targetH: 40, empType: 'INTERNAL' },
       { id: 'u-3', name: 'Markus Weber', email: 'markus.weber@insightarcs.de', role: 'PROJECT_MANAGER', jobRoleId: 'role-lead', targetH: 40, empType: 'INTERNAL' },
       { id: 'u-4', name: 'Sophie Becker', email: 'sophie.becker@insightarcs.de', role: 'EMPLOYEE', jobRoleId: 'role-sr', targetH: 40, empType: 'INTERNAL' },
       { id: 'u-5', name: 'Tobias Fischer', email: 'tobias.fischer@insightarcs.de', role: 'EMPLOYEE', jobRoleId: 'role-mid', targetH: 40, empType: 'INTERNAL' },
@@ -1102,10 +1105,19 @@ export class StorageService {
       defaultCurrency: orgData.defaultCurrency || 'EUR',
       stateLocation: orgData.stateLocation || 'DE-BE',
       locationCity: orgData.locationCity || 'Berlin',
+      allowMobileWorkplaces: orgData.allowMobileWorkplaces ?? false,
       logoColor: orgData.logoColor || 'indigo',
       createdAt: new Date().toISOString()
     };
     this.organizations.push(newOrg);
+
+    // Create default Job Roles for the new tenant
+    this.jobRoles.push(
+      { id: `role-${newOrg.id}-lead`, orgId: newOrg.id, name: 'Lead Consultant', standardBillingRate: 190, standardCostRate: 95, status: 'ACTIVE' },
+      { id: `role-${newOrg.id}-sr`, orgId: newOrg.id, name: 'Senior Consultant', standardBillingRate: 150, standardCostRate: 75, status: 'ACTIVE' },
+      { id: `role-${newOrg.id}-mid`, orgId: newOrg.id, name: 'Consultant', standardBillingRate: 120, standardCostRate: 60, status: 'ACTIVE' },
+      { id: `role-${newOrg.id}-jr`, orgId: newOrg.id, name: 'Junior Consultant', standardBillingRate: 90, standardCostRate: 45, status: 'ACTIVE' }
+    );
 
     // Add actor as admin membership
     const user = this.users.find(u => u.id === actorId);
@@ -1134,6 +1146,7 @@ export class StorageService {
 
   // --- CRUD getters (Filtered by active tenant) ---
   public getOrganization() { return this.organization; }
+  
   public updateOrganization(updates: Partial<Organization>, actorId: string): Organization {
     const idx = this.organizations.findIndex(o => o.id === this.activeOrgId);
     if (idx === -1) return this.organization;
@@ -1162,6 +1175,30 @@ export class StorageService {
         reason: 'Unternehmensstandort und Feiertagskalender angepasst'
       });
     }
+
+    return this.organizations[idx];
+  }
+
+  public updateOrganizationById(orgId: string, updates: Partial<Organization>, actorId: string): Organization | null {
+    const idx = this.organizations.findIndex(o => o.id === orgId);
+    if (idx === -1) return null;
+
+    const stateObj = updates.stateLocation ? GERMAN_STATES.find(s => s.code === updates.stateLocation) : undefined;
+    this.organizations[idx] = {
+      ...this.organizations[idx],
+      ...updates,
+      locationCity: updates.locationCity || (stateObj ? stateObj.name : this.organizations[idx].locationCity)
+    };
+
+    this.logAudit({
+      entityType: 'ORGANIZATION',
+      entityId: orgId,
+      action: 'UPDATE',
+      userId: actorId,
+      userName: this.users.find(u => u.id === actorId)?.name || 'Admin',
+      changes: [{ field: 'organization', oldValue: null, newValue: updates.name || orgId }],
+      reason: 'Mandanten-Einstellungen aktualisiert'
+    });
 
     return this.organizations[idx];
   }
@@ -1296,12 +1333,28 @@ export class StorageService {
 
   // --- User / Auth ---
   public addUser(userData: Partial<User>, inviterId: string): User {
+    const actorInfo = this.getActorRoleInfo(inviterId);
+    
+    // RBAC Rule 3 & 4: Only Superadmin can create or assign ADMIN or SUPERADMIN roles.
+    // Tenant Admin can only invite EMPLOYEE or PROJECT_MANAGER.
+    let requestedRole: UserRole = userData.role || 'EMPLOYEE';
+    if (!actorInfo.isSuperAdmin) {
+      if (requestedRole === 'SUPERADMIN' || requestedRole === 'ADMIN') {
+        requestedRole = userData.role === 'PROJECT_MANAGER' ? 'PROJECT_MANAGER' : 'EMPLOYEE';
+      }
+    }
+
+    const isInternal = (userData.employmentType || 'INTERNAL') === 'INTERNAL';
+    const userState = (isInternal && this.organization.allowMobileWorkplaces) 
+      ? (userData.stateLocation || this.organization.stateLocation || 'DE-BE')
+      : (this.organization.stateLocation || 'DE-BE');
+
     const newUser: User = {
       id: 'u-' + (this.users.length + 1),
       orgId: this.activeOrgId || this.organization.id,
       name: userData.name || 'Neuer Mitarbeiter',
       email: userData.email || '',
-      role: userData.role || 'EMPLOYEE',
+      role: requestedRole,
       employmentType: userData.employmentType || 'INTERNAL',
       companyName: userData.companyName,
       jobRoleId: userData.jobRoleId || 'role-mid',
@@ -1310,7 +1363,8 @@ export class StorageService {
       weeklyTargetHours: userData.weeklyTargetHours || 40,
       dailyTargetHours: (userData.weeklyTargetHours || 40) / 5,
       workDays: userData.workDays || [1, 2, 3, 4, 5],
-      holidayCalendar: userData.holidayCalendar || 'DE-BE',
+      stateLocation: userState,
+      holidayCalendar: userState,
       language: userData.language || 'de',
       status: userData.status || 'INVITED',
       invitationToken: 'inv-' + Math.random().toString(36).substring(2, 12),
@@ -1319,7 +1373,7 @@ export class StorageService {
         {
           orgId: this.activeOrgId || this.organization.id,
           orgName: this.organization?.name || 'Mandant',
-          role: userData.role || 'EMPLOYEE',
+          role: requestedRole,
           employmentType: userData.employmentType || 'INTERNAL',
           jobRoleId: userData.jobRoleId,
           individualBillingRate: userData.individualBillingRate,
@@ -1337,7 +1391,7 @@ export class StorageService {
       action: 'CREATE',
       userId: inviterId,
       userName: this.users.find(u => u.id === inviterId)?.name || 'Admin',
-      changes: [{ field: 'user', oldValue: null, newValue: newUser.email }]
+      changes: [{ field: 'user', oldValue: null, newValue: `${newUser.name} (${newUser.email}) [${newUser.role}]` }]
     });
 
     return newUser;
@@ -1347,12 +1401,55 @@ export class StorageService {
     const idx = this.users.findIndex(u => u.id === userId);
     if (idx === -1) return null;
     const old = { ...this.users[idx] };
-    this.users[idx] = { ...this.users[idx], ...updates };
+    const actorInfo = this.getActorRoleInfo(actorId);
 
-    const changes = Object.keys(updates).map(k => ({
+    // RBAC Rule 3 & 4: Only Superadmin can promote someone to ADMIN or SUPERADMIN, or modify a Superadmin profile.
+    const sanitizedUpdates = { ...updates };
+    if (!actorInfo.isSuperAdmin) {
+      // Cannot modify a Superadmin or Admin unless you are Superadmin
+      if (old.role === 'SUPERADMIN' || (old.role === 'ADMIN' && old.id !== actorId)) {
+        delete sanitizedUpdates.role;
+      }
+      if (sanitizedUpdates.role === 'SUPERADMIN' || sanitizedUpdates.role === 'ADMIN') {
+        sanitizedUpdates.role = old.role;
+      }
+    }
+    
+    // Check holiday location rules if stateLocation or employmentType is changed
+    let stateLocation = sanitizedUpdates.stateLocation !== undefined ? sanitizedUpdates.stateLocation : this.users[idx].stateLocation;
+    const empType = sanitizedUpdates.employmentType !== undefined ? sanitizedUpdates.employmentType : this.users[idx].employmentType;
+    if (empType === 'EXTERNAL' || !this.organization.allowMobileWorkplaces) {
+      stateLocation = this.organization.stateLocation;
+    }
+
+    this.users[idx] = { 
+      ...this.users[idx], 
+      ...sanitizedUpdates,
+      stateLocation,
+      holidayCalendar: stateLocation || this.organization.stateLocation || 'DE-BE'
+    };
+
+    // Keep memberships in sync
+    if (this.users[idx].memberships) {
+      this.users[idx].memberships = this.users[idx].memberships!.map(m => {
+        if (m.orgId === this.activeOrgId) {
+          return {
+            ...m,
+            role: this.users[idx].role,
+            employmentType: this.users[idx].employmentType,
+            jobRoleId: this.users[idx].jobRoleId,
+            individualBillingRate: this.users[idx].individualBillingRate,
+            individualCostRate: this.users[idx].individualCostRate
+          };
+        }
+        return m;
+      });
+    }
+
+    const changes = Object.keys(sanitizedUpdates).map(k => ({
       field: k,
       oldValue: (old as any)[k],
-      newValue: (updates as any)[k]
+      newValue: (sanitizedUpdates as any)[k]
     }));
 
     this.logAudit({
@@ -1370,6 +1467,23 @@ export class StorageService {
   public deleteUser(userId: string, actorId: string): { success: boolean; error?: string } {
     const user = this.users.find(u => u.id === userId);
     if (!user) return { success: false, error: 'Benutzer nicht gefunden' };
+
+    const actorInfo = this.getActorRoleInfo(actorId);
+    
+    // RBAC Rule 3 & 4: Only Superadmin can delete Admins or Superadmins
+    if ((user.role === 'SUPERADMIN' || user.role === 'ADMIN') && !actorInfo.isSuperAdmin) {
+      return {
+        success: false,
+        error: 'Administratoren und Superadmins können nur durch einen Superadmin verwaltet oder gelöscht werden.'
+      };
+    }
+
+    if (user.role === 'SUPERADMIN' && this.users.filter(u => u.role === 'SUPERADMIN').length <= 1) {
+      return {
+        success: false,
+        error: 'Der letzte verbleibende Superadmin des Systems kann nicht gelöscht werden.'
+      };
+    }
 
     const entriesCount = this.timeEntries.filter(te => te.userId === userId).length;
     if (entriesCount > 0) {
@@ -1396,22 +1510,79 @@ export class StorageService {
   // --- Job Roles CRUD ---
   public addJobRole(roleData: Partial<EmployeeJobRole>, actorId: string): EmployeeJobRole {
     const role: EmployeeJobRole = {
-      id: 'role-' + (this.jobRoles.length + 1),
-      orgId: this.organization.id,
+      id: 'role-' + (this.jobRoles.length + 1) + '-' + Math.random().toString(36).substring(2, 6),
+      orgId: this.activeOrgId || this.organization.id,
       name: roleData.name || 'Neue Rolle',
-      standardBillingRate: roleData.standardBillingRate || 100,
-      standardCostRate: roleData.standardCostRate || 50,
+      standardBillingRate: Number(roleData.standardBillingRate) || 120,
+      standardCostRate: Number(roleData.standardCostRate) || 60,
       status: 'ACTIVE'
     };
     this.jobRoles.push(role);
+
+    this.logAudit({
+      entityType: 'JOB_ROLE',
+      entityId: role.id,
+      action: 'CREATE',
+      userId: actorId,
+      userName: this.users.find(u => u.id === actorId)?.name || 'Admin',
+      changes: [{ field: 'name', oldValue: null, newValue: role.name }],
+      reason: 'Neue fachliche Rolle für Mandanten angelegt'
+    });
+
     return role;
   }
 
-  public updateJobRole(roleId: string, updates: Partial<EmployeeJobRole>): EmployeeJobRole | null {
+  public updateJobRole(roleId: string, updates: Partial<EmployeeJobRole>, actorId?: string): EmployeeJobRole | null {
     const idx = this.jobRoles.findIndex(r => r.id === roleId);
     if (idx === -1) return null;
-    this.jobRoles[idx] = { ...this.jobRoles[idx], ...updates };
+    const old = { ...this.jobRoles[idx] };
+    this.jobRoles[idx] = { 
+      ...this.jobRoles[idx], 
+      ...updates,
+      standardBillingRate: updates.standardBillingRate !== undefined ? Number(updates.standardBillingRate) : this.jobRoles[idx].standardBillingRate,
+      standardCostRate: updates.standardCostRate !== undefined ? Number(updates.standardCostRate) : this.jobRoles[idx].standardCostRate
+    };
+
+    if (actorId) {
+      this.logAudit({
+        entityType: 'JOB_ROLE',
+        entityId: roleId,
+        action: 'UPDATE',
+        userId: actorId,
+        userName: this.users.find(u => u.id === actorId)?.name || 'Admin',
+        changes: [{ field: 'rates', oldValue: `${old.standardBillingRate}/${old.standardCostRate}`, newValue: `${this.jobRoles[idx].standardBillingRate}/${this.jobRoles[idx].standardCostRate}` }],
+        reason: 'Rollen-Stundensätze aktualisiert'
+      });
+    }
+
     return this.jobRoles[idx];
+  }
+
+  public deleteJobRole(roleId: string, actorId: string): { success: boolean; error?: string } {
+    const role = this.jobRoles.find(r => r.id === roleId);
+    if (!role) return { success: false, error: 'Rolle nicht gefunden' };
+
+    const assignedUsers = this.users.filter(u => u.orgId === this.activeOrgId && u.jobRoleId === roleId);
+    if (assignedUsers.length > 0) {
+      return {
+        success: false,
+        error: `Rolle "${role.name}" kann nicht gelöscht werden, da sie noch ${assignedUsers.length} Mitarbeiter(n) im Mandanten zugeordnet ist. Bitte weisen Sie den Mitarbeitern zuerst eine andere Rolle zu.`
+      };
+    }
+
+    this.jobRoles = this.jobRoles.filter(r => r.id !== roleId);
+
+    this.logAudit({
+      entityType: 'JOB_ROLE',
+      entityId: roleId,
+      action: 'DELETE',
+      userId: actorId,
+      userName: this.users.find(u => u.id === actorId)?.name || 'Admin',
+      changes: [{ field: 'role', oldValue: role.name, newValue: null }],
+      reason: 'Rolle gelöscht'
+    });
+
+    return { success: true };
   }
 
   // --- Clients & Projects ---
@@ -1761,10 +1932,23 @@ export class StorageService {
   }
 
   public createTimeEntry(entryData: Partial<TimeEntry>, actorId: string): TimeEntry {
-    const user = this.users.find(u => u.id === (entryData.userId || actorId));
+    const bookingUserId = entryData.userId || actorId;
+    const user = this.users.find(u => u.id === bookingUserId);
     const project = this.projects.find(p => p.id === entryData.projectId);
     const client = project ? this.clients.find(c => c.id === project.clientId) : undefined;
     const task = entryData.taskId ? this.tasks.find(t => t.id === entryData.taskId) : undefined;
+
+    if (project) {
+      if (project.status === 'ARCHIVED' || project.status === 'COMPLETED') {
+        throw new Error(`Das Projekt "${project.name}" ist ${project.status === 'ARCHIVED' ? 'archiviert' : 'abgeschlossen'} und für neue Buchungen gesperrt.`);
+      }
+      if (project.excludedUserIds && project.excludedUserIds.includes(bookingUserId)) {
+        throw new Error(`Der Mitarbeiter ist aus dem Projekt "${project.name}" ausgeschlossen und für neue Buchungen gesperrt. Bisherige Buchungen bleiben unverändert erhalten.`);
+      }
+      if (project.restrictToAssignedMembers && (!project.assignedUserIds || !project.assignedUserIds.includes(bookingUserId))) {
+        throw new Error(`Der Mitarbeiter ist dem Projekt "${project.name}" nicht als aktives Teammitglied zugewiesen.`);
+      }
+    }
 
     // Rate resolution
     const rateInfo = this.resolveRates(user?.id || actorId, project?.id, entryData.date);

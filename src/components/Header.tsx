@@ -17,7 +17,6 @@ import {
   Sparkles
 } from 'lucide-react';
 import { CompanyLocationModal } from './CompanyLocationModal';
-import { OrganizationSwitcherModal } from './OrganizationSwitcherModal';
 
 export const Header: React.FC = () => {
   const {
@@ -40,7 +39,6 @@ export const Header: React.FC = () => {
 
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [showLocationModal, setShowLocationModal] = useState(false);
-  const [showOrgModal, setShowOrgModal] = useState(false);
 
   const formatTimer = (totalSeconds: number) => {
     const hours = Math.floor(totalSeconds / 3600);
@@ -126,22 +124,20 @@ export const Header: React.FC = () => {
 
           {/* Right Controls: Mandanten-Umschalter, EU Compliance, Location, Language, User */}
           <div className="flex items-center gap-2.5">
-            {/* Active Organization / Mandanten-Umschalter */}
-            <button
-              id="btn-organization-switcher"
-              onClick={() => setShowOrgModal(true)}
-              className="flex items-center gap-2 text-xs text-slate-800 bg-emerald-50/70 hover:bg-emerald-100/80 border border-emerald-300/70 px-3 py-1.5 rounded-lg transition-all shadow-2xs group"
-              title="Aktiven Mandanten wechseln oder verwalten"
+            {/* Active Organization (Strikte Datenisolation: kein Switch aus Hauptmenü) */}
+            <div
+              id="header-active-organization"
+              className="flex items-center gap-2 text-xs text-slate-800 bg-slate-100/90 border border-slate-200/90 px-3 py-1.5 rounded-lg shadow-2xs"
+              title="Aktiver Firmenmandant (Vollständige Datenisolation)"
             >
-              <Building2 className="w-4 h-4 text-emerald-700" />
+              <Building2 className="w-4 h-4 text-slate-700" />
               <div className="text-left">
-                <div className="text-[9px] uppercase font-bold text-emerald-700 tracking-wider">Mandant</div>
+                <div className="text-[9px] uppercase font-bold text-slate-500 tracking-wider">Mandant</div>
                 <div className="font-bold text-slate-900 truncate max-w-[130px] sm:max-w-[170px]">
                   {organization?.name.split(' (')[0] || 'Insight Arcs'}
                 </div>
               </div>
-              <ChevronDown className="w-3.5 h-3.5 text-emerald-600 group-hover:translate-y-0.5 transition-transform" />
-            </button>
+            </div>
 
             {/* EU Badge */}
             <div className="hidden xl:flex items-center gap-1.5 text-xs text-slate-600 bg-slate-50 border border-slate-200/80 px-2.5 py-1.5 rounded-md">
@@ -312,11 +308,6 @@ export const Header: React.FC = () => {
           </div>
         </div>
       </div>
-
-      <OrganizationSwitcherModal
-        isOpen={showOrgModal}
-        onClose={() => setShowOrgModal(false)}
-      />
 
       <CompanyLocationModal
         isOpen={showLocationModal}

@@ -13,8 +13,9 @@ export interface Organization {
   defaultHourlyBillingRate: number;
   defaultHourlyCostRate: number;
   defaultCurrency: string;
-  stateLocation?: string; // e.g. 'DE-BE' for Berlin
+  stateLocation: string; // e.g. 'DE-BE' for Berlin
   locationCity?: string; // e.g. 'Berlin'
+  allowMobileWorkplaces?: boolean; // If true, fixed employees can define their own Bundesland
   logoColor?: string;
   createdAt: string;
 }
@@ -50,6 +51,7 @@ export interface EmployeeJobRole {
   id: string;
   orgId: string;
   name: string;
+  description?: string;
   standardBillingRate: number;
   standardCostRate: number; // Only visible to ADMIN
   status: 'ACTIVE' | 'ARCHIVED';
@@ -79,7 +81,8 @@ export interface User {
   weeklyTargetHours: number;
   dailyTargetHours: number;
   workDays: number[]; // e.g. [1, 2, 3, 4, 5] for Mon-Fri
-  holidayCalendar: string;
+  stateLocation?: string; // Bundesland code for holidays if mobile workplaces enabled on tenant (e.g. 'DE-BY')
+  holidayCalendar?: string;
   language: Language;
   status: 'ACTIVE' | 'INVITED' | 'SUSPENDED';
   invitationToken?: string;
@@ -130,7 +133,7 @@ export interface Project {
   billingModel: BillingModel;
   totalFixedPrice?: number;
   budgetHours?: number;
-  status: 'ACTIVE' | 'ARCHIVED';
+  status: 'ACTIVE' | 'ON_HOLD' | 'COMPLETED' | 'ARCHIVED';
   requireApproval: boolean;
   requiredFields: {
     description: boolean;
@@ -141,6 +144,7 @@ export interface Project {
   fixedPriceAllocations?: ProjectFixedPriceAllocation[];
   restrictToAssignedMembers?: boolean;
   assignedUserIds?: string[];
+  excludedUserIds?: string[];
   allowPmViewCosts?: boolean;
   createdAt: string;
 }
@@ -214,7 +218,7 @@ export interface AuditLogChange {
 export interface AuditLogEntry {
   id: string;
   orgId: string;
-  entityType: 'TIME_ENTRY' | 'WORKING_TIME' | 'FORECAST' | 'PROJECT' | 'USER' | 'RATE' | 'ORGANIZATION' | 'CLIENT' | 'TASK';
+  entityType: 'TIME_ENTRY' | 'WORKING_TIME' | 'FORECAST' | 'PROJECT' | 'USER' | 'RATE' | 'ORGANIZATION' | 'CLIENT' | 'TASK' | 'JOB_ROLE';
   entityId: string;
   action: 'CREATE' | 'UPDATE' | 'DELETE' | 'APPROVE' | 'REJECT' | 'CORRECT_AFTER_APPROVAL';
   userId: string;
@@ -303,7 +307,7 @@ export interface ProjectForecastSummary {
   clientId: string;
   clientName: string;
   billingModel: BillingModel;
-  status: 'ACTIVE' | 'ARCHIVED' | 'COMPLETED';
+  status: 'ACTIVE' | 'ON_HOLD' | 'COMPLETED' | 'ARCHIVED';
   budgetHours?: number;
   totalFixedPrice?: number;
   

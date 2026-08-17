@@ -3,7 +3,7 @@ import cors from 'cors';
 import path from 'path';
 import { createServer as createViteServer } from 'vite';
 import { storage } from './server/storage.js';
-import { GERMAN_STATES, getGermanHolidays, getWorkingDaysInRange } from './server/holidays.js';
+import { GERMAN_STATES, getGermanHolidays, getWorkingDaysInRange, resolveUserHolidayState } from './server/holidays.js';
 
 async function startServer() {
   const app = express();
@@ -159,6 +159,13 @@ async function startServer() {
     res.status(201).json(newOrg);
   });
 
+  app.put('/api/organizations/:id', (req, res) => {
+    const actorId = getActorId(req);
+    const updated = storage.updateOrganizationById(req.params.id, req.body, actorId);
+    if (!updated) return res.status(404).json({ error: 'Organization not found' });
+    res.json(updated);
+  });
+
   app.post('/api/organizations/switch', (req, res) => {
     const { orgId } = req.body;
     const org = storage.setActiveOrgId(orgId);
@@ -189,7 +196,11 @@ async function startServer() {
 
   app.get('/api/holidays', (req, res) => {
     const year = parseInt((req.query.year as string) || String(new Date().getFullYear()), 10);
-    const stateCode = (req.query.state as string) || storage.getOrganization().stateLocation || 'DE-BE';
+    const actorId = getActorId(req);
+    const targetUserId = (req.query.userId as string) || actorId;
+    const user = targetUserId ? storage.getUsers(true).find(u => u.id === targetUserId) : null;
+    const org = storage.getOrganization();
+    const stateCode = (req.query.state as string) || resolveUserHolidayState(user, org);
     const holidays = getGermanHolidays(year, stateCode);
     res.json({
       year,
@@ -200,7 +211,8 @@ async function startServer() {
 
   // Users & Invitations (Section 4)
   app.get('/api/users', (req, res) => {
-    res.json(storage.getUsers());
+    const { allOrgs } = req.query as { allOrgs?: string };
+    res.json(storage.getUsers(allOrgs === 'true'));
   });
 
   app.post('/api/users/invite', (req, res) => {
@@ -242,9 +254,19 @@ async function startServer() {
   });
 
   app.put('/api/employee-roles/:id', (req, res) => {
-    const role = storage.updateJobRole(req.params.id, req.body);
+    const actorId = getActorId(req);
+    const role = storage.updateJobRole(req.params.id, req.body, actorId);
     if (!role) return res.status(404).json({ error: 'Role not found' });
     res.json(role);
+  });
+
+  app.delete('/api/employee-roles/:id', (req, res) => {
+    const actorId = getActorId(req);
+    const result = storage.deleteJobRole(req.params.id, actorId);
+    if (!result.success) {
+      return res.status(400).json({ error: result.error });
+    }
+    res.json({ success: true, message: 'Rolle erfolgreich gelöscht' });
   });
 
   // Clients & Projects & Tasks (Section 6)

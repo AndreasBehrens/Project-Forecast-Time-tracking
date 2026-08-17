@@ -77,18 +77,27 @@ export const TimeTrackerView: React.FC = () => {
   const effectiveUserId = targetUserId || currentUser?.id || 'u-1';
   const isPrivilegedUser = currentUser?.role === 'ADMIN' || currentUser?.role === 'PROJECT_MANAGER';
 
-  // Allowed projects for booking (filters out restricted projects where user is not assigned)
+  // Allowed projects for booking (filters out archived/completed projects, excluded members, and restricted projects where user is not assigned)
   const allowedProjects = useMemo(() => {
     return projects.filter(p => {
-      if (p.status === 'ARCHIVED') return false;
-      // If unrestricted, everyone can book
+      // 1. Inactive / Archived / Completed projects are never bookable
+      if (p.status === 'ARCHIVED' || p.status === 'COMPLETED') return false;
+
+      // 2. Explicitly excluded users can never book on this project
+      if (p.excludedUserIds && p.excludedUserIds.includes(effectiveUserId)) {
+        return false;
+      }
+
+      // 3. If unrestricted team access, all active employees can book
       if (!p.restrictToAssignedMembers) return true;
-      // If user is explicitly assigned
-      const isAssigned = (p.assignedUserIds && p.assignedUserIds.includes(effectiveUserId)) ||
-                         (p.memberRates && p.memberRates.some(r => r.userId === effectiveUserId));
+
+      // 4. If restricted to specific team members, check active assignment
+      const isAssigned = (p.assignedUserIds && p.assignedUserIds.includes(effectiveUserId));
       if (isAssigned) return true;
-      // Admins/PMs booking for themselves can see all projects
-      if (isPrivilegedUser && targetUserId === currentUser?.id) return true;
+
+      // 5. Admins/PMs booking for themselves can see unassigned active projects only if not explicitly restricted/excluded
+      if (isPrivilegedUser && targetUserId === currentUser?.id && !p.restrictToAssignedMembers) return true;
+
       return false;
     });
   }, [projects, effectiveUserId, isPrivilegedUser, targetUserId, currentUser?.id]);

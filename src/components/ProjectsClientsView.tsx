@@ -18,6 +18,9 @@ import {
   Globe,
   UserCheck,
   UserX,
+  UserMinus,
+  UserPlus,
+  Ban,
   Search,
   Check,
   Edit2,
@@ -64,6 +67,7 @@ export const ProjectsClientsView: React.FC = () => {
   const [projectSearch, setProjectSearch] = useState('');
   const [clientSearch, setClientSearch] = useState('');
   const [projectBillingFilter, setProjectBillingFilter] = useState<'ALL' | 'TIME_AND_MATERIAL' | 'FIXED_PRICE'>('ALL');
+  const [projectStatusFilter, setProjectStatusFilter] = useState<'ALL' | 'ACTIVE' | 'ON_HOLD' | 'COMPLETED' | 'ARCHIVED'>('ALL');
 
   // --- Create Project Modal State ---
   const [showNewProjectModal, setShowNewProjectModal] = useState(false);
@@ -73,6 +77,7 @@ export const ProjectsClientsView: React.FC = () => {
   const [projBillingModel, setProjBillingModel] = useState<'TIME_AND_MATERIAL' | 'FIXED_PRICE'>('TIME_AND_MATERIAL');
   const [projFixedPrice, setProjFixedPrice] = useState('50000');
   const [projBudgetHours, setProjBudgetHours] = useState('200');
+  const [projStatus, setProjStatus] = useState<'ACTIVE' | 'ON_HOLD' | 'COMPLETED' | 'ARCHIVED'>('ACTIVE');
   const [projRequireApproval, setProjRequireApproval] = useState(true);
   const [projReqDesc, setProjReqDesc] = useState(true);
   const [projReqTask, setProjReqTask] = useState(false);
@@ -89,7 +94,7 @@ export const ProjectsClientsView: React.FC = () => {
   const [editProjBillingModel, setEditProjBillingModel] = useState<'TIME_AND_MATERIAL' | 'FIXED_PRICE'>('TIME_AND_MATERIAL');
   const [editProjFixedPrice, setEditProjFixedPrice] = useState('');
   const [editProjBudgetHours, setEditProjBudgetHours] = useState('');
-  const [editProjStatus, setEditProjStatus] = useState<'ACTIVE' | 'ARCHIVED' | 'ON_HOLD'>('ACTIVE');
+  const [editProjStatus, setEditProjStatus] = useState<'ACTIVE' | 'ON_HOLD' | 'COMPLETED' | 'ARCHIVED'>('ACTIVE');
   const [editProjRequireApproval, setEditProjRequireApproval] = useState(true);
   const [editProjReqDesc, setEditProjReqDesc] = useState(true);
   const [editProjReqTask, setEditProjReqTask] = useState(false);
@@ -143,6 +148,18 @@ export const ProjectsClientsView: React.FC = () => {
   const [deleteTaskError, setDeleteTaskError] = useState<string | null>(null);
   const [isDeletingTask, setIsDeletingTask] = useState(false);
 
+  // --- Exclude Member Confirmation State ---
+  const [memberToExclude, setMemberToExclude] = useState<{
+    uid: string;
+    name: string;
+    role?: string;
+    isExternal?: boolean;
+    hours: number;
+    revenue: number;
+    bookingsCount: number;
+  } | null>(null);
+  const [isExcludingMember, setIsExcludingMember] = useState(false);
+
   const selectedProject = projects.find(p => p.id === selectedProjectId) || projects[0];
   const projectTasks = tasks.filter(t => t.projectId === selectedProject?.id);
 
@@ -164,6 +181,7 @@ export const ProjectsClientsView: React.FC = () => {
       billingModel: projBillingModel,
       totalFixedPrice: projBillingModel === 'FIXED_PRICE' ? parseFloat(projFixedPrice) : undefined,
       budgetHours: parseFloat(projBudgetHours) || 100,
+      status: projStatus,
       requireApproval: projRequireApproval,
       requiredFields: {
         description: projReqDesc,
@@ -177,6 +195,7 @@ export const ProjectsClientsView: React.FC = () => {
     setShowNewProjectModal(false);
     setProjName('');
     setProjProjectManagerId('');
+    setProjStatus('ACTIVE');
     setProjRestrictMembers(false);
     setProjAssignedUsers([]);
     setProjAllowPmViewCosts(true);
@@ -286,20 +305,81 @@ export const ProjectsClientsView: React.FC = () => {
   const handleToggleMember = async (userId: string) => {
     if (!selectedProject) return;
     const currentAssigned = selectedProject.assignedUserIds || [];
+    const currentExcluded = selectedProject.excludedUserIds || [];
     const isAssigned = currentAssigned.includes(userId);
-    const newAssigned = isAssigned 
-      ? currentAssigned.filter(id => id !== userId)
-      : [...currentAssigned, userId];
+
+    if (isAssigned) {
+      // Unassign & exclude
+      const newAssigned = currentAssigned.filter(id => id !== userId);
+      const newExcluded = Array.from(new Set([...currentExcluded, userId]));
+      await updateProject(selectedProject.id, {
+        assignedUserIds: newAssigned,
+        excludedUserIds: newExcluded
+      });
+    } else {
+      // Reassign & unexclude
+      const newAssigned = [...currentAssigned, userId];
+      const newExcluded = currentExcluded.filter(id => id !== userId);
+      await updateProject(selectedProject.id, {
+        assignedUserIds: newAssigned,
+        excludedUserIds: newExcluded
+      });
+    }
+  };
+
+  const handleOpenExcludeMember = (memberData: {
+    uid: string;
+    name: string;
+    role?: string;
+    isExternal?: boolean;
+    hours: number;
+    revenue: number;
+    bookingsCount: number;
+  }) => {
+    setMemberToExclude(memberData);
+  };
+
+  const handleConfirmExcludeMember = async () => {
+    if (!selectedProject || !memberToExclude) return;
+    setIsExcludingMember(true);
+    try {
+      const uid = memberToExclude.uid;
+      const currentAssigned = selectedProject.assignedUserIds || [];
+      const currentExcluded = selectedProject.excludedUserIds || [];
+
+      const newAssigned = currentAssigned.filter(id => id !== uid);
+      const newExcluded = Array.from(new Set([...currentExcluded, uid]));
+
+      await updateProject(selectedProject.id, {
+        assignedUserIds: newAssigned,
+        excludedUserIds: newExcluded
+      });
+
+      setMemberToExclude(null);
+    } finally {
+      setIsExcludingMember(false);
+    }
+  };
+
+  const handleReassignMember = async (userId: string) => {
+    if (!selectedProject) return;
+    const currentAssigned = selectedProject.assignedUserIds || [];
+    const currentExcluded = selectedProject.excludedUserIds || [];
+
+    const newAssigned = Array.from(new Set([...currentAssigned, userId]));
+    const newExcluded = currentExcluded.filter(id => id !== userId);
 
     await updateProject(selectedProject.id, {
-      assignedUserIds: newAssigned
+      assignedUserIds: newAssigned,
+      excludedUserIds: newExcluded
     });
   };
 
   const handleAssignAllUsers = async (assignAll: boolean) => {
     if (!selectedProject) return;
     await updateProject(selectedProject.id, {
-      assignedUserIds: assignAll ? users.map(u => u.id) : []
+      assignedUserIds: assignAll ? users.map(u => u.id) : [],
+      excludedUserIds: assignAll ? [] : users.map(u => u.id)
     });
   };
 
@@ -441,7 +521,8 @@ export const ProjectsClientsView: React.FC = () => {
                           p.clientName.toLowerCase().includes(projectSearch.toLowerCase()) ||
                           (p.projectNumber && p.projectNumber.toLowerCase().includes(projectSearch.toLowerCase()));
     const matchesModel = projectBillingFilter === 'ALL' || p.billingModel === projectBillingFilter;
-    return matchesSearch && matchesModel;
+    const matchesStatus = projectStatusFilter === 'ALL' || (p.status || 'ACTIVE') === projectStatusFilter;
+    return matchesSearch && matchesModel && matchesStatus;
   });
 
   // Auto-sync selected project if previous selection is not in filteredProjects
@@ -583,6 +664,30 @@ export const ProjectsClientsView: React.FC = () => {
               </div>
             </div>
 
+            {/* Status Filter Pill Bar */}
+            <div className="flex items-center gap-1 overflow-x-auto pb-1 text-[11px]">
+              {[
+                { key: 'ALL', label: 'Alle Status' },
+                { key: 'ACTIVE', label: 'Aktiv' },
+                { key: 'ON_HOLD', label: 'Pausiert' },
+                { key: 'COMPLETED', label: 'Abgeschlossen' },
+                { key: 'ARCHIVED', label: 'Archiviert' }
+              ].map(st => (
+                <button
+                  key={st.key}
+                  type="button"
+                  onClick={() => setProjectStatusFilter(st.key as any)}
+                  className={`px-2 py-0.5 rounded text-[10px] font-semibold transition-colors shrink-0 ${
+                    projectStatusFilter === st.key
+                      ? 'bg-slate-800 text-white'
+                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                  }`}
+                >
+                  {st.label}
+                </button>
+              ))}
+            </div>
+
             {/* Search Box */}
             <div className="relative">
               <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-2.5" />
@@ -601,6 +706,7 @@ export const ProjectsClientsView: React.FC = () => {
                 const entries = timeEntries.filter(e => e.projectId === project.id);
                 const hours = entries.reduce((s, e) => s + e.durationHoursDecimal, 0);
                 const hasEntries = entries.length > 0;
+                const st = project.status || 'ACTIVE';
 
                 return (
                   <div
@@ -617,9 +723,19 @@ export const ProjectsClientsView: React.FC = () => {
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2">
                           <span className="text-[11px] font-semibold text-slate-400 truncate">{project.clientName}</span>
-                          {project.status === 'ARCHIVED' && (
+                          {st === 'ARCHIVED' && (
                             <span className="text-[9px] font-bold bg-slate-100 text-slate-600 px-1.5 py-0.2 rounded border border-slate-200">
                               Archiviert
+                            </span>
+                          )}
+                          {st === 'ON_HOLD' && (
+                            <span className="text-[9px] font-bold bg-amber-50 text-amber-700 px-1.5 py-0.2 rounded border border-amber-200">
+                              Pausiert
+                            </span>
+                          )}
+                          {st === 'COMPLETED' && (
+                            <span className="text-[9px] font-bold bg-blue-50 text-blue-700 px-1.5 py-0.2 rounded border border-blue-200">
+                              Abgeschlossen
                             </span>
                           )}
                         </div>
@@ -702,11 +818,26 @@ export const ProjectsClientsView: React.FC = () => {
                   <div>
                     <div className="flex items-center gap-2">
                       <span className="text-xs text-slate-400 font-medium">{selectedProject.clientName}</span>
-                      {selectedProject.status === 'ARCHIVED' && (
-                        <span className="text-[10px] font-bold bg-amber-100 text-amber-900 px-2 py-0.5 rounded">
-                          Archiviert
-                        </span>
-                      )}
+                      <select
+                        id="select-quick-project-status"
+                        value={selectedProject.status || 'ACTIVE'}
+                        onChange={(e) => updateProject(selectedProject.id, { status: e.target.value as any })}
+                        className={`text-[11px] font-bold px-2.5 py-0.5 rounded-lg border cursor-pointer transition-colors ${
+                          selectedProject.status === 'ARCHIVED'
+                            ? 'bg-slate-100 text-slate-700 border-slate-300'
+                            : selectedProject.status === 'ON_HOLD'
+                            ? 'bg-amber-50 text-amber-800 border-amber-300'
+                            : selectedProject.status === 'COMPLETED'
+                            ? 'bg-blue-50 text-blue-800 border-blue-300'
+                            : 'bg-emerald-50 text-emerald-800 border-emerald-300'
+                        }`}
+                        title="Projektstatus ändern (Aktiv / Pausiert / Abgeschlossen / Archiviert)"
+                      >
+                        <option value="ACTIVE">● Aktiv</option>
+                        <option value="ON_HOLD">● Pausiert</option>
+                        <option value="COMPLETED">● Abgeschlossen</option>
+                        <option value="ARCHIVED">● Archiviert</option>
+                      </select>
                     </div>
                     <h3 className="text-xl font-black text-slate-900 mt-0.5 flex items-center gap-2">
                       <span>{selectedProject.name}</span>
@@ -940,6 +1071,7 @@ export const ProjectsClientsView: React.FC = () => {
 
                   const projectMemberIds = Array.from(new Set([
                     ...(selectedProject?.assignedUserIds || []),
+                    ...(selectedProject?.excludedUserIds || []),
                     ...projectEntries.map(e => e.userId)
                   ]));
 
@@ -961,6 +1093,13 @@ export const ProjectsClientsView: React.FC = () => {
                     const userMargin = userCost !== null ? (userRevenue - userCost) : null;
                     const userMarginPercent = (userMargin !== null && userRevenue > 0) ? (userMargin / userRevenue) * 100 : null;
 
+                    const isExplicitlyExcluded = (selectedProject?.excludedUserIds || []).includes(uid);
+                    const isRestricted = !!selectedProject?.restrictToAssignedMembers;
+                    const isAssigned = (selectedProject?.assignedUserIds || []).includes(uid);
+
+                    // A member can book if not explicitly excluded AND (not restricted OR assigned)
+                    const canBook = !isExplicitlyExcluded && (!isRestricted || isAssigned);
+
                     return {
                       user,
                       uid,
@@ -976,7 +1115,9 @@ export const ProjectsClientsView: React.FC = () => {
                       userCost,
                       userMargin,
                       userMarginPercent,
-                      isAssigned: (selectedProject?.assignedUserIds || []).includes(uid)
+                      isAssigned,
+                      isExplicitlyExcluded,
+                      canBook
                     };
                   });
 
@@ -1029,6 +1170,17 @@ export const ProjectsClientsView: React.FC = () => {
                         </div>
                       </div>
 
+                      {/* GoBD Integrity & Member Exclusion Banner */}
+                      <div className="p-3 bg-blue-50/70 border border-blue-200/80 rounded-xl flex items-start gap-2.5 text-xs text-blue-900 shadow-2xs">
+                        <Info className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
+                        <div className="space-y-0.5">
+                          <span className="font-bold">Mitarbeiter-Ausschluss & Revisionssicherheit:</span>
+                          <p className="text-blue-800 text-[11px] leading-relaxed">
+                            Das Ausschließen eines Mitarbeiters sperrt <strong>ausschließlich zukünftige Zeiterfassungen</strong> für dieses Projekt. Sämtliche historischen Buchungen, Soll/Ist-Vergleiche und Forecast-Versionen bleiben GoBD-konform und vollständig unverändert erhalten.
+                          </p>
+                        </div>
+                      </div>
+
                       {/* Summary KPI Cards */}
                       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
                         <div className="p-3 bg-slate-50 rounded-xl border border-slate-200/80">
@@ -1078,25 +1230,23 @@ export const ProjectsClientsView: React.FC = () => {
                             <tr className="bg-slate-50 border-b border-slate-200 text-slate-600 text-[10px] uppercase font-bold tracking-wider">
                               <th className="py-2.5 px-3">Mitarbeiter</th>
                               <th className="py-2.5 px-2">Typ</th>
+                              <th className="py-2.5 px-2">Buchungsstatus</th>
                               <th className="py-2.5 px-2 text-right">Stunden</th>
                               <th className="py-2.5 px-2 text-right">Kundensatz</th>
                               <th className="py-2.5 px-2 text-right">Kostensatz</th>
                               <th className="py-2.5 px-2 text-right">Umsatz</th>
                               <th className="py-2.5 px-2 text-right">Kosten</th>
-                              <th className="py-2.5 px-3 text-right">Marge</th>
+                              <th className="py-2.5 px-2 text-right">Marge</th>
+                              <th className="py-2.5 px-3 text-right">Aktion</th>
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-slate-100">
                             {projectMembersData.map(m => (
-                              <tr key={m.uid} className="hover:bg-slate-50/70 transition-colors">
+                              <tr key={m.uid} className={`transition-colors ${!m.canBook ? 'bg-slate-50/40 opacity-90' : 'hover:bg-slate-50/70'}`}>
                                 <td className="py-2.5 px-3">
                                   <div className="font-bold text-slate-900 truncate">{m.name}</div>
                                   <div className="text-[10px] text-slate-400">
-                                    {m.isAssigned ? (
-                                      <span className="text-blue-600 font-medium">✓ Zugewiesen</span>
-                                    ) : (
-                                      <span className="text-slate-400">Gebucht</span>
-                                    )}
+                                    {m.user?.email || m.role}
                                   </div>
                                 </td>
                                 <td className="py-2.5 px-2">
@@ -1107,6 +1257,22 @@ export const ProjectsClientsView: React.FC = () => {
                                   }`}>
                                     {m.isExternal ? (m.companyName ? `Extern (${m.companyName})` : 'Extern') : 'Intern'}
                                   </span>
+                                </td>
+                                <td className="py-2.5 px-2">
+                                  {m.canBook ? (
+                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                      <CheckCircle className="w-3 h-3 text-emerald-600" />
+                                      Aktiv im Team
+                                    </span>
+                                  ) : (
+                                    <span
+                                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-50 text-amber-800 border border-amber-200"
+                                      title="Für zukünftige Buchungen gesperrt. Bisherige Buchungen und Forecasts bleiben vollständig erhalten."
+                                    >
+                                      <Lock className="w-3 h-3 text-amber-600" />
+                                      {m.userHours > 0 ? 'Gesperrt (Historie erhalten)' : 'Gesperrt'}
+                                    </span>
+                                  )}
                                 </td>
                                 <td className="py-2.5 px-2 text-right font-mono font-bold text-slate-800">
                                   {m.userHours.toFixed(1)}h
@@ -1133,7 +1299,7 @@ export const ProjectsClientsView: React.FC = () => {
                                     <span className="text-slate-400 italic text-[10px]">🔒 Maskiert</span>
                                   )}
                                 </td>
-                                <td className="py-2.5 px-3 text-right font-mono">
+                                <td className="py-2.5 px-2 text-right font-mono">
                                   {canViewProjectCosts && m.userMargin !== null ? (
                                     <div>
                                       <span className={`font-bold ${m.userMargin >= 0 ? 'text-indigo-700' : 'text-rose-700'}`}>
@@ -1149,11 +1315,44 @@ export const ProjectsClientsView: React.FC = () => {
                                     <span className="text-slate-400 italic text-[10px]">🔒 Maskiert</span>
                                   )}
                                 </td>
+                                <td className="py-2.5 px-3 text-right">
+                                  {m.canBook ? (
+                                    <button
+                                      type="button"
+                                      id={`btn-exclude-member-${m.uid}`}
+                                      onClick={() => handleOpenExcludeMember({
+                                        uid: m.uid,
+                                        name: m.name,
+                                        role: m.role,
+                                        isExternal: m.isExternal,
+                                        hours: m.userHours,
+                                        revenue: m.userRevenue,
+                                        bookingsCount: m.userEntriesCount
+                                      })}
+                                      title="Mitarbeiter aus dem laufenden Projekt ausschließen (sperrt zukünftige Buchungen, historische Daten bleiben erhalten)"
+                                      className="px-2 py-1 bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 rounded-lg text-[11px] font-semibold inline-flex items-center gap-1 transition-colors shadow-2xs"
+                                    >
+                                      <UserMinus className="w-3 h-3 text-amber-700" />
+                                      <span>Ausschließen</span>
+                                    </button>
+                                  ) : (
+                                    <button
+                                      type="button"
+                                      id={`btn-reassign-member-${m.uid}`}
+                                      onClick={() => handleReassignMember(m.uid)}
+                                      title="Mitarbeiter wieder zuweisen und für zukünftige Buchungen freischalten"
+                                      className="px-2 py-1 bg-blue-50 hover:bg-blue-100 text-blue-900 border border-blue-200 rounded-lg text-[11px] font-semibold inline-flex items-center gap-1 transition-colors shadow-2xs"
+                                    >
+                                      <UserPlus className="w-3 h-3 text-blue-700" />
+                                      <span>Freigeben</span>
+                                    </button>
+                                  )}
+                                </td>
                               </tr>
                             ))}
                             {projectMembersData.length === 0 && (
                               <tr>
-                                <td colSpan={8} className="py-6 text-center text-slate-400 italic">
+                                <td colSpan={10} className="py-6 text-center text-slate-400 italic">
                                   Noch keine Mitarbeiter diesem Projekt zugewiesen oder gebucht.
                                 </td>
                               </tr>
@@ -1459,21 +1658,36 @@ export const ProjectsClientsView: React.FC = () => {
                   </select>
                 </div>
                 <div>
-                  <label className="font-semibold text-slate-700 block mb-1">Projektleiter (PM)</label>
+                  <label className="font-semibold text-slate-700 block mb-1">Status</label>
                   <select
-                    id="select-create-proj-pm"
-                    value={projProjectManagerId}
-                    onChange={e => setProjProjectManagerId(e.target.value)}
-                    className="w-full border border-slate-200 rounded-xl px-3 py-2 text-xs"
+                    id="select-create-proj-status"
+                    value={projStatus}
+                    onChange={e => setProjStatus(e.target.value as any)}
+                    className="w-full border border-slate-200 rounded-xl px-3 py-2 text-xs font-medium"
                   >
-                    <option value="">-- Kein fester PM --</option>
-                    {users.map(u => (
-                      <option key={u.id} value={u.id}>
-                        {u.name} ({u.role === 'PROJECT_MANAGER' ? 'Projektleitung' : u.role === 'ADMIN' ? 'Admin' : 'Mitarbeiter'})
-                      </option>
-                    ))}
+                    <option value="ACTIVE">Aktiv (Buchbar)</option>
+                    <option value="ON_HOLD">Pausiert</option>
+                    <option value="COMPLETED">Abgeschlossen</option>
+                    <option value="ARCHIVED">Archiviert</option>
                   </select>
                 </div>
+              </div>
+
+              <div>
+                <label className="font-semibold text-slate-700 block mb-1">Projektleiter (PM)</label>
+                <select
+                  id="select-create-proj-pm"
+                  value={projProjectManagerId}
+                  onChange={e => setProjProjectManagerId(e.target.value)}
+                  className="w-full border border-slate-200 rounded-xl px-3 py-2 text-xs"
+                >
+                  <option value="">-- Kein fester PM --</option>
+                  {users.map(u => (
+                    <option key={u.id} value={u.id}>
+                      {u.name} ({u.role === 'PROJECT_MANAGER' ? 'Projektleitung' : u.role === 'ADMIN' ? 'Admin' : 'Mitarbeiter'})
+                    </option>
+                  ))}
+                </select>
               </div>
 
               <div className="grid grid-cols-2 gap-2">
@@ -1678,15 +1892,17 @@ export const ProjectsClientsView: React.FC = () => {
                   </select>
                 </div>
                 <div>
-                  <label className="font-semibold text-slate-700 block mb-1">Status</label>
+                  <label className="font-semibold text-slate-700 block mb-1">Status *</label>
                   <select
+                    id="select-edit-proj-status"
                     value={editProjStatus}
                     onChange={e => setEditProjStatus(e.target.value as any)}
                     className="w-full border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold"
                   >
-                    <option value="ACTIVE">Aktiv</option>
-                    <option value="ARCHIVED">Archiviert (Gesperrt für neue Buchungen)</option>
-                    <option value="ON_HOLD">Pausiert</option>
+                    <option value="ACTIVE">Aktiv (Buchbar)</option>
+                    <option value="ON_HOLD">Pausiert (Gestoppt)</option>
+                    <option value="COMPLETED">Abgeschlossen (Projekt beendet)</option>
+                    <option value="ARCHIVED">Archiviert (Buchungssperre)</option>
                   </select>
                 </div>
               </div>
@@ -2405,6 +2621,76 @@ export const ProjectsClientsView: React.FC = () => {
                 </>
               );
             })()}
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* MODAL: EXCLUDE MEMBER FROM PROJECT (Zukünftige Buchungen sperren, Historie erhalten) */}
+      {/* ========================================================================= */}
+      {memberToExclude && selectedProject && (
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in">
+          <div className="bg-white rounded-2xl max-w-lg w-full p-6 space-y-4 shadow-2xl border border-slate-200">
+            <div className="flex items-center gap-3">
+              <div className="p-3 bg-amber-100 text-amber-900 rounded-xl">
+                <UserMinus className="w-6 h-6 text-amber-700" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-slate-900">
+                  Mitarbeiter aus Projekt ausschließen
+                </h3>
+                <div className="text-xs text-slate-500">
+                  {memberToExclude.name} • {selectedProject.name}
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-3 text-xs text-slate-600">
+              <p className="leading-relaxed">
+                Möchten Sie <strong>{memberToExclude.name}</strong> aus dem Projekt <strong>"{selectedProject.name}"</strong> ausschließen?
+              </p>
+
+              <div className="p-3.5 bg-amber-50/80 rounded-xl border border-amber-200 text-amber-950 space-y-2">
+                <div className="font-bold flex items-center gap-1.5 text-amber-900">
+                  <ShieldCheck className="w-4 h-4 text-amber-700" />
+                  <span>Revisionssichere Auswirkung des Ausschlusses:</span>
+                </div>
+                <ul className="list-disc list-inside space-y-1.5 text-[11px] text-amber-900/90 pl-1 leading-relaxed">
+                  <li>
+                    <strong>Zukünftige Buchungen gesperrt:</strong> Der Mitarbeiter kann dieses Projekt ab sofort nicht mehr im Zeiterfassungsmenü auswählen.
+                  </li>
+                  <li>
+                    <strong>Sämtliche historischen Daten bleiben erhalten:</strong> Die bisher erfassten <strong>{memberToExclude.hours.toFixed(1)} Stunden</strong> ({memberToExclude.bookingsCount} Buchungen, € {memberToExclude.revenue.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}) bleiben unverändert in Projektberichten, Soll/Ist-Vergleichen und Leistungsnachweisen gespeichert.
+                  </li>
+                  <li>
+                    <strong>Forecast-Versionen unverändert:</strong> Alle bisherigen Projekt- und Forecast-Snapshots behalten ihre Gültigkeit.
+                  </li>
+                  <li>
+                    <strong>Jederzeit reaktivierbar:</strong> Sie können den Mitarbeiter bei Bedarf jederzeit wieder freischalten.
+                  </li>
+                </ul>
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setMemberToExclude(null)}
+                className="px-3.5 py-1.5 rounded-lg border border-slate-200 text-xs font-medium text-slate-700 hover:bg-slate-50"
+              >
+                {t.cancel}
+              </button>
+              <button
+                type="button"
+                id="btn-confirm-exclude-member"
+                disabled={isExcludingMember}
+                onClick={handleConfirmExcludeMember}
+                className="px-4 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-xs font-semibold flex items-center gap-1.5 shadow-xs disabled:opacity-50"
+              >
+                <UserMinus className="w-3.5 h-3.5" />
+                <span>{isExcludingMember ? 'Wird ausgeschlossen...' : 'Mitarbeiter ausschließen & Buchungen sperren'}</span>
+              </button>
+            </div>
           </div>
         </div>
       )}

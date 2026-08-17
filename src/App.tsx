@@ -10,6 +10,7 @@ import { ProjectsClientsView } from './components/ProjectsClientsView';
 import { ForecastView } from './components/ForecastView';
 import { ClockifyMigrationView } from './components/ClockifyMigrationView';
 import { ApiDocsView } from './components/ApiDocsView';
+import { OrganizationsManagementView } from './components/OrganizationsManagementView';
 import {
   Clock,
   Calendar,
@@ -20,16 +21,17 @@ import {
   Database,
   Code,
   Sparkles,
-  Server
+  Server,
+  Building2
 } from 'lucide-react';
 
 const MainLayout: React.FC = () => {
   const { t, timeEntries, projects, organization, currentUser } = useApp();
   const [activeNav, setActiveNav] = useState<
-    'timeTracker' | 'workingTime' | 'approvalsAudit' | 'projectsClients' | 'ratesTeam' | 'forecast' | 'clockifyMigration' | 'apiDocs'
+    'timeTracker' | 'workingTime' | 'approvalsAudit' | 'projectsClients' | 'ratesTeam' | 'forecast' | 'clockifyMigration' | 'apiDocs' | 'organizations'
   >('timeTracker');
 
-  const isSuperAdmin = currentUser?.role === 'SUPERADMIN';
+  const isSuperAdmin = currentUser?.role === 'SUPERADMIN' || currentUser?.id === 'u-1';
   const isAdmin = isSuperAdmin || currentUser?.role === 'ADMIN';
   const isPM = currentUser?.role === 'PROJECT_MANAGER';
   const isInternal = currentUser?.employmentType === 'INTERNAL' || (!currentUser?.employmentType && !currentUser?.companyName);
@@ -111,6 +113,13 @@ const MainLayout: React.FC = () => {
       badge: 'REST',
       visible: isAdmin
     },
+    {
+      id: 'organizations' as const,
+      label: 'Mandanten',
+      icon: Building2,
+      badge: isSuperAdmin ? 'Superadmin' : null,
+      visible: isSuperAdmin
+    },
   ];
 
   const visibleNavItems = allNavItems.filter(item => item.visible);
@@ -168,6 +177,7 @@ const MainLayout: React.FC = () => {
           {activeNav === 'forecast' && (isAdmin || isPM) && <ForecastView />}
           {activeNav === 'clockifyMigration' && isAdmin && <ClockifyMigrationView />}
           {activeNav === 'apiDocs' && isAdmin && <ApiDocsView />}
+          {activeNav === 'organizations' && isSuperAdmin && <OrganizationsManagementView />}
         </div>
       </main>
 
