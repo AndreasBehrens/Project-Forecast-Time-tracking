@@ -1,4 +1,4 @@
-export type UserRole = 'ADMIN' | 'PROJECT_MANAGER' | 'EMPLOYEE';
+export type UserRole = 'SUPERADMIN' | 'ADMIN' | 'PROJECT_MANAGER' | 'EMPLOYEE';
 
 export type BillingModel = 'TIME_AND_MATERIAL' | 'FIXED_PRICE';
 
@@ -124,6 +124,9 @@ export interface Project {
   clientName?: string;
   name: string;
   projectNumber?: string;
+  projectManagerId?: string;
+  projectManagerName?: string;
+  managerUserIds?: string[];
   billingModel: BillingModel;
   totalFixedPrice?: number;
   budgetHours?: number;
@@ -210,7 +213,7 @@ export interface AuditLogChange {
 export interface AuditLogEntry {
   id: string;
   orgId: string;
-  entityType: 'TIME_ENTRY' | 'WORKING_TIME' | 'FORECAST' | 'PROJECT' | 'USER' | 'RATE' | 'ORGANIZATION';
+  entityType: 'TIME_ENTRY' | 'WORKING_TIME' | 'FORECAST' | 'PROJECT' | 'USER' | 'RATE' | 'ORGANIZATION' | 'CLIENT' | 'TASK';
   entityId: string;
   action: 'CREATE' | 'UPDATE' | 'DELETE' | 'APPROVE' | 'REJECT' | 'CORRECT_AFTER_APPROVAL';
   userId: string;

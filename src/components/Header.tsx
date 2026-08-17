@@ -52,6 +52,7 @@ export const Header: React.FC = () => {
   const activeProject = projects.find(p => p.id === activeTimer.projectId);
 
   const getRoleBadge = (role?: string) => {
+    if (role === 'SUPERADMIN') return <span className="bg-purple-100 text-purple-900 border border-purple-300/80 text-xs font-bold px-2 py-0.5 rounded shadow-2xs">Superadmin</span>;
     if (role === 'ADMIN') return <span className="bg-amber-100 text-amber-800 text-xs font-semibold px-2 py-0.5 rounded">Admin</span>;
     if (role === 'PROJECT_MANAGER') return <span className="bg-blue-100 text-blue-800 text-xs font-semibold px-2 py-0.5 rounded">Projektleitung</span>;
     return <span className="bg-slate-100 text-slate-700 text-xs font-medium px-2 py-0.5 rounded">Mitarbeiter</span>;
@@ -197,7 +198,7 @@ export const Header: React.FC = () => {
                     {currentUser?.name || 'Angemeldet'}
                   </div>
                   <div className="text-[10px] text-slate-500 flex items-center gap-1">
-                    <span>{currentUser?.role === 'ADMIN' ? 'Admin' : currentUser?.role === 'PROJECT_MANAGER' ? 'Projektleitung' : 'Mitarbeiter'}</span>
+                    <span>{currentUser?.role === 'SUPERADMIN' ? 'Superadmin' : currentUser?.role === 'ADMIN' ? 'Admin' : currentUser?.role === 'PROJECT_MANAGER' ? 'Projektleitung' : 'Mitarbeiter'}</span>
                   </div>
                 </div>
                 <ChevronDown className="w-3.5 h-3.5 text-slate-400" />

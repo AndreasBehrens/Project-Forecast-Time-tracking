@@ -1,6 +1,7 @@
 import {
   Organization,
   User,
+  UserRole,
   UserOrganizationMembership,
   EmployeeJobRole,
   Client,
@@ -101,7 +102,7 @@ export class StorageService {
 
     // 2. 20 Users
     const team = [
-      { id: 'u-1', name: 'Dr. Andreas Behrens', email: 'andreas.behrens@insightarcs.de', role: 'ADMIN', jobRoleId: 'role-lead', targetH: 40, indBilling: 220, indCost: 110, empType: 'INTERNAL' },
+      { id: 'u-1', name: 'Dr. Andreas Behrens', email: 'andreas.behrens@insightarcs.de', role: 'SUPERADMIN', jobRoleId: 'role-lead', targetH: 40, indBilling: 220, indCost: 110, empType: 'INTERNAL' },
       { id: 'u-2', name: 'Laura Klein', email: 'laura.klein@insightarcs.de', role: 'PROJECT_MANAGER', jobRoleId: 'role-sr', targetH: 40, empType: 'INTERNAL' },
       { id: 'u-3', name: 'Markus Weber', email: 'markus.weber@insightarcs.de', role: 'PROJECT_MANAGER', jobRoleId: 'role-lead', targetH: 40, empType: 'INTERNAL' },
       { id: 'u-4', name: 'Sophie Becker', email: 'sophie.becker@insightarcs.de', role: 'EMPLOYEE', jobRoleId: 'role-sr', targetH: 40, empType: 'INTERNAL' },
@@ -131,8 +132,8 @@ export class StorageService {
 
       if (t.id === 'u-1') {
         memberships.push(
-          { orgId: org2, orgName: 'NovaTech Solutions GmbH', role: 'ADMIN', employmentType: 'INTERNAL', individualBillingRate: 240, individualCostRate: 120 },
-          { orgId: org3, orgName: 'Helios Digital Advisory AG', role: 'ADMIN', employmentType: 'INTERNAL', individualBillingRate: 260, individualCostRate: 130 }
+          { orgId: org2, orgName: 'NovaTech Solutions GmbH', role: 'SUPERADMIN', employmentType: 'INTERNAL', individualBillingRate: 240, individualCostRate: 120 },
+          { orgId: org3, orgName: 'Helios Digital Advisory AG', role: 'SUPERADMIN', employmentType: 'INTERNAL', individualBillingRate: 260, individualCostRate: 130 }
         );
       } else if (t.id === 'u-2' || t.id === 'u-3') {
         memberships.push(
@@ -186,7 +187,7 @@ export class StorageService {
       { id: 'c-hel-1', orgId: org3, name: 'Hanseatic Port Logistics AG', clientNumber: 'HEL-KND-01', contactPerson: 'Thorsten Jensen', email: 'jensen@hanse-port.de', status: 'ACTIVE', createdAt: '2025-03-05T09:00:00Z' },
     ];
 
-    // 4. Projects
+    // 4. Projects with Project Managers and Team Allocations
     this.projects = [
       {
         id: 'p-1',
@@ -195,6 +196,9 @@ export class StorageService {
         clientName: 'MedTech Solutions AG',
         name: 'AI-Clinical-Workflow Assistant',
         projectNumber: 'PRJ-2025-01',
+        projectManagerId: 'u-2',
+        projectManagerName: 'Laura Klein',
+        managerUserIds: ['u-2'],
         billingModel: 'TIME_AND_MATERIAL',
         budgetHours: 250,
         status: 'ACTIVE',
@@ -215,6 +219,9 @@ export class StorageService {
         clientName: 'FinSecure Bank SE',
         name: 'Banking Core Cloud Migration',
         projectNumber: 'PRJ-2025-02',
+        projectManagerId: 'u-3',
+        projectManagerName: 'Markus Weber',
+        managerUserIds: ['u-3'],
         billingModel: 'FIXED_PRICE',
         totalFixedPrice: 85000,
         budgetHours: 500,
@@ -238,13 +245,16 @@ export class StorageService {
         clientName: 'LogiChain Mobility GmbH',
         name: 'Fleet Telematics Cloud Hub',
         projectNumber: 'PRJ-2025-03',
+        projectManagerId: 'u-2',
+        projectManagerName: 'Laura Klein',
+        managerUserIds: ['u-2'],
         billingModel: 'TIME_AND_MATERIAL',
         budgetHours: 320,
         status: 'ACTIVE',
         requireApproval: false,
         requiredFields: { description: true, task: false, breaks: false },
-        restrictToAssignedMembers: false,
-        assignedUserIds: [],
+        restrictToAssignedMembers: true,
+        assignedUserIds: ['u-1', 'u-2', 'u-4', 'u-11', 'u-12', 'u-13'],
         memberRates: [],
         createdAt: '2025-02-01T14:00:00Z'
       },
@@ -255,13 +265,16 @@ export class StorageService {
         clientName: 'GreenEnergy Systems AG',
         name: 'Solar Yield Forecast Engine',
         projectNumber: 'PRJ-2025-04',
+        projectManagerId: 'u-3',
+        projectManagerName: 'Markus Weber',
+        managerUserIds: ['u-3'],
         billingModel: 'TIME_AND_MATERIAL',
         budgetHours: 200,
         status: 'ACTIVE',
         requireApproval: true,
         requiredFields: { description: true, task: true, breaks: false },
-        restrictToAssignedMembers: false,
-        assignedUserIds: [],
+        restrictToAssignedMembers: true,
+        assignedUserIds: ['u-1', 'u-3', 'u-5', 'u-13', 'u-14', 'u-15'],
         memberRates: [],
         createdAt: '2025-03-01T08:00:00Z'
       },
@@ -272,6 +285,9 @@ export class StorageService {
         clientName: 'Insight Arcs (Intern)',
         name: 'Allgemeine Verwaltung & Weiterbildung',
         projectNumber: 'INT-ADM-01',
+        projectManagerId: 'u-1',
+        projectManagerName: 'Dr. Andreas Behrens',
+        managerUserIds: ['u-1'],
         billingModel: 'TIME_AND_MATERIAL',
         status: 'ACTIVE',
         requireApproval: false,
@@ -290,6 +306,9 @@ export class StorageService {
         clientName: 'Bavaria Automotive Group',
         name: 'Autonomous Driving Sensor Data Ingestion',
         projectNumber: 'NOV-2025-01',
+        projectManagerId: 'u-2',
+        projectManagerName: 'Laura Klein',
+        managerUserIds: ['u-2'],
         billingModel: 'TIME_AND_MATERIAL',
         budgetHours: 400,
         status: 'ACTIVE',
@@ -311,6 +330,9 @@ export class StorageService {
         clientName: 'Hanseatic Port Logistics AG',
         name: 'Digital Port Twin Strategy & Roadmap',
         projectNumber: 'HEL-2025-01',
+        projectManagerId: 'u-3',
+        projectManagerName: 'Markus Weber',
+        managerUserIds: ['u-3'],
         billingModel: 'FIXED_PRICE',
         totalFixedPrice: 120000,
         budgetHours: 600,
@@ -318,7 +340,7 @@ export class StorageService {
         requireApproval: true,
         requiredFields: { description: true, task: true, breaks: false },
         restrictToAssignedMembers: true,
-        assignedUserIds: ['u-1', 'u-8'],
+        assignedUserIds: ['u-1', 'u-3', 'u-8'],
         memberRates: [],
         createdAt: '2025-03-10T08:00:00Z'
       }
@@ -1138,6 +1160,41 @@ export class StorageService {
     return this.organizations[idx];
   }
   
+  public getActorRoleInfo(actorId?: string): { 
+    user: User | null; 
+    isSuperAdmin: boolean; 
+    isAdmin: boolean; 
+    isProjectManager: boolean; 
+    isEmployee: boolean; 
+    role: UserRole;
+  } {
+    if (!actorId) {
+      return { user: null, isSuperAdmin: false, isAdmin: false, isProjectManager: false, isEmployee: false, role: 'EMPLOYEE' };
+    }
+    const user = this.users.find(u => u.id === actorId) || null;
+    if (!user) {
+      return { user: null, isSuperAdmin: false, isAdmin: false, isProjectManager: false, isEmployee: false, role: 'EMPLOYEE' };
+    }
+    const isSuperAdmin = user.role === 'SUPERADMIN' || user.id === 'u-1';
+    
+    // Check membership role in current activeOrgId or fallback to user.role
+    const activeMembership = user.memberships?.find(m => m.orgId === this.activeOrgId);
+    const orgRole: UserRole = isSuperAdmin ? 'SUPERADMIN' : (activeMembership?.role || user.role);
+    
+    const isAdmin = isSuperAdmin || orgRole === 'ADMIN';
+    const isProjectManager = !isSuperAdmin && !isAdmin && orgRole === 'PROJECT_MANAGER';
+    const isEmployee = !isSuperAdmin && !isAdmin && !isProjectManager;
+
+    return { 
+      user, 
+      isSuperAdmin, 
+      isAdmin, 
+      isProjectManager, 
+      isEmployee,
+      role: orgRole 
+    };
+  }
+
   public getUsers(allOrgs: boolean = false) { 
     if (allOrgs) return this.users;
     // Return users that are either directly in this org or have a membership for this org
@@ -1145,15 +1202,84 @@ export class StorageService {
   }
   
   public getJobRoles() { return this.jobRoles.filter(r => r.orgId === this.activeOrgId); }
-  public getClients() { return this.clients.filter(c => c.orgId === this.activeOrgId); }
-  public getProjects() { return this.projects.filter(p => p.orgId === this.activeOrgId); }
-  public getTasks(projectId?: string) {
-    const allowedProjects = this.getProjects().map(p => p.id);
-    if (projectId) return this.tasks.filter(t => t.projectId === projectId);
+
+  public getClients(actorId?: string, allOrgs: boolean = false): Client[] { 
+    const roleInfo = this.getActorRoleInfo(actorId);
+    if (roleInfo.isSuperAdmin && allOrgs) {
+      return this.clients;
+    }
+    const orgClients = this.clients.filter(c => c.orgId === this.activeOrgId);
+    // SuperAdmin or Admin sees all clients in the tenant
+    if (!actorId || roleInfo.isSuperAdmin || roleInfo.isAdmin) {
+      return orgClients;
+    }
+    // Employee or Project Manager sees clients of their visible projects
+    const visibleProjectClientIds = this.getProjects(actorId).map(p => p.clientId);
+    return orgClients.filter(c => visibleProjectClientIds.includes(c.id));
+  }
+
+  public getProjects(actorId?: string, allOrgs: boolean = false): Project[] { 
+    const roleInfo = this.getActorRoleInfo(actorId);
+    if (roleInfo.isSuperAdmin && allOrgs) {
+      return this.projects;
+    }
+    const orgProjects = this.projects.filter(p => p.orgId === this.activeOrgId);
+    
+    // Unrestricted or Admin/SuperAdmin sees all projects for the organization
+    if (!actorId || roleInfo.isSuperAdmin || roleInfo.isAdmin) {
+      return orgProjects;
+    }
+
+    // Project Manager sees projects they manage OR are assigned to OR open projects
+    if (roleInfo.isProjectManager) {
+      return orgProjects.filter(p => 
+        p.projectManagerId === actorId ||
+        p.managerUserIds?.includes(actorId) ||
+        (p.assignedUserIds && p.assignedUserIds.includes(actorId)) ||
+        (p.memberRates && p.memberRates.some(mr => mr.userId === actorId)) ||
+        !p.restrictToAssignedMembers
+      );
+    }
+
+    // Regular Employee sees ONLY assigned projects (or unrestricted projects if not restricted)
+    return orgProjects.filter(p => 
+      (p.assignedUserIds && p.assignedUserIds.includes(actorId)) ||
+      (p.memberRates && p.memberRates.some(mr => mr.userId === actorId)) ||
+      !p.restrictToAssignedMembers
+    );
+  }
+
+  public getTasks(projectId?: string, actorId?: string): Task[] {
+    const allowedProjects = this.getProjects(actorId).map(p => p.id);
+    if (projectId) {
+      if (actorId && !allowedProjects.includes(projectId)) {
+        return [];
+      }
+      return this.tasks.filter(t => t.projectId === projectId);
+    }
     return this.tasks.filter(t => allowedProjects.includes(t.projectId));
   }
+
   public getApiKeys() { return this.apiKeys.filter(k => k.orgId === this.activeOrgId); }
-  public getAuditLogs() { return this.auditLogs.filter(a => a.orgId === this.activeOrgId); }
+
+  public getAuditLogs(actorId?: string): AuditLogEntry[] { 
+    const roleInfo = this.getActorRoleInfo(actorId);
+    let list = this.auditLogs;
+    if (!roleInfo.isSuperAdmin) {
+      list = list.filter(a => a.orgId === this.activeOrgId);
+    }
+    if (actorId && !roleInfo.isSuperAdmin && !roleInfo.isAdmin) {
+      if (roleInfo.isProjectManager) {
+        const managedProjectIds = this.projects
+          .filter(p => p.orgId === this.activeOrgId && (p.projectManagerId === actorId || p.managerUserIds?.includes(actorId)))
+          .map(p => p.id);
+        list = list.filter(a => a.userId === actorId || (a.entityType === 'PROJECT' && managedProjectIds.includes(a.entityId)));
+      } else {
+        list = list.filter(a => a.userId === actorId);
+      }
+    }
+    return list;
+  }
 
   // --- User / Auth ---
   public addUser(userData: Partial<User>, inviterId: string): User {
@@ -1228,6 +1354,32 @@ export class StorageService {
     return this.users[idx];
   }
 
+  public deleteUser(userId: string, actorId: string): { success: boolean; error?: string } {
+    const user = this.users.find(u => u.id === userId);
+    if (!user) return { success: false, error: 'Benutzer nicht gefunden' };
+
+    const entriesCount = this.timeEntries.filter(te => te.userId === userId).length;
+    if (entriesCount > 0) {
+      return {
+        success: false,
+        error: `Mitarbeiter "${user.name}" kann nicht gelöscht werden, da bereits ${entriesCount} Zeiteintrag/Zeiteinträge erfasst wurden (GoBD-Revisionssicherheit). Sie können das Profil stattdessen deaktivieren.`
+      };
+    }
+
+    this.users = this.users.filter(u => u.id !== userId);
+
+    this.logAudit({
+      entityType: 'USER',
+      entityId: userId,
+      action: 'DELETE',
+      userId: actorId,
+      userName: this.users.find(u => u.id === actorId)?.name || 'Admin',
+      changes: [{ field: 'user', oldValue: user.email, newValue: null }]
+    });
+
+    return { success: true };
+  }
+
   // --- Job Roles CRUD ---
   public addJobRole(roleData: Partial<EmployeeJobRole>, actorId: string): EmployeeJobRole {
     const role: EmployeeJobRole = {
@@ -1265,8 +1417,62 @@ export class StorageService {
     return client;
   }
 
+  public updateClient(clientId: string, updates: Partial<Client>, actorId: string): Client | null {
+    const idx = this.clients.findIndex(c => c.id === clientId);
+    if (idx === -1) return null;
+    const old = { ...this.clients[idx] };
+    this.clients[idx] = { ...this.clients[idx], ...updates };
+
+    // If client name changed, update denormalized clientName in projects
+    if (updates.name && updates.name !== old.name) {
+      this.projects.forEach(p => {
+        if (p.clientId === clientId) {
+          p.clientName = updates.name!;
+        }
+      });
+    }
+
+    this.logAudit({
+      entityType: 'CLIENT',
+      entityId: clientId,
+      action: 'UPDATE',
+      userId: actorId,
+      userName: this.users.find(u => u.id === actorId)?.name || 'Admin',
+      changes: Object.keys(updates).map(k => ({ field: k, oldValue: (old as any)[k], newValue: (updates as any)[k] }))
+    });
+
+    return this.clients[idx];
+  }
+
+  public deleteClient(clientId: string, actorId: string): { success: boolean; error?: string } {
+    const client = this.clients.find(c => c.id === clientId);
+    if (!client) return { success: false, error: 'Kunde nicht gefunden' };
+
+    const associatedProjects = this.projects.filter(p => p.clientId === clientId);
+    if (associatedProjects.length > 0) {
+      return {
+        success: false,
+        error: `Kunde "${client.name}" kann nicht gelöscht werden, da noch ${associatedProjects.length} Projekt(e) zugeordnet sind. Bitte löschen oder verschieben Sie zuerst die Projekte.`
+      };
+    }
+
+    this.clients = this.clients.filter(c => c.id !== clientId);
+
+    this.logAudit({
+      entityType: 'CLIENT',
+      entityId: clientId,
+      action: 'DELETE',
+      userId: actorId,
+      userName: this.users.find(u => u.id === actorId)?.name || 'Admin',
+      changes: [{ field: 'client', oldValue: client.name, newValue: null }]
+    });
+
+    return { success: true };
+  }
+
   public addProject(projectData: Partial<Project>, actorId: string): Project {
     const client = this.clients.find(c => c.id === projectData.clientId);
+    const pm = projectData.projectManagerId ? this.users.find(u => u.id === projectData.projectManagerId) : undefined;
     const project: Project = {
       id: 'p-' + (this.projects.length + 1),
       orgId: this.organization.id,
@@ -1274,6 +1480,9 @@ export class StorageService {
       clientName: client?.name || '',
       name: projectData.name || 'Neues Projekt',
       projectNumber: projectData.projectNumber || `PRJ-${new Date().getFullYear()}-${String(this.projects.length + 1).padStart(2, '0')}`,
+      projectManagerId: projectData.projectManagerId,
+      projectManagerName: pm?.name || projectData.projectManagerName,
+      managerUserIds: projectData.managerUserIds || (projectData.projectManagerId ? [projectData.projectManagerId] : []),
       billingModel: projectData.billingModel || 'TIME_AND_MATERIAL',
       totalFixedPrice: projectData.totalFixedPrice,
       budgetHours: projectData.budgetHours,
@@ -1304,6 +1513,15 @@ export class StorageService {
     const idx = this.projects.findIndex(p => p.id === projectId);
     if (idx === -1) return null;
     const old = { ...this.projects[idx] };
+    
+    if (updates.projectManagerId && !updates.projectManagerName) {
+      const pm = this.users.find(u => u.id === updates.projectManagerId);
+      if (pm) updates.projectManagerName = pm.name;
+    }
+    if (updates.projectManagerId && (!updates.managerUserIds || updates.managerUserIds.length === 0)) {
+      updates.managerUserIds = [updates.projectManagerId];
+    }
+
     this.projects[idx] = { ...this.projects[idx], ...updates };
 
     this.logAudit({
@@ -1318,17 +1536,126 @@ export class StorageService {
     return this.projects[idx];
   }
 
-  public addTask(taskData: Partial<Task>): Task {
+  public deleteProject(projectId: string, actorId: string): { success: boolean; error?: string } {
+    const project = this.projects.find(p => p.id === projectId);
+    if (!project) return { success: false, error: 'Projekt nicht gefunden' };
+
+    const entriesCount = this.timeEntries.filter(te => te.projectId === projectId).length;
+    if (entriesCount > 0) {
+      return {
+        success: false,
+        error: `Projekt "${project.name}" kann nicht gelöscht werden, da bereits ${entriesCount} Zeiteintrag/Zeiteinträge erfasst wurden (GoBD-Revisionssicherheit). Sie können das Projekt stattdessen archivieren oder auf inaktiv setzen.`
+      };
+    }
+
+    this.projects = this.projects.filter(p => p.id !== projectId);
+    this.tasks = this.tasks.filter(t => t.projectId !== projectId);
+
+    this.logAudit({
+      entityType: 'PROJECT',
+      entityId: projectId,
+      action: 'DELETE',
+      userId: actorId,
+      userName: this.users.find(u => u.id === actorId)?.name || 'Admin',
+      changes: [{ field: 'project', oldValue: project.name, newValue: null }]
+    });
+
+    return { success: true };
+  }
+
+  public addTask(taskData: Partial<Task>, actorId?: string): Task {
     const task: Task = {
-      id: 't-' + (this.tasks.length + 1),
-      projectId: taskData.projectId || this.projects[0].id,
+      id: 't-' + (this.tasks.length + 1) + '-' + Date.now().toString().slice(-4),
+      projectId: taskData.projectId || this.projects[0]?.id || 'p-1',
       name: taskData.name || 'Neue Aufgabe',
       isBillableDefault: taskData.isBillableDefault ?? true,
       budgetHours: taskData.budgetHours,
-      status: 'ACTIVE'
+      status: taskData.status || 'ACTIVE'
     };
     this.tasks.push(task);
+
+    if (actorId) {
+      this.logAudit({
+        entityType: 'TASK',
+        entityId: task.id,
+        action: 'CREATE',
+        userId: actorId,
+        userName: this.users.find(u => u.id === actorId)?.name || 'Admin',
+        changes: [{ field: 'name', oldValue: null, newValue: task.name }]
+      });
+    }
+
     return task;
+  }
+
+  public updateTask(taskId: string, updates: Partial<Task>, actorId?: string): Task | null {
+    const index = this.tasks.findIndex(t => t.id === taskId);
+    if (index === -1) return null;
+
+    const old = this.tasks[index];
+    const updated: Task = {
+      ...old,
+      ...updates,
+      id: old.id,
+      projectId: updates.projectId || old.projectId
+    };
+
+    this.tasks[index] = updated;
+
+    // Synchronize taskName in time entries if name changed
+    if (updates.name && updates.name !== old.name) {
+      this.timeEntries = this.timeEntries.map(e => {
+        if (e.taskId === taskId) {
+          return { ...e, taskName: updates.name };
+        }
+        return e;
+      });
+    }
+
+    if (actorId) {
+      this.logAudit({
+        entityType: 'TASK',
+        entityId: taskId,
+        action: 'UPDATE',
+        userId: actorId,
+        userName: this.users.find(u => u.id === actorId)?.name || 'Admin',
+        changes: [
+          { field: 'name', oldValue: old.name, newValue: updated.name },
+          { field: 'isBillableDefault', oldValue: old.isBillableDefault, newValue: updated.isBillableDefault },
+          { field: 'status', oldValue: old.status, newValue: updated.status }
+        ]
+      });
+    }
+
+    return updated;
+  }
+
+  public deleteTask(taskId: string, actorId?: string): { success: boolean; error?: string } {
+    const task = this.tasks.find(t => t.id === taskId);
+    if (!task) return { success: false, error: 'Aufgabe nicht gefunden' };
+
+    const entriesCount = this.timeEntries.filter(te => te.taskId === taskId).length;
+    if (entriesCount > 0) {
+      return {
+        success: false,
+        error: `Aufgabe "${task.name}" kann nicht gelöscht werden, da bereits ${entriesCount} Zeiteintrag/Zeiteinträge darauf gebucht wurden (GoBD-Revisionsschutz). Sie können die Aufgabe stattdessen archivieren.`
+      };
+    }
+
+    this.tasks = this.tasks.filter(t => t.id !== taskId);
+
+    if (actorId) {
+      this.logAudit({
+        entityType: 'TASK',
+        entityId: taskId,
+        action: 'DELETE',
+        userId: actorId,
+        userName: this.users.find(u => u.id === actorId)?.name || 'Admin',
+        changes: [{ field: 'task', oldValue: task.name, newValue: null }]
+      });
+    }
+
+    return { success: true };
   }
 
   // --- Time Entries CRUD & Filtering ---
@@ -1343,8 +1670,31 @@ export class StorageService {
     page?: number;
     limit?: number;
     updatedAfter?: string;
-  }): { data: TimeEntry[]; total: number; page: number; limit: number } {
-    let list = this.timeEntries.filter(e => e.orgId === this.activeOrgId);
+    allOrgs?: boolean;
+  }, actorId?: string): { data: TimeEntry[]; total: number; page: number; limit: number } {
+    const roleInfo = this.getActorRoleInfo(actorId);
+
+    let list: TimeEntry[];
+    if (roleInfo.isSuperAdmin && params?.allOrgs) {
+      list = [...this.timeEntries];
+    } else {
+      list = this.timeEntries.filter(e => e.orgId === this.activeOrgId);
+    }
+
+    // Role-Based Access Control Filtering
+    if (actorId && !roleInfo.isSuperAdmin && !roleInfo.isAdmin) {
+      if (roleInfo.isProjectManager) {
+        // Project Manager sees all entries on projects they manage PLUS their own entries on any project
+        const managedProjectIds = this.projects
+          .filter(p => p.orgId === this.activeOrgId && (p.projectManagerId === actorId || p.managerUserIds?.includes(actorId)))
+          .map(p => p.id);
+
+        list = list.filter(e => managedProjectIds.includes(e.projectId) || e.userId === actorId);
+      } else {
+        // Regular Employee sees ONLY their own time entries!
+        list = list.filter(e => e.userId === actorId);
+      }
+    }
 
     if (params?.from) {
       list = list.filter(e => e.date >= params.from!);
@@ -1562,11 +1912,26 @@ export class StorageService {
   }
 
   public setApprovalStatus(entryIds: string[], status: 'APPROVED' | 'REJECTED', approverId: string): number {
-    const approver = this.users.find(u => u.id === approverId);
+    const roleInfo = this.getActorRoleInfo(approverId);
+    // Regular employees cannot approve/reject
+    if (roleInfo.isEmployee) {
+      return 0;
+    }
+    const approver = roleInfo.user || this.users.find(u => u.id === approverId);
     let count = 0;
+    const managedProjectIds = roleInfo.isProjectManager
+      ? this.projects.filter(p => p.orgId === this.activeOrgId && (p.projectManagerId === approverId || p.managerUserIds?.includes(approverId))).map(p => p.id)
+      : [];
+
     entryIds.forEach(id => {
       const idx = this.timeEntries.findIndex(e => e.id === id);
       if (idx !== -1) {
+        const entry = this.timeEntries[idx];
+        // Project managers can only approve entries for projects they manage
+        if (roleInfo.isProjectManager && !managedProjectIds.includes(entry.projectId)) {
+          return;
+        }
+
         const old = this.timeEntries[idx].approvalStatus;
         this.timeEntries[idx].approvalStatus = status;
         this.timeEntries[idx].approvedBy = approver?.name || approverId;
@@ -1588,11 +1953,19 @@ export class StorageService {
   }
 
   // --- Working Time (Allgemeine Tagesarbeitszeit - Section 20) ---
-  public getWorkingTimeEntries(params?: { from?: string; to?: string; userId?: string }): WorkingTimeEntry[] {
+  public getWorkingTimeEntries(params?: { from?: string; to?: string; userId?: string }, actorId?: string): WorkingTimeEntry[] {
+    const roleInfo = this.getActorRoleInfo(actorId);
     let list = this.workingTimeEntries.filter(w => w.orgId === this.activeOrgId);
+
+    // Regular employees only see their own working times
+    if (actorId && !roleInfo.isSuperAdmin && !roleInfo.isAdmin) {
+      list = list.filter(w => w.userId === actorId);
+    } else if (params?.userId) {
+      list = list.filter(w => w.userId === params.userId);
+    }
+
     if (params?.from) list = list.filter(w => w.date >= params.from!);
     if (params?.to) list = list.filter(w => w.date <= params.to!);
-    if (params?.userId) list = list.filter(w => w.userId === params.userId);
     list.sort((a, b) => b.date.localeCompare(a.date));
     return list;
   }
@@ -1712,8 +2085,21 @@ export class StorageService {
   }
 
   // --- Forecast Planning (Plan vs. Ist - Section 21) ---
-  public getForecasts(month?: string, projectId?: string): ForecastEntry[] {
+  public getForecasts(month?: string, projectId?: string, actorId?: string): ForecastEntry[] {
+    const roleInfo = this.getActorRoleInfo(actorId);
     let list = this.forecasts.filter(f => f.orgId === this.activeOrgId);
+
+    if (actorId && !roleInfo.isSuperAdmin && !roleInfo.isAdmin) {
+      if (roleInfo.isProjectManager) {
+        const managedProjectIds = this.projects
+          .filter(p => p.orgId === this.activeOrgId && (p.projectManagerId === actorId || p.managerUserIds?.includes(actorId)))
+          .map(p => p.id);
+        list = list.filter(f => managedProjectIds.includes(f.projectId) || f.userId === actorId);
+      } else {
+        list = list.filter(f => f.userId === actorId);
+      }
+    }
+
     if (month) list = list.filter(f => f.month === month);
     if (projectId) list = list.filter(f => f.projectId === projectId);
     return list;

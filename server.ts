@@ -221,6 +221,15 @@ async function startServer() {
     res.json(updated);
   });
 
+  app.delete('/api/users/:id', (req, res) => {
+    const actorId = getActorId(req);
+    const result = storage.deleteUser(req.params.id, actorId);
+    if (!result.success) {
+      return res.status(400).json({ error: result.error });
+    }
+    res.json({ success: true, message: 'Mitarbeiter erfolgreich gelöscht' });
+  });
+
   // Fachliche Mitarbeiterrollen (Section 24)
   app.get('/api/employee-roles', (req, res) => {
     res.json(storage.getJobRoles());
@@ -240,7 +249,9 @@ async function startServer() {
 
   // Clients & Projects & Tasks (Section 6)
   app.get('/api/clients', (req, res) => {
-    res.json(storage.getClients());
+    const actorId = getActorId(req);
+    const { allOrgs } = req.query as { allOrgs?: string };
+    res.json(storage.getClients(actorId, allOrgs === 'true'));
   });
 
   app.post('/api/clients', (req, res) => {
@@ -248,8 +259,26 @@ async function startServer() {
     res.status(201).json(client);
   });
 
+  app.put('/api/clients/:id', (req, res) => {
+    const actorId = getActorId(req);
+    const updated = storage.updateClient(req.params.id, req.body, actorId);
+    if (!updated) return res.status(404).json({ error: 'Client not found' });
+    res.json(updated);
+  });
+
+  app.delete('/api/clients/:id', (req, res) => {
+    const actorId = getActorId(req);
+    const result = storage.deleteClient(req.params.id, actorId);
+    if (!result.success) {
+      return res.status(400).json({ error: result.error });
+    }
+    res.json({ success: true, message: 'Kunde erfolgreich gelöscht' });
+  });
+
   app.get('/api/projects', (req, res) => {
-    res.json(storage.getProjects());
+    const actorId = getActorId(req);
+    const { allOrgs } = req.query as { allOrgs?: string };
+    res.json(storage.getProjects(actorId, allOrgs === 'true'));
   });
 
   app.post('/api/projects', (req, res) => {
@@ -265,14 +294,41 @@ async function startServer() {
     res.json(project);
   });
 
+  app.delete('/api/projects/:id', (req, res) => {
+    const actorId = getActorId(req);
+    const result = storage.deleteProject(req.params.id, actorId);
+    if (!result.success) {
+      return res.status(400).json({ error: result.error });
+    }
+    res.json({ success: true, message: 'Projekt erfolgreich gelöscht' });
+  });
+
   app.get('/api/tasks', (req, res) => {
+    const actorId = getActorId(req);
     const { projectId } = req.query as { projectId?: string };
-    res.json(storage.getTasks(projectId));
+    res.json(storage.getTasks(projectId, actorId));
   });
 
   app.post('/api/tasks', (req, res) => {
-    const task = storage.addTask(req.body);
+    const actorId = getActorId(req);
+    const task = storage.addTask(req.body, actorId);
     res.status(201).json(task);
+  });
+
+  app.put('/api/tasks/:id', (req, res) => {
+    const actorId = getActorId(req);
+    const task = storage.updateTask(req.params.id, req.body, actorId);
+    if (!task) return res.status(404).json({ error: 'Task not found' });
+    res.json(task);
+  });
+
+  app.delete('/api/tasks/:id', (req, res) => {
+    const actorId = getActorId(req);
+    const result = storage.deleteTask(req.params.id, actorId);
+    if (!result.success) {
+      return res.status(400).json({ error: result.error });
+    }
+    res.json({ success: true, message: 'Aufgabe erfolgreich gelöscht' });
   });
 
   // Rate Hierarchy Resolver Endpoint (Section 9, 24, 25)
@@ -285,7 +341,8 @@ async function startServer() {
 
   // Time Entries (Section 7)
   app.get('/api/time-entries', (req, res) => {
-    const { from, to, userId, projectId, clientId, approvalStatus, isBillable, page, limit, updatedAfter } = req.query as any;
+    const actorId = getActorId(req);
+    const { from, to, userId, projectId, clientId, approvalStatus, isBillable, page, limit, updatedAfter, allOrgs } = req.query as any;
     const result = storage.getTimeEntries({
       from,
       to,
@@ -296,8 +353,9 @@ async function startServer() {
       isBillable: isBillable !== undefined ? isBillable === 'true' : undefined,
       page: page ? parseInt(page, 10) : 1,
       limit: limit ? parseInt(limit, 10) : 100,
-      updatedAfter
-    });
+      updatedAfter,
+      allOrgs: allOrgs === 'true'
+    }, actorId);
     res.json(result);
   });
 
@@ -345,13 +403,15 @@ async function startServer() {
   });
 
   app.get('/api/audit-logs', (req, res) => {
-    res.json(storage.getAuditLogs());
+    const actorId = getActorId(req);
+    res.json(storage.getAuditLogs(actorId));
   });
 
   // Working Time (Section 20)
   app.get('/api/working-time', (req, res) => {
+    const actorId = getActorId(req);
     const { from, to, userId } = req.query as any;
-    res.json(storage.getWorkingTimeEntries({ from, to, userId }));
+    res.json(storage.getWorkingTimeEntries({ from, to, userId }, actorId));
   });
 
   app.post('/api/working-time', (req, res) => {
@@ -370,8 +430,9 @@ async function startServer() {
 
   // Forecast Planning (Section 21)
   app.get('/api/forecasts', (req, res) => {
+    const actorId = getActorId(req);
     const { month, projectId } = req.query as any;
-    res.json(storage.getForecasts(month, projectId));
+    res.json(storage.getForecasts(month, projectId, actorId));
   });
 
   app.post('/api/forecasts', (req, res) => {

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
+import { User } from '../types';
 import {
   Users,
   Shield,
@@ -12,7 +13,15 @@ import {
   HelpCircle,
   Mail,
   Copy,
-  Check
+  Check,
+  Edit2,
+  Trash2,
+  AlertTriangle,
+  Search,
+  ShieldCheck,
+  Clock,
+  UserX,
+  Lock
 } from 'lucide-react';
 
 export const RateHierarchyView: React.FC = () => {
@@ -22,8 +31,11 @@ export const RateHierarchyView: React.FC = () => {
     jobRoles,
     projects,
     organization,
+    timeEntries,
     resolveRate,
     inviteUser,
+    updateUser,
+    deleteUser,
     currentUser
   } = useApp();
 
@@ -32,13 +44,14 @@ export const RateHierarchyView: React.FC = () => {
   const [testProjectId, setTestProjectId] = useState(projects[0]?.id || 'p-1');
   const [resolvedResult, setResolvedResult] = useState<any>(null);
 
-  // Filter States
+  // Filter & Search States
   const [empTypeFilter, setEmpTypeFilter] = useState<'ALL' | 'INTERNAL' | 'EXTERNAL'>('ALL');
-  const [inviteEmploymentType, setInviteEmploymentType] = useState<'INTERNAL' | 'EXTERNAL'>('INTERNAL');
-  const [inviteCompanyName, setInviteCompanyName] = useState('');
+  const [empSearch, setEmpSearch] = useState('');
 
   // Invite Modal
   const [showInviteModal, setShowInviteModal] = useState(false);
+  const [inviteEmploymentType, setInviteEmploymentType] = useState<'INTERNAL' | 'EXTERNAL'>('INTERNAL');
+  const [inviteCompanyName, setInviteCompanyName] = useState('');
   const [inviteName, setInviteName] = useState('');
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteRole, setInviteRole] = useState<'EMPLOYEE' | 'PROJECT_MANAGER' | 'ADMIN'>('EMPLOYEE');
@@ -46,6 +59,25 @@ export const RateHierarchyView: React.FC = () => {
   const [inviteWeeklyHours, setInviteWeeklyHours] = useState('40');
   const [invitationLinkResult, setInvitationLinkResult] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+
+  // Edit User Modal
+  const [editingUser, setEditingUser] = useState<User | null>(null);
+  const [editName, setEditName] = useState('');
+  const [editEmail, setEditEmail] = useState('');
+  const [editRole, setEditRole] = useState<'EMPLOYEE' | 'PROJECT_MANAGER' | 'ADMIN'>('EMPLOYEE');
+  const [editEmploymentType, setEditEmploymentType] = useState<'INTERNAL' | 'EXTERNAL'>('INTERNAL');
+  const [editCompanyName, setEditCompanyName] = useState('');
+  const [editJobRoleId, setEditJobRoleId] = useState('');
+  const [editWeeklyHours, setEditWeeklyHours] = useState('40');
+  const [editDailyHours, setEditDailyHours] = useState('8');
+  const [editBillingRate, setEditBillingRate] = useState('');
+  const [editCostRate, setEditCostRate] = useState('');
+  const [editStatus, setEditStatus] = useState<'ACTIVE' | 'INACTIVE'>('ACTIVE');
+
+  // Delete User Modal
+  const [userToDelete, setUserToDelete] = useState<User | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   useEffect(() => {
     if (testUserId) {
@@ -67,11 +99,86 @@ export const RateHierarchyView: React.FC = () => {
     setInvitationLinkResult(res.invitationLink);
   };
 
+  const handleOpenEditUser = (user: User) => {
+    setEditingUser(user);
+    setEditName(user.name);
+    setEditEmail(user.email);
+    setEditRole(user.role);
+    setEditEmploymentType(user.employmentType || 'INTERNAL');
+    setEditCompanyName(user.companyName || '');
+    setEditJobRoleId(user.jobRoleId || jobRoles[0]?.id || '');
+    setEditWeeklyHours(String(user.weeklyTargetHours || 40));
+    setEditDailyHours(String(user.dailyTargetHours || 8));
+    setEditBillingRate(user.individualBillingRate ? String(user.individualBillingRate) : '');
+    setEditCostRate(user.individualCostRate ? String(user.individualCostRate) : '');
+    setEditStatus((user.status as any) || 'ACTIVE');
+  };
+
+  const handleSaveEditUser = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingUser) return;
+
+    await updateUser(editingUser.id, {
+      name: editName,
+      email: editEmail,
+      role: editRole,
+      employmentType: editEmploymentType,
+      companyName: editEmploymentType === 'EXTERNAL' ? editCompanyName : undefined,
+      jobRoleId: editJobRoleId,
+      weeklyTargetHours: parseFloat(editWeeklyHours) || 40,
+      dailyTargetHours: parseFloat(editDailyHours) || 8,
+      individualBillingRate: editBillingRate ? parseFloat(editBillingRate) : undefined,
+      individualCostRate: editCostRate ? parseFloat(editCostRate) : undefined,
+      status: editStatus
+    });
+
+    setEditingUser(null);
+  };
+
+  const handleOpenDeleteUser = (user: User) => {
+    setUserToDelete(user);
+    setDeleteError(null);
+  };
+
+  const handleConfirmDeleteUser = async () => {
+    if (!userToDelete) return;
+    setIsDeleting(true);
+    setDeleteError(null);
+
+    const result = await deleteUser(userToDelete.id);
+    setIsDeleting(false);
+
+    if (result.success) {
+      setUserToDelete(null);
+    } else {
+      setDeleteError(result.error || 'Fehler beim Löschen des Mitarbeiters.');
+    }
+  };
+
+  const handleDeactivateUserDirectly = async (user: User) => {
+    await updateUser(user.id, { status: 'INACTIVE' });
+    setUserToDelete(null);
+  };
+
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
+
+  const filteredUsers = users.filter(u => {
+    const matchesType =
+      empTypeFilter === 'ALL' ||
+      (empTypeFilter === 'INTERNAL' && u.employmentType !== 'EXTERNAL') ||
+      (empTypeFilter === 'EXTERNAL' && u.employmentType === 'EXTERNAL');
+
+    const matchesSearch =
+      u.name.toLowerCase().includes(empSearch.toLowerCase()) ||
+      u.email.toLowerCase().includes(empSearch.toLowerCase()) ||
+      (u.companyName && u.companyName.toLowerCase().includes(empSearch.toLowerCase()));
+
+    return matchesType && matchesSearch;
+  });
 
   return (
     <div className="space-y-6">
@@ -97,7 +204,7 @@ export const RateHierarchyView: React.FC = () => {
             className="bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold px-4 py-2.5 rounded-xl flex items-center gap-2 shadow-xs transition-all"
           >
             <UserPlus className="w-4 h-4" />
-            {t.inviteUser}
+            <span>Mitarbeiter einladen</span>
           </button>
         </div>
 
@@ -129,7 +236,7 @@ export const RateHierarchyView: React.FC = () => {
         </div>
       </div>
 
-      {/* Interactive Rate Resolution Simulator (Section 25 Verification) */}
+      {/* Interactive Rate Resolution Simulator */}
       <div className="bg-gradient-to-r from-slate-900 to-slate-800 text-white rounded-2xl p-6 shadow-md space-y-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -148,60 +255,65 @@ export const RateHierarchyView: React.FC = () => {
               id="select-sim-user"
               value={testUserId}
               onChange={e => setTestUserId(e.target.value)}
-              className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-xs font-semibold text-white focus:ring-2 focus:ring-emerald-500"
+              className="w-full bg-slate-800 border border-slate-700 text-white text-xs rounded-xl px-3 py-2"
             >
               {users.map(u => (
-                <option key={u.id} value={u.id}>
-                  {u.name} ({u.role})
-                </option>
+                <option key={u.id} value={u.id}>{u.name} ({u.role})</option>
               ))}
             </select>
           </div>
 
-          <div className="md:col-span-4 space-y-1">
+          <div className="md:col-span-5 space-y-1">
             <label className="text-xs text-slate-400 font-medium">{t.selectProject}</label>
             <select
-              id="select-sim-project"
+              id="select-sim-proj"
               value={testProjectId}
               onChange={e => setTestProjectId(e.target.value)}
-              className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-xs font-semibold text-white focus:ring-2 focus:ring-emerald-500"
+              className="w-full bg-slate-800 border border-slate-700 text-white text-xs rounded-xl px-3 py-2"
             >
               {projects.map(p => (
-                <option key={p.id} value={p.id}>
-                  {p.name} ({p.billingModel === 'FIXED_PRICE' ? 'Festpreis' : 'T&M'})
-                </option>
+                <option key={p.id} value={p.id}>{p.name} ({p.clientName})</option>
               ))}
             </select>
           </div>
 
-          <div className="md:col-span-3 bg-slate-800/80 border border-slate-700 rounded-xl p-3 text-center">
-            <div className="text-[10px] text-slate-400 uppercase font-semibold">{t.resolvedRate}</div>
-            <div className="text-2xl font-black text-emerald-400 mt-0.5">
-              {resolvedResult?.billingRate || 0} €/h
-            </div>
-            <div className="text-[10px] text-slate-300 mt-1 font-medium bg-slate-700/60 py-0.5 px-2 rounded-full inline-block">
-              {resolvedResult?.billingSource === 'PROJECT_MEMBER' && 'Stufe 1: Projekt-Mitarbeitersatz'}
-              {resolvedResult?.billingSource === 'USER_INDIVIDUAL' && 'Stufe 2: Individueller Satz'}
-              {resolvedResult?.billingSource === 'JOB_ROLE' && `Stufe 3: Rolle (${resolvedResult?.jobRoleName})`}
-              {resolvedResult?.billingSource === 'ORG_DEFAULT' && 'Stufe 4: Org-Standard'}
+          <div className="md:col-span-2 text-center pt-3 md:pt-0">
+            <div className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-slate-800 border border-slate-700 text-emerald-400">
+              <ArrowRight className="w-4 h-4" />
             </div>
           </div>
         </div>
 
-        {/* Cost Rate (Visible to Admins) */}
-        {currentUser?.role === 'ADMIN' && (
-          <div className="text-xs text-slate-400 border-t border-slate-800 pt-3 flex items-center justify-between">
-            <span>
-              🔒 <strong>{t.internalCostRate}:</strong> {resolvedResult?.costRate || 0} €/h ({resolvedResult?.costSource})
-            </span>
-            <span className="text-emerald-400 font-semibold">
-              Erwartete Marge: {((resolvedResult?.billingRate || 0) - (resolvedResult?.costRate || 0))} €/h
-            </span>
+        {resolvedResult && (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-2 border-t border-slate-800/80">
+            <div className="bg-slate-800/60 border border-slate-700/60 rounded-xl p-3 flex items-center justify-between">
+              <div>
+                <div className="text-[10px] uppercase font-bold text-slate-400">{t.billingRate} (Kunde)</div>
+                <div className="text-xl font-extrabold text-emerald-400">{resolvedResult.billingRate} € / Std.</div>
+              </div>
+              <div className="text-right">
+                <span className="text-[10px] font-semibold bg-emerald-950 text-emerald-300 border border-emerald-800 px-2 py-0.5 rounded">
+                  {resolvedResult.billingSource}
+                </span>
+              </div>
+            </div>
+
+            <div className="bg-slate-800/60 border border-slate-700/60 rounded-xl p-3 flex items-center justify-between">
+              <div>
+                <div className="text-[10px] uppercase font-bold text-slate-400">{t.costRate} (Intern)</div>
+                <div className="text-xl font-extrabold text-purple-400">{resolvedResult.costRate} € / Std.</div>
+              </div>
+              <div className="text-right">
+                <span className="text-[10px] font-semibold bg-purple-950 text-purple-300 border border-purple-800 px-2 py-0.5 rounded">
+                  {resolvedResult.costSource}
+                </span>
+              </div>
+            </div>
           </div>
         )}
       </div>
 
-      {/* Team Members List (20 Employees) */}
+      {/* Team Members List (Editable & Deletable) */}
       <div className="bg-white rounded-2xl border border-slate-200/90 shadow-xs overflow-hidden">
         <div className="px-5 py-3.5 border-b border-slate-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-50/50">
           <div className="flex items-center gap-3">
@@ -214,13 +326,25 @@ export const RateHierarchyView: React.FC = () => {
             </span>
           </div>
 
-          {/* Filter: Alle / Intern / Extern */}
           <div className="flex items-center gap-2">
+            {/* Search Input */}
+            <div className="relative">
+              <Search className="w-3 h-3 text-slate-400 absolute left-2.5 top-2" />
+              <input
+                type="text"
+                value={empSearch}
+                onChange={e => setEmpSearch(e.target.value)}
+                placeholder="Mitarbeiter suchen..."
+                className="pl-7 pr-2.5 py-1 bg-white border border-slate-200 rounded-lg text-xs placeholder:text-slate-400 focus:outline-hidden focus:ring-1 focus:ring-slate-900"
+              />
+            </div>
+
+            {/* Filter: Alle / Intern / Extern */}
             <div className="flex items-center bg-slate-100 p-0.5 rounded-lg border border-slate-200 text-xs">
               <button
                 type="button"
                 onClick={() => setEmpTypeFilter('ALL')}
-                className={`px-2.5 py-1 font-semibold rounded-md transition-colors ${
+                className={`px-2 py-1 font-semibold rounded-md transition-colors ${
                   empTypeFilter === 'ALL' ? 'bg-white text-slate-900 shadow-2xs' : 'text-slate-600 hover:text-slate-900'
                 }`}
               >
@@ -229,7 +353,7 @@ export const RateHierarchyView: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setEmpTypeFilter('INTERNAL')}
-                className={`px-2.5 py-1 font-semibold rounded-md transition-colors ${
+                className={`px-2 py-1 font-semibold rounded-md transition-colors ${
                   empTypeFilter === 'INTERNAL' ? 'bg-white text-slate-900 shadow-2xs' : 'text-slate-600 hover:text-slate-900'
                 }`}
               >
@@ -238,7 +362,7 @@ export const RateHierarchyView: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setEmpTypeFilter('EXTERNAL')}
-                className={`px-2.5 py-1 font-semibold rounded-md transition-colors ${
+                className={`px-2 py-1 font-semibold rounded-md transition-colors ${
                   empTypeFilter === 'EXTERNAL' ? 'bg-white text-slate-900 shadow-2xs' : 'text-slate-600 hover:text-slate-900'
                 }`}
               >
@@ -259,82 +383,394 @@ export const RateHierarchyView: React.FC = () => {
                 <th className="px-4 py-3">Sollstunden</th>
                 <th className="px-4 py-3">Individueller Satz</th>
                 {currentUser?.role === 'ADMIN' && <th className="px-4 py-3">Interner Kostensatz</th>}
-                <th className="px-4 py-3 text-right">Status</th>
+                <th className="px-4 py-3">Status</th>
+                <th className="px-4 py-3 text-right">Aktionen</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {users
-                .filter(u => {
-                  if (empTypeFilter === 'INTERNAL') return u.employmentType !== 'EXTERNAL';
-                  if (empTypeFilter === 'EXTERNAL') return u.employmentType === 'EXTERNAL';
-                  return true;
-                })
-                .map(u => {
-                  const jobRole = jobRoles.find(r => r.id === u.jobRoleId);
-                  const isExternal = u.employmentType === 'EXTERNAL';
+              {filteredUsers.map(u => {
+                const jobRole = jobRoles.find(r => r.id === u.jobRoleId);
+                const isExternal = u.employmentType === 'EXTERNAL';
+                const userEntries = timeEntries.filter(e => e.userId === u.id);
+                const canDelete = userEntries.length === 0;
 
-                  return (
-                    <tr key={u.id} className="hover:bg-slate-50/60">
-                      <td className="px-4 py-3">
-                        <div className="font-semibold text-slate-900">{u.name}</div>
-                        <div className="text-[10px] text-slate-400">{u.email}</div>
-                        {isExternal && u.companyName && (
-                          <div className="text-[10px] text-purple-700 font-medium mt-0.5">
-                            Firma: {u.companyName}
-                          </div>
-                        )}
-                      </td>
-                      <td className="px-4 py-3">
-                        {isExternal ? (
-                          <span className="inline-flex items-center gap-1 text-[10px] font-bold bg-purple-100 text-purple-800 border border-purple-200/60 px-2 py-0.5 rounded">
-                            Extern (Sub/Freelancer)
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center gap-1 text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200/60 px-2 py-0.5 rounded">
-                            Intern (Festangestellt)
-                          </span>
-                        )}
-                      </td>
-                      <td className="px-4 py-3">
-                        <span className={`text-[10px] font-semibold px-2 py-0.5 rounded ${
-                          u.role === 'ADMIN' ? 'bg-amber-100 text-amber-800' :
-                          u.role === 'PROJECT_MANAGER' ? 'bg-blue-100 text-blue-800' : 'bg-slate-100 text-slate-700'
-                        }`}>
-                          {u.role}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 font-medium text-slate-800">
-                        {jobRole?.name || '—'}
-                      </td>
-                      <td className="px-4 py-3 text-slate-700">
-                        <strong>{u.weeklyTargetHours}h</strong> / Woche ({u.dailyTargetHours}h/Tag)
-                      </td>
-                      <td className="px-4 py-3">
-                        {u.individualBillingRate ? (
-                          <span className="font-bold text-slate-900">{u.individualBillingRate} €/h (Override)</span>
-                        ) : (
-                          <span className="text-slate-400 italic">Gemäß Rolle ({jobRole?.standardBillingRate || 130} €/h)</span>
-                        )}
-                      </td>
-                      {currentUser?.role === 'ADMIN' && (
-                        <td className="px-4 py-3 text-slate-600 font-mono">
-                          {u.individualCostRate || jobRole?.standardCostRate || 65} €/h
-                        </td>
+                return (
+                  <tr key={u.id} className="hover:bg-slate-50/60">
+                    <td className="px-4 py-3">
+                      <div className="font-semibold text-slate-900">{u.name}</div>
+                      <div className="text-[10px] text-slate-400">{u.email}</div>
+                      {isExternal && u.companyName && (
+                        <div className="text-[10px] text-purple-700 font-medium mt-0.5">
+                          Firma: {u.companyName}
+                        </div>
                       )}
-                      <td className="px-4 py-3 text-right">
-                        <span className="text-[10px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200/60">
-                          Aktiv
+                    </td>
+                    <td className="px-4 py-3">
+                      {isExternal ? (
+                        <span className="inline-flex items-center gap-1 text-[10px] font-bold bg-purple-100 text-purple-800 border border-purple-200/60 px-2 py-0.5 rounded">
+                          Extern (Freelancer)
                         </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200/60 px-2 py-0.5 rounded">
+                          Intern (Festangestellt)
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3">
+                      <span className={`text-[10px] font-semibold px-2 py-0.5 rounded ${
+                        u.role === 'ADMIN' ? 'bg-amber-100 text-amber-800' :
+                        u.role === 'PROJECT_MANAGER' ? 'bg-blue-100 text-blue-800' : 'bg-slate-100 text-slate-700'
+                      }`}>
+                        {u.role}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 font-medium text-slate-800">
+                      {jobRole?.name || '—'}
+                    </td>
+                    <td className="px-4 py-3 text-slate-700">
+                      <strong>{u.weeklyTargetHours}h</strong> / Woche ({u.dailyTargetHours}h/Tag)
+                    </td>
+                    <td className="px-4 py-3">
+                      {u.individualBillingRate ? (
+                        <span className="font-bold text-slate-900">{u.individualBillingRate} €/h (Override)</span>
+                      ) : (
+                        <span className="text-slate-400 italic">Gemäß Rolle ({jobRole?.standardBillingRate || 130} €/h)</span>
+                      )}
+                    </td>
+                    {currentUser?.role === 'ADMIN' && (
+                      <td className="px-4 py-3 text-slate-600 font-mono">
+                        {u.individualCostRate || jobRole?.standardCostRate || 65} €/h
                       </td>
-                    </tr>
-                  );
-                })}
+                    )}
+                    <td className="px-4 py-3">
+                      <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${
+                        u.status === 'INACTIVE'
+                          ? 'bg-slate-100 text-slate-600 border-slate-200'
+                          : 'bg-emerald-50 text-emerald-700 border-emerald-200/60'
+                      }`}>
+                        {u.status === 'INACTIVE' ? 'Inaktiv' : 'Aktiv'}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      <div className="flex items-center justify-end gap-1.5">
+                        <button
+                          id={`btn-edit-user-${u.id}`}
+                          onClick={() => handleOpenEditUser(u)}
+                          className="px-2.5 py-1 text-slate-700 hover:bg-slate-100 border border-slate-200 rounded-lg text-xs font-semibold flex items-center gap-1 transition-colors"
+                        >
+                          <Edit2 className="w-3 h-3 text-slate-500" />
+                          <span>Bearbeiten</span>
+                        </button>
+                        <button
+                          id={`btn-del-user-${u.id}`}
+                          onClick={() => handleOpenDeleteUser(u)}
+                          title={canDelete ? 'Mitarbeiter löschen' : `${userEntries.length} Zeiteinträge vorhanden (GoBD geschützt)`}
+                          className={`px-2.5 py-1 rounded-lg text-xs font-semibold flex items-center gap-1 border transition-colors ${
+                            canDelete
+                              ? 'border-red-200 bg-red-50 text-red-700 hover:bg-red-100'
+                              : 'border-slate-200 bg-slate-50 text-slate-400 hover:text-slate-600'
+                          }`}
+                        >
+                          <Trash2 className="w-3 h-3" />
+                          <span>Löschen</span>
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+              {filteredUsers.length === 0 && (
+                <tr>
+                  <td colSpan={9} className="px-4 py-8 text-center text-slate-400 text-xs italic">
+                    Keine Mitarbeiter für den aktuellen Suchbegriff gefunden.
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>
       </div>
 
-      {/* --- INVITATION MODAL (Section 4: Einladungsprozess & Onboarding) --- */}
+      {/* ========================================================================= */}
+      {/* MODAL: EDIT USER */}
+      {/* ========================================================================= */}
+      {editingUser && (
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in">
+          <div className="bg-white rounded-2xl max-w-lg w-full p-6 space-y-4 shadow-xl border border-slate-200 max-h-[90vh] overflow-y-auto">
+            <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
+              <Edit2 className="w-4 h-4 text-emerald-600" />
+              <span>Mitarbeiterprofil bearbeiten: {editingUser.name}</span>
+            </h3>
+
+            <form onSubmit={handleSaveEditUser} className="space-y-3 text-xs">
+              <div>
+                <label className="font-semibold text-slate-700 block mb-1">Name *</label>
+                <input
+                  type="text"
+                  required
+                  value={editName}
+                  onChange={e => setEditName(e.target.value)}
+                  className="w-full border border-slate-200 rounded-xl px-3 py-2 text-xs"
+                />
+              </div>
+
+              <div>
+                <label className="font-semibold text-slate-700 block mb-1">E-Mail-Adresse *</label>
+                <input
+                  type="email"
+                  required
+                  value={editEmail}
+                  onChange={e => setEditEmail(e.target.value)}
+                  className="w-full border border-slate-200 rounded-xl px-3 py-2 text-xs font-mono"
+                />
+              </div>
+
+              {/* Intern vs. Extern */}
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="font-semibold text-slate-700 block mb-1">Mitarbeitertyp *</label>
+                  <select
+                    value={editEmploymentType}
+                    onChange={e => setEditEmploymentType(e.target.value as any)}
+                    className="w-full border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold"
+                  >
+                    <option value="INTERNAL">🏢 Festangestellt (Intern)</option>
+                    <option value="EXTERNAL">🤝 Freelancer (Extern)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="font-semibold text-slate-700 block mb-1">Status</label>
+                  <select
+                    value={editStatus}
+                    onChange={e => setEditStatus(e.target.value as any)}
+                    className="w-full border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold"
+                  >
+                    <option value="ACTIVE">Aktiv</option>
+                    <option value="INACTIVE">Inaktiv (Gesperrt)</option>
+                  </select>
+                </div>
+              </div>
+
+              {editEmploymentType === 'EXTERNAL' && (
+                <div>
+                  <label className="font-semibold text-slate-700 block mb-1">Subunternehmer- / Firmenname</label>
+                  <input
+                    type="text"
+                    value={editCompanyName}
+                    onChange={e => setEditCompanyName(e.target.value)}
+                    placeholder="z.B. AI Cloud Solutions GmbH"
+                    className="w-full border border-slate-200 rounded-xl px-3 py-2 text-xs"
+                  />
+                </div>
+              )}
+
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="font-semibold text-slate-700 block mb-1">Systemrolle *</label>
+                  <select
+                    value={editRole}
+                    onChange={e => setEditRole(e.target.value as any)}
+                    className="w-full border border-slate-200 rounded-xl px-3 py-2 text-xs font-medium"
+                  >
+                    <option value="EMPLOYEE">Mitarbeiter</option>
+                    <option value="PROJECT_MANAGER">Projektleiter</option>
+                    <option value="ADMIN">Administrator</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="font-semibold text-slate-700 block mb-1">Fachliche Rolle</label>
+                  <select
+                    value={editJobRoleId}
+                    onChange={e => setEditJobRoleId(e.target.value)}
+                    className="w-full border border-slate-200 rounded-xl px-3 py-2 text-xs font-medium"
+                  >
+                    {jobRoles.map(r => (
+                      <option key={r.id} value={r.id}>{r.name} ({r.standardBillingRate} €/h)</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="font-semibold text-slate-700 block mb-1">Soll-Wochenarbeitszeit (h)</label>
+                  <input
+                    type="number"
+                    step="0.5"
+                    value={editWeeklyHours}
+                    onChange={e => setEditWeeklyHours(e.target.value)}
+                    className="w-full border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold"
+                  />
+                </div>
+                <div>
+                  <label className="font-semibold text-slate-700 block mb-1">Soll-Tagesarbeitszeit (h)</label>
+                  <input
+                    type="number"
+                    step="0.5"
+                    value={editDailyHours}
+                    onChange={e => setEditDailyHours(e.target.value)}
+                    className="w-full border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold"
+                  />
+                </div>
+              </div>
+
+              {/* Rate Overrides */}
+              <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-2">
+                <div className="font-semibold text-slate-800">Individuelle Satz-Overrides (Stufe 2 der Satzhierarchie)</div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="text-[11px] text-slate-600 block mb-0.5">Indiv. Kundensatz (€/h)</label>
+                    <input
+                      type="number"
+                      placeholder="Leer = Rolle"
+                      value={editBillingRate}
+                      onChange={e => setEditBillingRate(e.target.value)}
+                      className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs font-semibold"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[11px] text-slate-600 block mb-0.5">Indiv. Kostensatz (€/h)</label>
+                    <input
+                      type="number"
+                      placeholder="Leer = Rolle"
+                      value={editCostRate}
+                      onChange={e => setEditCostRate(e.target.value)}
+                      className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs font-semibold"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setEditingUser(null)}
+                  className="px-3 py-1.5 rounded-lg border border-slate-200 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                >
+                  {t.cancel}
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-1.5 rounded-lg bg-slate-900 text-white text-xs font-semibold hover:bg-slate-800"
+                >
+                  Änderungen speichern
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* MODAL: DELETE USER CONFIRMATION */}
+      {/* ========================================================================= */}
+      {userToDelete && (
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl border border-slate-200">
+            {(() => {
+              const entries = timeEntries.filter(e => e.userId === userToDelete.id);
+              const hasEntries = entries.length > 0;
+
+              return (
+                <>
+                  <div className="flex items-center gap-3">
+                    <div className={`p-2.5 rounded-xl ${hasEntries ? 'bg-amber-100 text-amber-800' : 'bg-red-100 text-red-800'}`}>
+                      {hasEntries ? <AlertTriangle className="w-5 h-5" /> : <Trash2 className="w-5 h-5" />}
+                    </div>
+                    <div>
+                      <h3 className="text-base font-bold text-slate-900">
+                        {hasEntries ? 'Mitarbeiter nicht löschbar (GoBD-Schutz)' : 'Mitarbeiter wirklich löschen?'}
+                      </h3>
+                      <div className="text-xs text-slate-500">{userToDelete.name} ({userToDelete.email})</div>
+                    </div>
+                  </div>
+
+                  {hasEntries ? (
+                    <div className="space-y-3 text-xs text-slate-600">
+                      <div className="p-3 bg-amber-50 rounded-xl border border-amber-200 space-y-1.5 text-amber-900">
+                        <div className="font-bold flex items-center gap-1.5">
+                          <ShieldCheck className="w-4 h-4 text-amber-700" />
+                          <span>Revisionssicherheit & gesetzliche Aufbewahrungspflicht</span>
+                        </div>
+                        <p className="leading-relaxed">
+                          Für <strong>{userToDelete.name}</strong> existieren bereits <strong>{entries.length} erfasste Zeiteinträge</strong> ({entries.reduce((s, e) => s + e.durationHoursDecimal, 0).toFixed(1)} Stunden).
+                          Aus Gründen der GoBD-Konformität und Lohn-/Projektprüfbarkeit kann dieses Benutzerkonto nicht gelöscht werden.
+                        </p>
+                      </div>
+
+                      <p className="text-slate-700">
+                        <strong>Empfohlene Lösung:</strong> Setzen Sie das Benutzerkonto auf <strong>"Inaktiv"</strong>. Der Mitarbeiter kann sich nicht mehr anmelden oder Zeiten buchen, während historische Daten unberührt bleiben.
+                      </p>
+
+                      {deleteError && (
+                        <div className="p-2.5 bg-red-50 border border-red-200 text-red-700 rounded-lg text-xs">
+                          {deleteError}
+                        </div>
+                      )}
+
+                      <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
+                        <button
+                          type="button"
+                          onClick={() => setUserToDelete(null)}
+                          className="px-3 py-1.5 rounded-lg border border-slate-200 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                        >
+                          Schließen
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDeactivateUserDirectly(userToDelete)}
+                          className="px-4 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-xs font-semibold flex items-center gap-1.5 shadow-xs"
+                        >
+                          <UserX className="w-3.5 h-3.5" />
+                          <span>Mitarbeiter auf "Inaktiv" setzen</span>
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="space-y-3 text-xs text-slate-600">
+                      <p>
+                        Möchten Sie das Mitarbeiterprofil von <strong>"{userToDelete.name}"</strong> wirklich unwiderruflich löschen?
+                      </p>
+                      <p className="text-slate-500">
+                        Es wurden <strong>0 Zeiteinträge</strong> für diesen Benutzer erfasst. Das Profil und Zugangsdaten werden restlos entfernt.
+                      </p>
+
+                      {deleteError && (
+                        <div className="p-2.5 bg-red-50 border border-red-200 text-red-700 rounded-lg text-xs">
+                          {deleteError}
+                        </div>
+                      )}
+
+                      <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
+                        <button
+                          type="button"
+                          onClick={() => setUserToDelete(null)}
+                          className="px-3 py-1.5 rounded-lg border border-slate-200 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                        >
+                          {t.cancel}
+                        </button>
+                        <button
+                          type="button"
+                          disabled={isDeleting}
+                          onClick={handleConfirmDeleteUser}
+                          className="px-4 py-1.5 rounded-lg bg-red-600 hover:bg-red-700 text-white text-xs font-semibold flex items-center gap-1.5 shadow-xs disabled:opacity-50"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                          <span>{isDeleting ? 'Wird gelöscht...' : 'Mitarbeiter löschen'}</span>
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </>
+              );
+            })()}
+          </div>
+        </div>
+      )}
+
+      {/* --- INVITATION MODAL --- */}
       {showInviteModal && (
         <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in">
           <div className="bg-white rounded-2xl max-w-md w-full p-6 space-y-4 shadow-xl border border-slate-200">
@@ -358,9 +794,10 @@ export const RateHierarchyView: React.FC = () => {
                           : 'border-slate-200 text-slate-600 hover:bg-slate-50'
                       }`}
                     >
-                      <div className="font-bold">🏢 Intern</div>
-                      <div className="text-[10px] font-normal text-slate-500 mt-0.5">Festangestellter Mitarbeiter</div>
+                      <div className="font-bold">🏢 Intern (Festangestellt)</div>
+                      <div className="text-[10px] text-slate-500 font-normal mt-0.5">ArbZG & Urlaubskonto aktiv</div>
                     </button>
+
                     <button
                       type="button"
                       onClick={() => setInviteEmploymentType('EXTERNAL')}
@@ -370,92 +807,89 @@ export const RateHierarchyView: React.FC = () => {
                           : 'border-slate-200 text-slate-600 hover:bg-slate-50'
                       }`}
                     >
-                      <div className="font-bold">🤝 Extern</div>
-                      <div className="text-[10px] font-normal text-slate-500 mt-0.5">Freelancer / Subunternehmer</div>
+                      <div className="font-bold">🤝 Extern (Freelancer)</div>
+                      <div className="text-[10px] text-slate-500 font-normal mt-0.5">Keine ArbZG-Grenzwerte</div>
                     </button>
                   </div>
                 </div>
 
                 {inviteEmploymentType === 'EXTERNAL' && (
                   <div>
-                    <label className="font-semibold text-slate-700 block mb-1">Dienstleister / Firmenname (optional)</label>
+                    <label className="font-semibold text-slate-700 block mb-1">Subunternehmer- / Firmenname</label>
                     <input
                       type="text"
                       value={inviteCompanyName}
                       onChange={e => setInviteCompanyName(e.target.value)}
-                      placeholder="z. B. TechConsultants GmbH / Freiberufler"
+                      placeholder="z.B. AI Cloud Solutions GmbH"
                       className="w-full border border-slate-200 rounded-xl px-3 py-2 text-xs"
                     />
                   </div>
                 )}
 
                 <div>
-                  <label className="font-semibold text-slate-700 block mb-1">{t.fullName} *</label>
+                  <label className="font-semibold text-slate-700 block mb-1">Vollständiger Name *</label>
                   <input
-                    id="input-invite-name"
                     type="text"
                     required
                     value={inviteName}
                     onChange={e => setInviteName(e.target.value)}
-                    placeholder="z.B. Dr. Sandra Richter"
+                    placeholder="z.B. Dr. Clara Schumann"
                     className="w-full border border-slate-200 rounded-xl px-3 py-2 text-xs"
                   />
                 </div>
 
                 <div>
-                  <label className="font-semibold text-slate-700 block mb-1">{t.emailAddress} *</label>
+                  <label className="font-semibold text-slate-700 block mb-1">E-Mail-Adresse *</label>
                   <input
-                    id="input-invite-email"
                     type="email"
                     required
                     value={inviteEmail}
                     onChange={e => setInviteEmail(e.target.value)}
-                    placeholder="sandra.richter@insightarcs.de"
+                    placeholder="clara.schumann@insightarcs.de"
                     className="w-full border border-slate-200 rounded-xl px-3 py-2 text-xs"
                   />
                 </div>
 
                 <div className="grid grid-cols-2 gap-2">
                   <div>
-                    <label className="font-semibold text-slate-700 block mb-1">Berechtigungsrolle</label>
+                    <label className="font-semibold text-slate-700 block mb-1">Berechtigungsrolle *</label>
                     <select
-                      id="select-invite-role"
                       value={inviteRole}
                       onChange={e => setInviteRole(e.target.value as any)}
-                      className="w-full border border-slate-200 rounded-xl px-2.5 py-2 text-xs"
+                      className="w-full border border-slate-200 rounded-xl px-3 py-2 text-xs"
                     >
                       <option value="EMPLOYEE">Mitarbeiter</option>
-                      <option value="PROJECT_MANAGER">Projektleitung</option>
+                      <option value="PROJECT_MANAGER">Projektleiter</option>
                       <option value="ADMIN">Administrator</option>
                     </select>
                   </div>
+
                   <div>
-                    <label className="font-semibold text-slate-700 block mb-1">Fachliche Rolle</label>
+                    <label className="font-semibold text-slate-700 block mb-1">Fachliche Rolle *</label>
                     <select
-                      id="select-invite-jobrole"
                       value={inviteJobRoleId}
                       onChange={e => setInviteJobRoleId(e.target.value)}
-                      className="w-full border border-slate-200 rounded-xl px-2.5 py-2 text-xs"
+                      className="w-full border border-slate-200 rounded-xl px-3 py-2 text-xs"
                     >
                       {jobRoles.map(r => (
-                        <option key={r.id} value={r.id}>{r.name}</option>
+                        <option key={r.id} value={r.id}>{r.name} ({r.standardBillingRate} €/h)</option>
                       ))}
                     </select>
                   </div>
                 </div>
 
                 <div>
-                  <label className="font-semibold text-slate-700 block mb-1">{t.weeklyHours}</label>
+                  <label className="font-semibold text-slate-700 block mb-1">Soll-Wochenarbeitszeit (Stunden)</label>
                   <input
-                    id="input-invite-hours"
                     type="number"
                     value={inviteWeeklyHours}
                     onChange={e => setInviteWeeklyHours(e.target.value)}
-                    className="w-full border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold"
+                    placeholder="40"
+                    className="w-full border border-slate-200 rounded-xl px-3 py-2 text-xs"
                   />
                 </div>
 
-                <div className="flex justify-end gap-2 pt-2">
+                <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
                   <button
                     type="button"
                     onClick={() => setShowInviteModal(false)}
@@ -467,40 +901,41 @@ export const RateHierarchyView: React.FC = () => {
                     type="submit"
                     className="px-4 py-1.5 rounded-lg bg-slate-900 text-white text-xs font-semibold hover:bg-slate-800"
                   >
-                    {t.sendInvitation}
+                    Einladung generieren
                   </button>
                 </div>
               </form>
             ) : (
               <div className="space-y-3 text-xs">
-                <div className="bg-emerald-50 border border-emerald-200 p-3 rounded-xl text-emerald-900">
-                  <div className="font-bold flex items-center gap-1">
-                    <Check className="w-4 h-4 text-emerald-600" /> Einladung erfolgreich generiert!
+                <div className="p-3 bg-emerald-50 text-emerald-800 rounded-xl border border-emerald-200 flex items-center gap-2">
+                  <CheckCircle className="w-5 h-5 text-emerald-600 shrink-0" />
+                  <span>Einladungslink für <strong>{inviteEmail}</strong> wurde erfolgreich erzeugt!</span>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[11px] text-slate-500 font-medium">Magischer Registrierungslink (Gültig 7 Tage):</label>
+                  <div className="flex items-center gap-1.5 p-2 bg-slate-50 border border-slate-200 rounded-xl font-mono text-[11px] text-slate-700">
+                    <span className="truncate flex-1">{invitationLinkResult}</span>
+                    <button
+                      type="button"
+                      onClick={() => copyToClipboard(invitationLinkResult)}
+                      className="p-1 hover:bg-slate-200 rounded text-slate-600 shrink-0"
+                    >
+                      {copied ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+                    </button>
                   </div>
-                  <p className="text-[11px] text-emerald-800 mt-1">
-                    Einladungstoken wurde mit 7 Tagen Gültigkeit erstellt. Für Tests können Sie den Registrierungslink kopieren:
-                  </p>
                 </div>
 
-                <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-200 font-mono text-[11px] break-all">
-                  {invitationLinkResult}
-                </div>
-
-                <div className="flex justify-end gap-2 pt-2">
+                <div className="flex justify-end pt-2 border-t border-slate-100">
                   <button
                     type="button"
-                    onClick={() => copyToClipboard(invitationLinkResult)}
-                    className="px-3 py-1.5 rounded-lg bg-emerald-600 text-white text-xs font-semibold flex items-center gap-1.5"
+                    onClick={() => {
+                      setShowInviteModal(false);
+                      setInvitationLinkResult(null);
+                    }}
+                    className="px-4 py-1.5 rounded-lg bg-slate-900 text-white text-xs font-semibold hover:bg-slate-800"
                   >
-                    {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
-                    {copied ? t.copied : t.copy}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setShowInviteModal(false)}
-                    className="px-4 py-1.5 rounded-lg bg-slate-900 text-white text-xs font-semibold"
-                  >
-                    Schließen
+                    Fertig
                   </button>
                 </div>
               </div>

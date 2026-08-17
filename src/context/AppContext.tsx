@@ -74,9 +74,16 @@ interface AppContextType {
   saveForecast: (entry: Partial<ForecastEntry>) => Promise<void>;
   createProject: (project: Partial<Project>) => Promise<Project>;
   updateProject: (id: string, updates: Partial<Project>) => Promise<void>;
+  deleteProject: (id: string) => Promise<{ success: boolean; error?: string }>;
   createClient: (client: Partial<Client>) => Promise<Client>;
+  updateClient: (id: string, updates: Partial<Client>) => Promise<Client>;
+  deleteClient: (id: string) => Promise<{ success: boolean; error?: string }>;
   createTask: (task: Partial<Task>) => Promise<Task>;
+  updateTask: (id: string, updates: Partial<Task>) => Promise<Task>;
+  deleteTask: (id: string) => Promise<{ success: boolean; error?: string }>;
   inviteUser: (userData: Partial<User>) => Promise<{ user: User; invitationLink: string }>;
+  updateUser: (id: string, updates: Partial<User>) => Promise<User>;
+  deleteUser: (id: string) => Promise<{ success: boolean; error?: string }>;
   createApiKey: (name: string) => Promise<ApiKey>;
   revokeApiKey: (id: string) => Promise<void>;
   importClockify: (rows: any[]) => Promise<ClockifyImportReport>;
@@ -544,6 +551,21 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     await refreshAllData();
   };
 
+  const deleteProject = async (id: string): Promise<{ success: boolean; error?: string }> => {
+    const res = await fetch(`/api/projects/${id}`, {
+      method: 'DELETE',
+      headers: {
+        'x-user-id': currentUser?.id || 'u-1'
+      }
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      return { success: false, error: data.error || 'Fehler beim Löschen des Projekts' };
+    }
+    await refreshAllData();
+    return { success: true };
+  };
+
   const createClient = async (client: Partial<Client>): Promise<Client> => {
     const res = await fetch('/api/clients', {
       method: 'POST',
@@ -555,15 +577,76 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     return created;
   };
 
+  const updateClient = async (id: string, updates: Partial<Client>): Promise<Client> => {
+    const res = await fetch(`/api/clients/${id}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-user-id': currentUser?.id || 'u-1'
+      },
+      body: JSON.stringify(updates)
+    });
+    const updated = await res.json();
+    await refreshAllData();
+    return updated;
+  };
+
+  const deleteClient = async (id: string): Promise<{ success: boolean; error?: string }> => {
+    const res = await fetch(`/api/clients/${id}`, {
+      method: 'DELETE',
+      headers: {
+        'x-user-id': currentUser?.id || 'u-1'
+      }
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      return { success: false, error: data.error || 'Fehler beim Löschen des Kunden' };
+    }
+    await refreshAllData();
+    return { success: true };
+  };
+
   const createTask = async (task: Partial<Task>): Promise<Task> => {
     const res = await fetch('/api/tasks', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'x-user-id': currentUser?.id || 'u-1'
+      },
       body: JSON.stringify(task)
     });
     const created = await res.json();
     await refreshAllData();
     return created;
+  };
+
+  const updateTask = async (id: string, updates: Partial<Task>): Promise<Task> => {
+    const res = await fetch(`/api/tasks/${id}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-user-id': currentUser?.id || 'u-1'
+      },
+      body: JSON.stringify(updates)
+    });
+    const updated = await res.json();
+    await refreshAllData();
+    return updated;
+  };
+
+  const deleteTask = async (id: string): Promise<{ success: boolean; error?: string }> => {
+    const res = await fetch(`/api/tasks/${id}`, {
+      method: 'DELETE',
+      headers: {
+        'x-user-id': currentUser?.id || 'u-1'
+      }
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      return { success: false, error: data.error || 'Fehler beim Löschen der Aufgabe' };
+    }
+    await refreshAllData();
+    return { success: true };
   };
 
   const inviteUser = async (userData: Partial<User>) => {
@@ -578,6 +661,35 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const data = await res.json();
     await refreshAllData();
     return data;
+  };
+
+  const updateUser = async (id: string, updates: Partial<User>): Promise<User> => {
+    const res = await fetch(`/api/users/${id}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-user-id': currentUser?.id || 'u-1'
+      },
+      body: JSON.stringify(updates)
+    });
+    const updated = await res.json();
+    await refreshAllData();
+    return updated;
+  };
+
+  const deleteUser = async (id: string): Promise<{ success: boolean; error?: string }> => {
+    const res = await fetch(`/api/users/${id}`, {
+      method: 'DELETE',
+      headers: {
+        'x-user-id': currentUser?.id || 'u-1'
+      }
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      return { success: false, error: data.error || 'Fehler beim Löschen des Mitarbeiters' };
+    }
+    await refreshAllData();
+    return { success: true };
   };
 
   const createApiKey = async (name: string): Promise<ApiKey> => {
@@ -702,9 +814,16 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         saveForecast,
         createProject,
         updateProject,
+        deleteProject,
         createClient,
+        updateClient,
+        deleteClient,
         createTask,
+        updateTask,
+        deleteTask,
         inviteUser,
+        updateUser,
+        deleteUser,
         createApiKey,
         revokeApiKey,
         importClockify,
