@@ -122,6 +122,7 @@ export class StorageService {
       { id: 'u-18', name: 'Anja Frank', email: 'anja.frank@insightarcs.de', role: 'EMPLOYEE', jobRoleId: 'role-mid', targetH: 20, empType: 'INTERNAL' },
       { id: 'u-19', name: 'Stefan Lange', email: 'stefan.lange@insightarcs.de', role: 'EMPLOYEE', jobRoleId: 'role-mid', targetH: 40, empType: 'INTERNAL' },
       { id: 'u-20', name: 'Vanessa Hartmann', email: 'v.hartmann@external-expert.de', role: 'EMPLOYEE', jobRoleId: 'role-jr', targetH: 40, empType: 'EXTERNAL', company: 'Hartmann Consulting & Support' },
+      { id: 'u-21', name: 'Michael Keller', email: 'm.keller@keller-pm-services.de', role: 'PROJECT_MANAGER', jobRoleId: 'role-sr', targetH: 40, empType: 'EXTERNAL', company: 'Keller Agile PM Services GmbH' },
     ];
 
     this.users = team.map((t, idx) => {
@@ -206,6 +207,7 @@ export class StorageService {
         requiredFields: { description: true, task: true, breaks: false },
         restrictToAssignedMembers: true,
         assignedUserIds: ['u-1', 'u-2', 'u-4', 'u-5', 'u-6'],
+        allowPmViewCosts: true,
         memberRates: [
           { id: 'pmr-1', projectId: 'p-1', userId: 'u-1', hourlyBillingRate: 230, hourlyCostRate: 110 },
           { id: 'pmr-2', projectId: 'p-1', userId: 'u-2', hourlyBillingRate: 175, hourlyCostRate: 85 }
@@ -230,6 +232,7 @@ export class StorageService {
         requiredFields: { description: true, task: true, breaks: true },
         restrictToAssignedMembers: true,
         assignedUserIds: ['u-1', 'u-3', 'u-7', 'u-8', 'u-9', 'u-10'],
+        allowPmViewCosts: false, // PM Kostenansicht hier testweise deaktiviert
         memberRates: [],
         fixedPriceAllocations: [
           { id: 'fpa-1', projectId: 'p-2', title: 'Phase 1: Architektur & PoC', amount: 25000, targetDate: '2025-03-31', status: 'PAID' },
@@ -255,6 +258,7 @@ export class StorageService {
         requiredFields: { description: true, task: false, breaks: false },
         restrictToAssignedMembers: true,
         assignedUserIds: ['u-1', 'u-2', 'u-4', 'u-11', 'u-12', 'u-13'],
+        allowPmViewCosts: true,
         memberRates: [],
         createdAt: '2025-02-01T14:00:00Z'
       },
@@ -265,16 +269,17 @@ export class StorageService {
         clientName: 'GreenEnergy Systems AG',
         name: 'Solar Yield Forecast Engine',
         projectNumber: 'PRJ-2025-04',
-        projectManagerId: 'u-3',
-        projectManagerName: 'Markus Weber',
-        managerUserIds: ['u-3'],
+        projectManagerId: 'u-21',
+        projectManagerName: 'Michael Keller',
+        managerUserIds: ['u-21'],
         billingModel: 'TIME_AND_MATERIAL',
         budgetHours: 200,
         status: 'ACTIVE',
         requireApproval: true,
         requiredFields: { description: true, task: true, breaks: false },
         restrictToAssignedMembers: true,
-        assignedUserIds: ['u-1', 'u-3', 'u-5', 'u-13', 'u-14', 'u-15'],
+        assignedUserIds: ['u-1', 'u-21', 'u-5', 'u-13', 'u-14', 'u-15'],
+        allowPmViewCosts: true,
         memberRates: [],
         createdAt: '2025-03-01T08:00:00Z'
       },
@@ -294,6 +299,7 @@ export class StorageService {
         requiredFields: { description: false, task: false, breaks: false },
         restrictToAssignedMembers: false,
         assignedUserIds: [],
+        allowPmViewCosts: true,
         memberRates: [],
         createdAt: '2025-01-01T08:00:00Z'
       },
@@ -1230,15 +1236,22 @@ export class StorageService {
       return orgProjects;
     }
 
-    // Project Manager sees projects they manage OR are assigned to OR open projects
+    // Project Manager sees strictly only their OWN projects (where they are PM or co-manager)
     if (roleInfo.isProjectManager) {
-      return orgProjects.filter(p => 
-        p.projectManagerId === actorId ||
-        p.managerUserIds?.includes(actorId) ||
-        (p.assignedUserIds && p.assignedUserIds.includes(actorId)) ||
-        (p.memberRates && p.memberRates.some(mr => mr.userId === actorId)) ||
-        !p.restrictToAssignedMembers
-      );
+      return orgProjects
+        .filter(p => p.projectManagerId === actorId || p.managerUserIds?.includes(actorId))
+        .map(p => {
+          if (p.allowPmViewCosts === false) {
+            return {
+              ...p,
+              memberRates: p.memberRates?.map(mr => ({
+                ...mr,
+                hourlyCostRate: undefined
+              }))
+            };
+          }
+          return p;
+        });
     }
 
     // Regular Employee sees ONLY assigned projects (or unrestricted projects if not restricted)
@@ -1491,6 +1504,7 @@ export class StorageService {
       requiredFields: projectData.requiredFields || { description: true, task: false, breaks: false },
       restrictToAssignedMembers: projectData.restrictToAssignedMembers ?? false,
       assignedUserIds: projectData.assignedUserIds || [],
+      allowPmViewCosts: projectData.allowPmViewCosts ?? true,
       memberRates: projectData.memberRates || [],
       fixedPriceAllocations: projectData.fixedPriceAllocations || [],
       createdAt: new Date().toISOString()
@@ -1690,6 +1704,19 @@ export class StorageService {
           .map(p => p.id);
 
         list = list.filter(e => managedProjectIds.includes(e.projectId) || e.userId === actorId);
+
+        // If allowPmViewCosts is false for a project, PM cannot see calculated cost / cost rate of other employees
+        list = list.map(e => {
+          const prj = this.projects.find(p => p.id === e.projectId);
+          if (prj && prj.allowPmViewCosts === false && e.userId !== actorId) {
+            return {
+              ...e,
+              hourlyCostRate: undefined,
+              calculatedCost: undefined
+            };
+          }
+          return e;
+        });
       } else {
         // Regular Employee sees ONLY their own time entries!
         list = list.filter(e => e.userId === actorId);

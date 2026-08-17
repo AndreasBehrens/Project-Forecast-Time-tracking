@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
 import { Project, Client, Task } from '../types';
 import {
@@ -28,7 +28,9 @@ import {
   ExternalLink,
   ShieldCheck,
   Calendar,
-  DollarSign
+  DollarSign,
+  Eye,
+  EyeOff
 } from 'lucide-react';
 
 export const ProjectsClientsView: React.FC = () => {
@@ -52,6 +54,9 @@ export const ProjectsClientsView: React.FC = () => {
     deleteTask
   } = useApp();
 
+  const isAdmin = currentUser?.role === 'SUPERADMIN' || currentUser?.role === 'ADMIN';
+  const isPM = currentUser?.role === 'PROJECT_MANAGER';
+
   // Active view tab: Projects vs Clients
   const [activeTab, setActiveTab] = useState<'PROJECTS' | 'CLIENTS'>('PROJECTS');
 
@@ -74,6 +79,7 @@ export const ProjectsClientsView: React.FC = () => {
   const [projReqBreaks, setProjReqBreaks] = useState(false);
   const [projRestrictMembers, setProjRestrictMembers] = useState(false);
   const [projAssignedUsers, setProjAssignedUsers] = useState<string[]>([]);
+  const [projAllowPmViewCosts, setProjAllowPmViewCosts] = useState(true);
 
   // --- Edit Project Modal State ---
   const [editingProject, setEditingProject] = useState<Project | null>(null);
@@ -90,6 +96,7 @@ export const ProjectsClientsView: React.FC = () => {
   const [editProjReqBreaks, setEditProjReqBreaks] = useState(false);
   const [editProjRestrictMembers, setEditProjRestrictMembers] = useState(false);
   const [editProjAssignedUsers, setEditProjAssignedUsers] = useState<string[]>([]);
+  const [editProjAllowPmViewCosts, setEditProjAllowPmViewCosts] = useState(true);
 
   // --- Delete Project Confirmation State ---
   const [projectToDelete, setProjectToDelete] = useState<Project | null>(null);
@@ -151,9 +158,9 @@ export const ProjectsClientsView: React.FC = () => {
     const created = await createProject({
       name: projName,
       clientId: projClientId || clients[0]?.id,
-      projectManagerId: projProjectManagerId || undefined,
-      projectManagerName: pm?.name,
-      managerUserIds: projProjectManagerId ? [projProjectManagerId] : [],
+      projectManagerId: projProjectManagerId || (isPM ? currentUser?.id : undefined),
+      projectManagerName: pm?.name || (isPM ? currentUser?.name : undefined),
+      managerUserIds: projProjectManagerId ? [projProjectManagerId] : (isPM && currentUser?.id ? [currentUser.id] : []),
       billingModel: projBillingModel,
       totalFixedPrice: projBillingModel === 'FIXED_PRICE' ? parseFloat(projFixedPrice) : undefined,
       budgetHours: parseFloat(projBudgetHours) || 100,
@@ -164,13 +171,15 @@ export const ProjectsClientsView: React.FC = () => {
         breaks: projReqBreaks
       },
       restrictToAssignedMembers: projRestrictMembers,
-      assignedUserIds: projAssignedUsers
+      assignedUserIds: projAssignedUsers,
+      allowPmViewCosts: projAllowPmViewCosts
     });
     setShowNewProjectModal(false);
     setProjName('');
     setProjProjectManagerId('');
     setProjRestrictMembers(false);
     setProjAssignedUsers([]);
+    setProjAllowPmViewCosts(true);
     if (created?.id) setSelectedProjectId(created.id);
   };
 
@@ -190,6 +199,7 @@ export const ProjectsClientsView: React.FC = () => {
     setEditProjReqBreaks(proj.requiredFields?.breaks ?? false);
     setEditProjRestrictMembers(proj.restrictToAssignedMembers ?? false);
     setEditProjAssignedUsers(proj.assignedUserIds || []);
+    setEditProjAllowPmViewCosts(proj.allowPmViewCosts ?? true);
   };
 
   const handleSaveEditProject = async (e: React.FormEvent) => {
@@ -216,10 +226,18 @@ export const ProjectsClientsView: React.FC = () => {
         breaks: editProjReqBreaks
       },
       restrictToAssignedMembers: editProjRestrictMembers,
-      assignedUserIds: editProjAssignedUsers
+      assignedUserIds: editProjAssignedUsers,
+      allowPmViewCosts: editProjAllowPmViewCosts
     });
 
     setEditingProject(null);
+  };
+
+  const handleToggleAllowPmCosts = async (allow: boolean) => {
+    if (!selectedProject) return;
+    await updateProject(selectedProject.id, {
+      allowPmViewCosts: allow
+    });
   };
 
   const handleOpenDeleteProject = (proj: Project, e?: React.MouseEvent) => {
@@ -413,12 +431,27 @@ export const ProjectsClientsView: React.FC = () => {
 
   // Filtered lists
   const filteredProjects = projects.filter(p => {
+    // If user is a Project Manager (and not admin), only show projects they manage
+    if (!isAdmin && isPM && currentUser) {
+      const isMyProject = p.projectManagerId === currentUser.id || p.managerUserIds?.includes(currentUser.id);
+      if (!isMyProject) return false;
+    }
+
     const matchesSearch = p.name.toLowerCase().includes(projectSearch.toLowerCase()) ||
                           p.clientName.toLowerCase().includes(projectSearch.toLowerCase()) ||
                           (p.projectNumber && p.projectNumber.toLowerCase().includes(projectSearch.toLowerCase()));
     const matchesModel = projectBillingFilter === 'ALL' || p.billingModel === projectBillingFilter;
     return matchesSearch && matchesModel;
   });
+
+  // Auto-sync selected project if previous selection is not in filteredProjects
+  useEffect(() => {
+    if (filteredProjects.length > 0) {
+      if (!filteredProjects.some(p => p.id === selectedProjectId)) {
+        setSelectedProjectId(filteredProjects[0].id);
+      }
+    }
+  }, [filteredProjects, selectedProjectId]);
 
   const filteredClients = clients.filter(c => {
     return c.name.toLowerCase().includes(clientSearch.toLowerCase()) ||
@@ -901,6 +934,237 @@ export const ProjectsClientsView: React.FC = () => {
                   )}
                 </div>
 
+                {/* Projekt-Mitarbeiter, Stundensätze & Wirtschaftlichkeit */}
+                {(() => {
+                  const canViewProjectCosts = isAdmin || (isPM && selectedProject?.allowPmViewCosts !== false);
+
+                  const projectMemberIds = Array.from(new Set([
+                    ...(selectedProject?.assignedUserIds || []),
+                    ...projectEntries.map(e => e.userId)
+                  ]));
+
+                  const projectMembersData = projectMemberIds.map(uid => {
+                    const user = users.find(u => u.id === uid);
+                    const userEntries = projectEntries.filter(e => e.userId === uid);
+                    const userHours = userEntries.reduce((s, e) => s + e.durationHoursDecimal, 0);
+                    const userRevenue = userEntries.reduce((s, e) => s + e.calculatedAmount, 0);
+                    
+                    const memberRateObj = selectedProject?.memberRates?.find(mr => mr.userId === uid);
+                    const jobRoleObj = jobRoles.find(jr => jr.id === user?.jobRoleId);
+                    
+                    const billingRate = memberRateObj?.hourlyBillingRate ?? user?.individualBillingRate ?? jobRoleObj?.defaultHourlyBillingRate ?? 100;
+                    const costRate = memberRateObj?.hourlyCostRate ?? user?.individualCostRate ?? jobRoleObj?.defaultHourlyCostRate ?? 50;
+                    
+                    const userCost = canViewProjectCosts 
+                      ? userEntries.reduce((s, e) => s + (e.calculatedCost ?? (e.durationHoursDecimal * (e.hourlyCostRate ?? costRate))), 0) 
+                      : null;
+                    const userMargin = userCost !== null ? (userRevenue - userCost) : null;
+                    const userMarginPercent = (userMargin !== null && userRevenue > 0) ? (userMargin / userRevenue) * 100 : null;
+
+                    return {
+                      user,
+                      uid,
+                      name: user?.name || uid,
+                      isExternal: user?.employmentType === 'EXTERNAL',
+                      companyName: user?.companyName,
+                      role: user?.role,
+                      userHours,
+                      userEntriesCount: userEntries.length,
+                      billingRate,
+                      costRate,
+                      userRevenue,
+                      userCost,
+                      userMargin,
+                      userMarginPercent,
+                      isAssigned: (selectedProject?.assignedUserIds || []).includes(uid)
+                    };
+                  });
+
+                  const totalProjectCosts = canViewProjectCosts 
+                    ? projectMembersData.reduce((s, m) => s + (m.userCost || 0), 0)
+                    : null;
+                  const totalProjectMargin = totalProjectCosts !== null ? (totalBilledAmount - totalProjectCosts) : null;
+                  const totalProjectMarginPercent = (totalProjectMargin !== null && totalBilledAmount > 0) ? (totalProjectMargin / totalBilledAmount) * 100 : null;
+
+                  return (
+                    <div className="space-y-3 pt-2">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-2">
+                        <div className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
+                          <DollarSign className="w-4 h-4 text-indigo-600" />
+                          Projekt-Mitarbeiter, Stundensätze & Kosten ({projectMembersData.length})
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {isAdmin ? (
+                            <label className="inline-flex items-center gap-2 cursor-pointer bg-slate-50 hover:bg-slate-100 px-2.5 py-1 rounded-lg border border-slate-200 text-xs transition-colors">
+                              <input
+                                id="toggle-allow-pm-view-costs"
+                                type="checkbox"
+                                checked={selectedProject.allowPmViewCosts !== false}
+                                onChange={e => handleToggleAllowPmCosts(e.target.checked)}
+                                className="rounded text-indigo-600 w-3.5 h-3.5"
+                              />
+                              <span className="text-[11px] font-medium text-slate-700">
+                                PMs Kostenansicht: <strong className={selectedProject.allowPmViewCosts !== false ? 'text-emerald-700' : 'text-amber-700'}>{selectedProject.allowPmViewCosts !== false ? 'Freigegeben' : 'Gesperrt'}</strong>
+                              </span>
+                            </label>
+                          ) : (
+                            <span className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded border ${
+                              canViewProjectCosts
+                                ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                : 'bg-amber-50 text-amber-800 border-amber-200'
+                            }`}>
+                              {canViewProjectCosts ? (
+                                <>
+                                  <Eye className="w-3 h-3 text-emerald-600" />
+                                  Kostenansicht aktiv
+                                </>
+                              ) : (
+                                <>
+                                  <Lock className="w-3 h-3 text-amber-600" />
+                                  Kostenansicht gesperrt
+                                </>
+                              )}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Summary KPI Cards */}
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                        <div className="p-3 bg-slate-50 rounded-xl border border-slate-200/80">
+                          <span className="text-[10px] uppercase font-bold text-slate-400 block tracking-wider">Erfasste Stunden</span>
+                          <span className="text-sm font-black text-slate-900 mt-0.5 block font-mono">
+                            {totalLoggedHours.toFixed(1)}h
+                          </span>
+                          <span className="text-[10px] text-slate-500">{projectEntries.length} Buchungen</span>
+                        </div>
+                        <div className="p-3 bg-emerald-50/50 rounded-xl border border-emerald-200/70">
+                          <span className="text-[10px] uppercase font-bold text-emerald-600 block tracking-wider">Gesamtumsatz</span>
+                          <span className="text-sm font-black text-emerald-950 mt-0.5 block font-mono">
+                            € {totalBilledAmount.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          </span>
+                          <span className="text-[10px] text-emerald-700">Kundenvolumen</span>
+                        </div>
+                        <div className="p-3 bg-rose-50/50 rounded-xl border border-rose-200/70">
+                          <span className="text-[10px] uppercase font-bold text-rose-600 block tracking-wider">Personalkosten</span>
+                          <span className="text-sm font-black text-rose-950 mt-0.5 block font-mono">
+                            {canViewProjectCosts && totalProjectCosts !== null
+                              ? `€ ${totalProjectCosts.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                              : '🔒 Verborgen'}
+                          </span>
+                          <span className="text-[10px] text-rose-700">
+                            {canViewProjectCosts ? 'Interner Aufwand' : 'Keine Berechtigung'}
+                          </span>
+                        </div>
+                        <div className="p-3 bg-indigo-50/50 rounded-xl border border-indigo-200/70">
+                          <span className="text-[10px] uppercase font-bold text-indigo-600 block tracking-wider">Deckungsbeitrag</span>
+                          <span className="text-sm font-black text-indigo-950 mt-0.5 block font-mono">
+                            {canViewProjectCosts && totalProjectMargin !== null
+                              ? `€ ${totalProjectMargin.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                              : '🔒 Verborgen'}
+                          </span>
+                          <span className="text-[10px] text-indigo-700 font-semibold">
+                            {canViewProjectCosts && totalProjectMarginPercent !== null
+                              ? `${totalProjectMarginPercent.toFixed(1)}% Marge`
+                              : 'PM-Kostenschutz aktiv'}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Detailed Team & Rates Table */}
+                      <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
+                        <table className="w-full text-left text-xs border-collapse">
+                          <thead>
+                            <tr className="bg-slate-50 border-b border-slate-200 text-slate-600 text-[10px] uppercase font-bold tracking-wider">
+                              <th className="py-2.5 px-3">Mitarbeiter</th>
+                              <th className="py-2.5 px-2">Typ</th>
+                              <th className="py-2.5 px-2 text-right">Stunden</th>
+                              <th className="py-2.5 px-2 text-right">Kundensatz</th>
+                              <th className="py-2.5 px-2 text-right">Kostensatz</th>
+                              <th className="py-2.5 px-2 text-right">Umsatz</th>
+                              <th className="py-2.5 px-2 text-right">Kosten</th>
+                              <th className="py-2.5 px-3 text-right">Marge</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-100">
+                            {projectMembersData.map(m => (
+                              <tr key={m.uid} className="hover:bg-slate-50/70 transition-colors">
+                                <td className="py-2.5 px-3">
+                                  <div className="font-bold text-slate-900 truncate">{m.name}</div>
+                                  <div className="text-[10px] text-slate-400">
+                                    {m.isAssigned ? (
+                                      <span className="text-blue-600 font-medium">✓ Zugewiesen</span>
+                                    ) : (
+                                      <span className="text-slate-400">Gebucht</span>
+                                    )}
+                                  </div>
+                                </td>
+                                <td className="py-2.5 px-2">
+                                  <span className={`inline-flex px-1.5 py-0.5 rounded text-[10px] font-semibold border ${
+                                    m.isExternal
+                                      ? 'bg-purple-50 text-purple-700 border-purple-200'
+                                      : 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                  }`}>
+                                    {m.isExternal ? (m.companyName ? `Extern (${m.companyName})` : 'Extern') : 'Intern'}
+                                  </span>
+                                </td>
+                                <td className="py-2.5 px-2 text-right font-mono font-bold text-slate-800">
+                                  {m.userHours.toFixed(1)}h
+                                </td>
+                                <td className="py-2.5 px-2 text-right font-mono text-slate-700">
+                                  € {m.billingRate.toFixed(2)}/h
+                                </td>
+                                <td className="py-2.5 px-2 text-right font-mono">
+                                  {canViewProjectCosts ? (
+                                    <span className="text-slate-700">€ {m.costRate.toFixed(2)}/h</span>
+                                  ) : (
+                                    <span className="text-slate-400 italic text-[10px]">🔒 Maskiert</span>
+                                  )}
+                                </td>
+                                <td className="py-2.5 px-2 text-right font-mono font-bold text-emerald-700">
+                                  € {m.userRevenue.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                </td>
+                                <td className="py-2.5 px-2 text-right font-mono">
+                                  {canViewProjectCosts && m.userCost !== null ? (
+                                    <span className="font-semibold text-rose-700">
+                                      € {m.userCost.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                    </span>
+                                  ) : (
+                                    <span className="text-slate-400 italic text-[10px]">🔒 Maskiert</span>
+                                  )}
+                                </td>
+                                <td className="py-2.5 px-3 text-right font-mono">
+                                  {canViewProjectCosts && m.userMargin !== null ? (
+                                    <div>
+                                      <span className={`font-bold ${m.userMargin >= 0 ? 'text-indigo-700' : 'text-rose-700'}`}>
+                                        € {m.userMargin.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                      </span>
+                                      {m.userMarginPercent !== null && (
+                                        <span className="block text-[9px] text-slate-400 font-sans">
+                                          {m.userMarginPercent.toFixed(1)}%
+                                        </span>
+                                      )}
+                                    </div>
+                                  ) : (
+                                    <span className="text-slate-400 italic text-[10px]">🔒 Maskiert</span>
+                                  )}
+                                </td>
+                              </tr>
+                            ))}
+                            {projectMembersData.length === 0 && (
+                              <tr>
+                                <td colSpan={8} className="py-6 text-center text-slate-400 italic">
+                                  Noch keine Mitarbeiter diesem Projekt zugewiesen oder gebucht.
+                                </td>
+                              </tr>
+                            )}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  );
+                })()}
+
                 {/* Tasks Section */}
                 <div className="space-y-3 pt-2">
                   <div className="flex items-center justify-between border-b border-slate-100 pb-2">
@@ -1250,6 +1514,22 @@ export const ProjectsClientsView: React.FC = () => {
                   />
                   <span>Freigabepflicht für Zeiteinträge aktivieren</span>
                 </label>
+                
+                {/* PM Cost Visibility Setting */}
+                <label className="flex items-center gap-2 cursor-pointer pt-1 border-t border-slate-200/70">
+                  <input
+                    id="checkbox-create-proj-allow-pm-costs"
+                    type="checkbox"
+                    checked={projAllowPmViewCosts}
+                    onChange={e => setProjAllowPmViewCosts(e.target.checked)}
+                    className="rounded text-indigo-600"
+                  />
+                  <div className="text-xs">
+                    <span className="font-medium text-slate-900">Projektleitern Einsicht in Mitarbeiterkosten gewähren</span>
+                    <p className="text-[10px] text-slate-500">Wenn deaktiviert, sehen Projektleiter nur erfasste Stunden und Umsätze, interne Kostensätze bleiben maskiert.</p>
+                  </div>
+                </label>
+
                 <div className="pt-1 flex items-center gap-4 text-slate-600">
                   <label className="flex items-center gap-1.5">
                     <input
@@ -1464,6 +1744,22 @@ export const ProjectsClientsView: React.FC = () => {
                   />
                   <span>Freigabepflicht für Zeiteinträge aktivieren</span>
                 </label>
+
+                {/* PM Cost Visibility Setting */}
+                <label className="flex items-center gap-2 cursor-pointer pt-1 border-t border-slate-200/70">
+                  <input
+                    id="checkbox-edit-proj-allow-pm-costs"
+                    type="checkbox"
+                    checked={editProjAllowPmViewCosts}
+                    onChange={e => setEditProjAllowPmViewCosts(e.target.checked)}
+                    className="rounded text-indigo-600"
+                  />
+                  <div className="text-xs">
+                    <span className="font-medium text-slate-900">Projektleitern Einsicht in Mitarbeiterkosten gewähren</span>
+                    <p className="text-[10px] text-slate-500">Wenn deaktiviert, sehen Projektleiter nur erfasste Stunden und Umsätze, interne Kostensätze bleiben maskiert.</p>
+                  </div>
+                </label>
+
                 <div className="pt-1 flex items-center gap-4 text-slate-600">
                   <label className="flex items-center gap-1.5">
                     <input

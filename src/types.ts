@@ -141,6 +141,7 @@ export interface Project {
   fixedPriceAllocations?: ProjectFixedPriceAllocation[];
   restrictToAssignedMembers?: boolean;
   assignedUserIds?: string[];
+  allowPmViewCosts?: boolean;
   createdAt: string;
 }
 

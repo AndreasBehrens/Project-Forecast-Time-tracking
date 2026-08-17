@@ -22,6 +22,14 @@ export const WorkingTimeView: React.FC = () => {
     users
   } = useApp();
 
+  const isAdmin = currentUser?.role === 'SUPERADMIN' || currentUser?.role === 'ADMIN';
+
+  useEffect(() => {
+    if (!isAdmin && currentUser?.id) {
+      setSelectedUserId(currentUser.id);
+    }
+  }, [currentUser?.id, isAdmin]);
+
   const [selectedMonth, setSelectedMonth] = useState('2026-08');
   const [selectedUserId, setSelectedUserId] = useState(currentUser?.id || 'u-1');
 
@@ -75,18 +83,25 @@ export const WorkingTimeView: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-3">
-          <select
-            id="select-worktime-user"
-            value={selectedUserId}
-            onChange={e => setSelectedUserId(e.target.value)}
-            className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800"
-          >
-            {users.map(u => (
-              <option key={u.id} value={u.id}>
-                {u.name} ({u.weeklyTargetHours}h/Woche)
-              </option>
-            ))}
-          </select>
+          {isAdmin ? (
+            <select
+              id="select-worktime-user"
+              value={selectedUserId}
+              onChange={e => setSelectedUserId(e.target.value)}
+              className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800"
+            >
+              {users.map(u => (
+                <option key={u.id} value={u.id}>
+                  {u.name} ({u.weeklyTargetHours}h/Woche)
+                </option>
+              ))}
+            </select>
+          ) : (
+            <div className="bg-slate-100 border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+              <span>{currentUser?.name} ({currentUser?.weeklyTargetHours || 40}h/Woche)</span>
+            </div>
+          )}
 
           <input
             id="input-worktime-month"

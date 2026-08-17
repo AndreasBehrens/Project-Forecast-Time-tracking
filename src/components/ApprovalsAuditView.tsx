@@ -27,8 +27,23 @@ export const ApprovalsAuditView: React.FC = () => {
   const [filterProjectId, setFilterProjectId] = useState<string>('all');
   const [filterStatus, setFilterStatus] = useState<string>('SUBMITTED');
 
+  const isAdmin = currentUser?.role === 'SUPERADMIN' || currentUser?.role === 'ADMIN';
+  const isPM = currentUser?.role === 'PROJECT_MANAGER';
+
+  // Projects available to user for approvals
+  const availableProjects = projects.filter(p => {
+    if (isAdmin) return true;
+    if (isPM && currentUser) {
+      return p.projectManagerId === currentUser.id || p.managerUserIds?.includes(currentUser.id);
+    }
+    return false;
+  });
+
+  const availableProjectIds = availableProjects.map(p => p.id);
+
   // Filter pending approvals
   const filteredEntries = timeEntries.filter(entry => {
+    if (!isAdmin && isPM && !availableProjectIds.includes(entry.projectId)) return false;
     if (filterProjectId !== 'all' && entry.projectId !== filterProjectId) return false;
     if (filterStatus !== 'all' && entry.approvalStatus !== filterStatus) return false;
     return true;
@@ -99,8 +114,8 @@ export const ApprovalsAuditView: React.FC = () => {
                 onChange={e => setFilterProjectId(e.target.value)}
                 className="bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 font-medium text-slate-800"
               >
-                <option value="all">Alle Projekte</option>
-                {projects.map(p => (
+                <option value="all">Alle {isPM && !isAdmin ? 'meine Projekte' : 'Projekte'} ({availableProjects.length})</option>
+                {availableProjects.map(p => (
                   <option key={p.id} value={p.id}>{p.name}</option>
                 ))}
               </select>

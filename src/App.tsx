@@ -24,23 +24,103 @@ import {
 } from 'lucide-react';
 
 const MainLayout: React.FC = () => {
-  const { t, timeEntries, organization } = useApp();
+  const { t, timeEntries, projects, organization, currentUser } = useApp();
   const [activeNav, setActiveNav] = useState<
     'timeTracker' | 'workingTime' | 'approvalsAudit' | 'projectsClients' | 'ratesTeam' | 'forecast' | 'clockifyMigration' | 'apiDocs'
   >('timeTracker');
 
-  const pendingApprovalsCount = timeEntries.filter(e => e.approvalStatus === 'SUBMITTED').length;
+  const isSuperAdmin = currentUser?.role === 'SUPERADMIN';
+  const isAdmin = isSuperAdmin || currentUser?.role === 'ADMIN';
+  const isPM = currentUser?.role === 'PROJECT_MANAGER';
+  const isInternal = currentUser?.employmentType === 'INTERNAL' || (!currentUser?.employmentType && !currentUser?.companyName);
+  const isExternal = currentUser?.employmentType === 'EXTERNAL';
+  const isEmployee = currentUser?.role === 'EMPLOYEE' || (!isAdmin && !isPM);
 
-  const navItems = [
-    { id: 'timeTracker', label: t.navTimeTracker, icon: Clock, badge: null },
-    { id: 'workingTime', label: t.navWorkingTime, icon: Calendar, badge: null },
-    { id: 'approvalsAudit', label: t.navApprovalsAudit, icon: ShieldCheck, badge: pendingApprovalsCount > 0 ? pendingApprovalsCount : null },
-    { id: 'projectsClients', label: t.navProjectsClients, icon: FolderKanban, badge: null },
-    { id: 'ratesTeam', label: t.navRatesTeam, icon: Layers, badge: null },
-    { id: 'forecast', label: t.navForecast, icon: TrendingUp, badge: null },
-    { id: 'clockifyMigration', label: t.navClockifyMigration, icon: Database, badge: null },
-    { id: 'apiDocs', label: t.navApiDocs, icon: Code, badge: 'REST' },
+  // Managed projects for PM
+  const myManagedProjectIds = isPM && currentUser
+    ? projects.filter(p => p.projectManagerId === currentUser.id || p.managerUserIds?.includes(currentUser.id)).map(p => p.id)
+    : [];
+
+  const pendingApprovalsCount = timeEntries.filter(e => {
+    if (e.approvalStatus !== 'SUBMITTED') return false;
+    if (isAdmin) return true;
+    if (isPM) return myManagedProjectIds.includes(e.projectId);
+    return false;
+  }).length;
+
+  // Compute allowed navigation items based on User Role & Employment Type
+  const allNavItems = [
+    {
+      id: 'timeTracker' as const,
+      label: t.navTimeTracker,
+      icon: Clock,
+      badge: null,
+      visible: true // All users have access to project time tracking
+    },
+    {
+      id: 'workingTime' as const,
+      label: t.navWorkingTime,
+      icon: Calendar,
+      badge: null,
+      // Only internal employees/PMs and admins have general ArbZG working time
+      visible: isAdmin || isInternal
+    },
+    {
+      id: 'approvalsAudit' as const,
+      label: t.navApprovalsAudit,
+      icon: ShieldCheck,
+      badge: pendingApprovalsCount > 0 ? pendingApprovalsCount : null,
+      // Visible to Admins and PMs (PMs only see their projects)
+      visible: isAdmin || isPM
+    },
+    {
+      id: 'projectsClients' as const,
+      label: isPM ? 'Meine Projekte & Team' : t.navProjectsClients,
+      icon: FolderKanban,
+      badge: null,
+      // Visible to Admins and PMs (PMs only see their own projects and assigned staff/costs)
+      visible: isAdmin || isPM
+    },
+    {
+      id: 'ratesTeam' as const,
+      label: t.navRatesTeam,
+      icon: Layers,
+      badge: null,
+      // Admin only: enterprise wide rate hierarchy and tenant defaults
+      visible: isAdmin
+    },
+    {
+      id: 'forecast' as const,
+      label: isPM ? 'Projekt-Forecast' : t.navForecast,
+      icon: TrendingUp,
+      badge: null,
+      // Admins and PMs
+      visible: isAdmin || isPM
+    },
+    {
+      id: 'clockifyMigration' as const,
+      label: t.navClockifyMigration,
+      icon: Database,
+      badge: null,
+      visible: isAdmin
+    },
+    {
+      id: 'apiDocs' as const,
+      label: t.navApiDocs,
+      icon: Code,
+      badge: 'REST',
+      visible: isAdmin
+    },
   ];
+
+  const visibleNavItems = allNavItems.filter(item => item.visible);
+
+  // Ensure current activeNav is valid for user role
+  React.useEffect(() => {
+    if (!visibleNavItems.some(item => item.id === activeNav)) {
+      setActiveNav(visibleNavItems[0]?.id || 'timeTracker');
+    }
+  }, [currentUser?.id, currentUser?.role, currentUser?.employmentType]);
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 flex flex-col font-sans selection:bg-emerald-100 selection:text-emerald-900">
@@ -50,14 +130,14 @@ const MainLayout: React.FC = () => {
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
         {/* Navigation Tabs Bar */}
         <div className="flex items-center gap-1.5 overflow-x-auto pb-1 no-scrollbar border-b border-slate-200">
-          {navItems.map(item => {
+          {visibleNavItems.map(item => {
             const Icon = item.icon;
             const isActive = activeNav === item.id;
             return (
               <button
                 key={item.id}
                 id={`nav-${item.id}`}
-                onClick={() => setActiveNav(item.id as any)}
+                onClick={() => setActiveNav(item.id)}
                 className={`flex items-center gap-2 px-3.5 py-2.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all ${
                   isActive
                     ? 'bg-slate-900 text-white shadow-xs'
@@ -81,13 +161,13 @@ const MainLayout: React.FC = () => {
         {/* Dynamic View Render */}
         <div className="animate-in fade-in duration-150">
           {activeNav === 'timeTracker' && <TimeTrackerView />}
-          {activeNav === 'workingTime' && <WorkingTimeView />}
-          {activeNav === 'approvalsAudit' && <ApprovalsAuditView />}
-          {activeNav === 'projectsClients' && <ProjectsClientsView />}
-          {activeNav === 'ratesTeam' && <RateHierarchyView />}
-          {activeNav === 'forecast' && <ForecastView />}
-          {activeNav === 'clockifyMigration' && <ClockifyMigrationView />}
-          {activeNav === 'apiDocs' && <ApiDocsView />}
+          {activeNav === 'workingTime' && isInternal && <WorkingTimeView />}
+          {activeNav === 'approvalsAudit' && (isAdmin || isPM) && <ApprovalsAuditView />}
+          {activeNav === 'projectsClients' && (isAdmin || isPM) && <ProjectsClientsView />}
+          {activeNav === 'ratesTeam' && isAdmin && <RateHierarchyView />}
+          {activeNav === 'forecast' && (isAdmin || isPM) && <ForecastView />}
+          {activeNav === 'clockifyMigration' && isAdmin && <ClockifyMigrationView />}
+          {activeNav === 'apiDocs' && isAdmin && <ApiDocsView />}
         </div>
       </main>
 
