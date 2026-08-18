@@ -75,6 +75,19 @@ export interface User {
   role: UserRole;
   employmentType?: EmploymentType; // 'INTERNAL' (Festangestellt / Intern) vs 'EXTERNAL' (Freiberufler / Subunternehmer / Extern)
   companyName?: string; // Für externe Dienstleister / Subunternehmer (z. B. "TechConsultants GbR")
+  partnerId?: string; // Zuweisung zu einem Partner-Unternehmen
+  partnerName?: string; // Denormalisierter Name des Partner-Unternehmens
+  externalType?: 'PARTNER_EMPLOYEE' | 'FREELANCER'; // Subunternehmer-Mitarbeiter vs freier Freelancer
+  // Freelancer & Externe MA Kontaktdaten, Adresse & Rechnungsemail:
+  contactPerson?: string; // Ansprechpartner
+  contactPhone?: string; // Telefon Ansprechpartner / MA
+  contactEmail?: string; // Direkte Kontakt-Email
+  billingEmail?: string; // Rechnungsemailadresse
+  street?: string; // Straße & Hausnummer
+  zip?: string; // PLZ
+  city?: string; // Ort
+  country?: string; // Land
+  taxId?: string; // Steuernummer / USt-IdNr.
   jobRoleId?: string;
   individualBillingRate?: number;
   individualCostRate?: number; // Only visible to ADMIN
@@ -90,6 +103,31 @@ export interface User {
   memberships?: UserOrganizationMembership[];
   createdAt: string;
 }
+
+export interface Partner {
+  id: string;
+  orgId: string;
+  name: string; // Partner- / Firmenname
+  partnerNumber?: string; // z. B. "PART-001"
+  contactPerson?: string; // Ansprechpartner (Vor- und Nachname)
+  contactPhone?: string; // Telefon Ansprechpartner
+  contactEmail?: string; // E-Mail Ansprechpartner
+  billingEmail?: string; // Rechnungsemailadresse (z. B. "rechnung@partner.de")
+  street?: string; // Straße & Hausnummer
+  zip?: string; // PLZ
+  city?: string; // Ort
+  country?: string; // Land (z. B. "Deutschland")
+  phone?: string; // Zentrale Telefonnummer
+  website?: string; // Website / URL
+  taxId?: string; // Steuernummer / USt-IdNr.
+  defaultHourlyRate?: number; // Standard-Stundensatz
+  notes?: string; // Notizen / Anmerkungen
+  status: 'ACTIVE' | 'ARCHIVED';
+  createdAt: string;
+  updatedAt?: string;
+}
+
+export type ProjectType = 'CUSTOMER_PROJECT' | 'INTERNAL_PROJECT';
 
 export interface Client {
   id: string;
@@ -127,6 +165,9 @@ export interface Project {
   clientName?: string;
   name: string;
   projectNumber?: string;
+  projectType?: ProjectType; // 'CUSTOMER_PROJECT' (default) | 'INTERNAL_PROJECT'
+  isBillableDefault?: boolean; // default billability for bookings (customer=true, internal=false)
+  allowInternalRebilling?: boolean; // for internal projects: allow billable exceptions for internal cost allocation
   projectManagerId?: string;
   projectManagerName?: string;
   managerUserIds?: string[];
@@ -153,9 +194,64 @@ export interface Task {
   id: string;
   projectId: string;
   name: string;
-  isBillableDefault: boolean;
+  isBillableDefault: boolean; // Flag on task/activity level, inherited during booking
   budgetHours?: number;
   status: 'ACTIVE' | 'ARCHIVED';
+}
+
+export interface BillableSummaryTotals {
+  totalHours: number;
+  billableHours: number;
+  nonBillableHours: number;
+  billableSharePercent: number;
+  totalBillingAmount: number; // calculated only for billable hours
+  totalInternalCost: number; // calculated for ALL hours (billable + non-billable)
+  grossMargin: number;
+  grossMarginPercent: number;
+}
+
+export interface BillableProjectSummary {
+  projectId: string;
+  projectNumber?: string;
+  projectName: string;
+  projectType: ProjectType;
+  billingModel: BillingModel;
+  clientId: string;
+  clientName: string;
+  totalHours: number;
+  billableHours: number;
+  nonBillableHours: number;
+  billableSharePercent: number;
+  effectiveBillingRate: number;
+  effectiveCostRate: number;
+  totalBillingAmount: number;
+  totalInternalCost: number;
+  margin: number;
+  marginPercent: number;
+}
+
+export interface BillableUserSummary {
+  userId: string;
+  userName: string;
+  userRole: UserRole;
+  employmentType: EmploymentType;
+  jobRoleName?: string;
+  totalHours: number;
+  billableHours: number;
+  nonBillableHours: number;
+  billableSharePercent: number;
+  totalBillingAmount: number;
+  totalInternalCost: number;
+  margin: number;
+}
+
+export interface BillableSummaryReport {
+  organization: string;
+  queryPeriod: { from?: string; to?: string };
+  totals: BillableSummaryTotals;
+  byProject: BillableProjectSummary[];
+  byUser: BillableUserSummary[];
+  generatedAt: string;
 }
 
 export interface TimeEntry {
@@ -218,7 +314,7 @@ export interface AuditLogChange {
 export interface AuditLogEntry {
   id: string;
   orgId: string;
-  entityType: 'TIME_ENTRY' | 'WORKING_TIME' | 'FORECAST' | 'PROJECT' | 'USER' | 'RATE' | 'ORGANIZATION' | 'CLIENT' | 'TASK' | 'JOB_ROLE';
+  entityType: 'TIME_ENTRY' | 'WORKING_TIME' | 'FORECAST' | 'PROJECT' | 'USER' | 'RATE' | 'ORGANIZATION' | 'CLIENT' | 'TASK' | 'JOB_ROLE' | 'PARTNER';
   entityId: string;
   action: 'CREATE' | 'UPDATE' | 'DELETE' | 'APPROVE' | 'REJECT' | 'CORRECT_AFTER_APPROVAL';
   userId: string;
@@ -227,6 +323,16 @@ export interface AuditLogEntry {
   changes: AuditLogChange[];
   reason?: string;
 }
+
+export type ForecastChangeReason =
+  | 'INITIAL_PLANNING'
+  | 'URLEAVE'
+  | 'REPRIORITIZATION'
+  | 'SCOPE_CHANGE'
+  | 'DELAY'
+  | 'STAFFING'
+  | 'CAPACITY_ADJUSTMENT'
+  | 'OTHER';
 
 export interface ForecastEntry {
   id: string;
@@ -243,7 +349,27 @@ export interface ForecastEntry {
   plannedCost: number;
   plannedMargin: number;
   version: number;
+  changeReason?: ForecastChangeReason | string;
+  changeNote?: string;
   createdBy: string;
+  createdAt: string;
+}
+
+export interface ForecastAuditHistoryItem {
+  id: string;
+  forecastId: string;
+  projectId: string;
+  projectName: string;
+  userId: string;
+  userName: string;
+  month: string;
+  plannedHours: number;
+  previousPlannedHours?: number;
+  version: number;
+  changeReason?: string;
+  changeNote?: string;
+  createdById: string;
+  createdByName: string;
   createdAt: string;
 }
 
@@ -264,8 +390,16 @@ export interface ForecastComparisonItem {
   extrapolatedRevenueMonthEnd: number;
   extrapolatedCostMonthEnd: number;
   hoursDeviationPercent: number; // (actual/extrapolated - planned) / planned * 100
-  isThresholdExceeded: boolean; // default > 20%
+  revenueDeviationPercent: number;
+  costDeviationPercent: number;
+  isHoursThresholdExceeded: boolean;
+  isRevenueThresholdExceeded: boolean;
+  isCostThresholdExceeded: boolean;
+  isThresholdExceeded: boolean; // default > 20% in hours, revenue or costs
   lastNotifiedAt?: string;
+  changeReason?: string;
+  changeNote?: string;
+  version?: number;
 }
 
 export interface ProjectTeamForecastAllocation {
@@ -284,6 +418,8 @@ export interface ProjectTeamForecastAllocation {
   actualCost: number;
   actualMargin: number;
   hoursDeviationPercent: number;
+  revenueDeviationPercent: number;
+  costDeviationPercent: number;
   isExceeded: boolean;
 }
 
@@ -298,6 +434,17 @@ export interface ProjectMonthlyForecastBreakdown {
   plannedCost: number;
   actualCost: number;
   plannedMargin: number;
+}
+
+export interface MilestoneProgressSummary {
+  id: string;
+  title: string;
+  amount: number;
+  targetDate: string;
+  period?: string;
+  status: 'PLANNED' | 'INVOICED' | 'PAID';
+  percentageOfTotal: number;
+  isPaidOrInvoiced: boolean;
 }
 
 export interface ProjectForecastSummary {
@@ -343,15 +490,85 @@ export interface ProjectForecastSummary {
   extrapolatedMarginEnd: number;
   extrapolatedMarginPercentEnd: number;
   
-  // Deviations & Alerts
+  // Deviations & Alerts (Hours, Revenue, Cost)
   hoursDeviationPercent: number;
   revenueDeviationPercent: number;
-  isThresholdExceeded: boolean; // >20%
+  costDeviationPercent: number;
+  isHoursThresholdExceeded: boolean;
+  isRevenueThresholdExceeded: boolean;
+  isCostThresholdExceeded: boolean;
+  isThresholdExceeded: boolean; // >20% on any metric
   alertSeverity: 'OK' | 'WARNING' | 'CRITICAL';
   
+  // Fixed-Price & Milestone Specifics (Fortschritt & Restbudget)
+  remainingFixedPriceBudget?: number; // totalFixedPrice - actualCostSoFar (oder verrechnete Kosten)
+  completionPercentagePoC?: number; // Percentage of Completion % (Meilensteine & Stunden)
+  milestonesSummary?: MilestoneProgressSummary[];
+  invoicedMilestonesTotal?: number;
+  paidMilestonesTotal?: number;
+  plannedMilestonesTotal?: number;
+
   // Detailed Drill-Downs
   teamBreakdown: ProjectTeamForecastAllocation[];
   monthlyBreakdown: ProjectMonthlyForecastBreakdown[];
+}
+
+export interface EmployeeProjectForecastAllocation {
+  projectId: string;
+  projectNumber: string;
+  projectName: string;
+  clientName: string;
+  billingModel: BillingModel;
+  plannedHours: number;
+  actualHours: number;
+  extrapolatedHours: number;
+  plannedRevenue: number;
+  plannedCost: number;
+  plannedMargin: number;
+  actualRevenue: number;
+  actualCost: number;
+  actualMargin: number;
+}
+
+export interface EmployeeCapacitySummaryItem {
+  userId: string;
+  userName: string;
+  userEmail: string;
+  role: UserRole;
+  employmentType: EmploymentType;
+  companyName?: string;
+  jobRoleName?: string;
+  weeklyTargetHours: number;
+  dailyTargetHours: number;
+  stateLocation?: string;
+  
+  // Workdays & Target Capacity
+  targetWorkdaysInPeriod: number;
+  targetCapacityHours: number; // targetWorkdays × dailyTargetHours
+  
+  // Project Allocations (Sum across all parallel projects)
+  totalPlannedHours: number;
+  totalActualHours: number;
+  totalExtrapolatedHours: number;
+  
+  // Capacity Utilization & Overbooking (Überbuchung)
+  capacityUtilizationPlannedPercent: number; // (totalPlannedHours / targetCapacityHours) * 100
+  capacityUtilizationActualPercent: number;
+  capacityUtilizationExtrapolatedPercent: number;
+  isOverbooked: boolean; // plannedHours > targetCapacityHours
+  overbookingHours: number; // Math.max(0, totalPlannedHours - targetCapacityHours)
+  freeCapacityHours: number; // Math.max(0, targetCapacityHours - totalPlannedHours)
+  
+  // Financial Totals
+  totalPlannedRevenue: number;
+  totalPlannedCost: number;
+  totalPlannedMargin: number;
+  totalActualRevenue: number;
+  totalActualCost: number;
+  totalActualMargin: number;
+  
+  // Parallel Projects List
+  projects: EmployeeProjectForecastAllocation[];
 }
 
 export interface ApiKey {
@@ -395,3 +612,4 @@ export interface ClockifyImportReport {
   createdUsers: string[];
   timestamp: string;
 }
+

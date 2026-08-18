@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
 import { Project, Client, Task } from '../types';
+import { PartnersManagementView } from './PartnersManagementView';
 import {
   FolderKanban,
   Building,
+  Building2,
   Plus,
   CheckCircle,
   FileCheck,
@@ -41,6 +43,7 @@ export const ProjectsClientsView: React.FC = () => {
     t,
     projects,
     clients,
+    partners,
     tasks,
     timeEntries,
     users,
@@ -60,8 +63,8 @@ export const ProjectsClientsView: React.FC = () => {
   const isAdmin = currentUser?.role === 'SUPERADMIN' || currentUser?.role === 'ADMIN';
   const isPM = currentUser?.role === 'PROJECT_MANAGER';
 
-  // Active view tab: Projects vs Clients
-  const [activeTab, setActiveTab] = useState<'PROJECTS' | 'CLIENTS'>('PROJECTS');
+  // Active view tab: Projects vs Clients vs Partners
+  const [activeTab, setActiveTab] = useState<'PROJECTS' | 'CLIENTS' | 'PARTNERS'>('PROJECTS');
 
   // Search & Filters
   const [projectSearch, setProjectSearch] = useState('');
@@ -72,6 +75,9 @@ export const ProjectsClientsView: React.FC = () => {
   // --- Create Project Modal State ---
   const [showNewProjectModal, setShowNewProjectModal] = useState(false);
   const [projName, setProjName] = useState('');
+  const [projProjectType, setProjProjectType] = useState<'CUSTOMER_PROJECT' | 'INTERNAL_PROJECT'>('CUSTOMER_PROJECT');
+  const [projIsBillableDefault, setProjIsBillableDefault] = useState(true);
+  const [projAllowInternalRebilling, setProjAllowInternalRebilling] = useState(false);
   const [projClientId, setProjClientId] = useState(clients[0]?.id || '');
   const [projProjectManagerId, setProjProjectManagerId] = useState('');
   const [projBillingModel, setProjBillingModel] = useState<'TIME_AND_MATERIAL' | 'FIXED_PRICE'>('TIME_AND_MATERIAL');
@@ -89,6 +95,9 @@ export const ProjectsClientsView: React.FC = () => {
   // --- Edit Project Modal State ---
   const [editingProject, setEditingProject] = useState<Project | null>(null);
   const [editProjName, setEditProjName] = useState('');
+  const [editProjProjectType, setEditProjProjectType] = useState<'CUSTOMER_PROJECT' | 'INTERNAL_PROJECT'>('CUSTOMER_PROJECT');
+  const [editProjIsBillableDefault, setEditProjIsBillableDefault] = useState(true);
+  const [editProjAllowInternalRebilling, setEditProjAllowInternalRebilling] = useState(false);
   const [editProjClientId, setEditProjClientId] = useState('');
   const [editProjProjectManagerId, setEditProjProjectManagerId] = useState('');
   const [editProjBillingModel, setEditProjBillingModel] = useState<'TIME_AND_MATERIAL' | 'FIXED_PRICE'>('TIME_AND_MATERIAL');
@@ -174,6 +183,9 @@ export const ProjectsClientsView: React.FC = () => {
     const pm = users.find(u => u.id === projProjectManagerId);
     const created = await createProject({
       name: projName,
+      projectType: projProjectType,
+      isBillableDefault: projIsBillableDefault,
+      allowInternalRebilling: projAllowInternalRebilling,
       clientId: projClientId || clients[0]?.id,
       projectManagerId: projProjectManagerId || (isPM ? currentUser?.id : undefined),
       projectManagerName: pm?.name || (isPM ? currentUser?.name : undefined),
@@ -194,6 +206,9 @@ export const ProjectsClientsView: React.FC = () => {
     });
     setShowNewProjectModal(false);
     setProjName('');
+    setProjProjectType('CUSTOMER_PROJECT');
+    setProjIsBillableDefault(true);
+    setProjAllowInternalRebilling(false);
     setProjProjectManagerId('');
     setProjStatus('ACTIVE');
     setProjRestrictMembers(false);
@@ -206,6 +221,9 @@ export const ProjectsClientsView: React.FC = () => {
     if (e) e.stopPropagation();
     setEditingProject(proj);
     setEditProjName(proj.name);
+    setEditProjProjectType(proj.projectType || 'CUSTOMER_PROJECT');
+    setEditProjIsBillableDefault(proj.isBillableDefault ?? (proj.projectType === 'INTERNAL_PROJECT' ? false : true));
+    setEditProjAllowInternalRebilling(proj.allowInternalRebilling ?? false);
     setEditProjClientId(proj.clientId);
     setEditProjProjectManagerId(proj.projectManagerId || '');
     setEditProjBillingModel(proj.billingModel);
@@ -229,6 +247,9 @@ export const ProjectsClientsView: React.FC = () => {
 
     await updateProject(editingProject.id, {
       name: editProjName,
+      projectType: editProjProjectType,
+      isBillableDefault: editProjIsBillableDefault,
+      allowInternalRebilling: editProjAllowInternalRebilling,
       clientId: editProjClientId,
       clientName: clients.find(c => c.id === editProjClientId)?.name || editingProject.clientName,
       projectManagerId: editProjProjectManagerId || undefined,
@@ -607,6 +628,19 @@ export const ProjectsClientsView: React.FC = () => {
               <Building className="w-3.5 h-3.5" />
               <span>Kunden ({clients.length})</span>
             </button>
+            <button
+              id="tab-btn-partners"
+              type="button"
+              onClick={() => setActiveTab('PARTNERS')}
+              className={`px-3 py-1.5 rounded-lg font-semibold flex items-center gap-1.5 transition-all ${
+                activeTab === 'PARTNERS'
+                  ? 'bg-white text-slate-900 shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <Building2 className="w-3.5 h-3.5 text-emerald-600" />
+              <span>Partner ({partners.length})</span>
+            </button>
           </div>
 
           <button
@@ -723,6 +757,15 @@ export const ProjectsClientsView: React.FC = () => {
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2">
                           <span className="text-[11px] font-semibold text-slate-400 truncate">{project.clientName}</span>
+                          {project.projectType === 'INTERNAL_PROJECT' ? (
+                            <span className="text-[9px] font-bold bg-purple-100 text-purple-900 px-1.5 py-0.2 rounded border border-purple-200">
+                              Intern
+                            </span>
+                          ) : (
+                            <span className="text-[9px] font-medium bg-slate-100 text-slate-700 px-1.5 py-0.2 rounded border border-slate-200">
+                              Kunde
+                            </span>
+                          )}
                           {st === 'ARCHIVED' && (
                             <span className="text-[9px] font-bold bg-slate-100 text-slate-600 px-1.5 py-0.2 rounded border border-slate-200">
                               Archiviert
@@ -818,6 +861,15 @@ export const ProjectsClientsView: React.FC = () => {
                   <div>
                     <div className="flex items-center gap-2">
                       <span className="text-xs text-slate-400 font-medium">{selectedProject.clientName}</span>
+                      {selectedProject.projectType === 'INTERNAL_PROJECT' ? (
+                        <span className="text-[10px] font-bold bg-purple-100 text-purple-900 px-2 py-0.5 rounded-md border border-purple-200">
+                          🏢 Internes Projekt (Mandant) • {selectedProject.isBillableDefault ? 'Billable Standard' : 'Non-Billable Standard'}
+                        </span>
+                      ) : (
+                        <span className="text-[10px] font-medium bg-slate-100 text-slate-700 px-2 py-0.5 rounded-md border border-slate-200">
+                          💼 Kundenprojekt • {selectedProject.isBillableDefault === false ? 'Non-Billable' : 'Billable'}
+                        </span>
+                      )}
                       <select
                         id="select-quick-project-status"
                         value={selectedProject.status || 'ACTIVE'}
@@ -1622,6 +1674,15 @@ export const ProjectsClientsView: React.FC = () => {
       )}
 
       {/* ========================================================================= */}
+      {/* TAB 3: PARTNERS VIEW */}
+      {/* ========================================================================= */}
+      {activeTab === 'PARTNERS' && (
+        <div className="pt-2">
+          <PartnersManagementView />
+        </div>
+      )}
+
+      {/* ========================================================================= */}
       {/* MODAL: CREATE PROJECT */}
       {/* ========================================================================= */}
       {showNewProjectModal && (
@@ -1643,9 +1704,73 @@ export const ProjectsClientsView: React.FC = () => {
                 />
               </div>
 
+              {/* Projekttyp: Kundenprojekt vs. Internes Projekt */}
+              <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-2">
+                <label className="font-bold text-slate-900 block">Projekttyp *</label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setProjProjectType('CUSTOMER_PROJECT');
+                      setProjIsBillableDefault(true);
+                    }}
+                    className={`p-2.5 rounded-xl border text-left transition-all ${
+                      projProjectType === 'CUSTOMER_PROJECT'
+                        ? 'bg-white border-slate-900 ring-2 ring-slate-900 shadow-xs'
+                        : 'bg-white/60 border-slate-200 text-slate-600 hover:bg-white'
+                    }`}
+                  >
+                    <div className="font-bold text-slate-900 text-xs">Kundenprojekt</div>
+                    <div className="text-[10px] text-slate-500 mt-0.5">Externer Kunde, standardmäßig billable (abrechenbar)</div>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setProjProjectType('INTERNAL_PROJECT');
+                      setProjIsBillableDefault(false);
+                      const intClient = clients.find(c => c.name.toLowerCase().includes('intern'));
+                      if (intClient) setProjClientId(intClient.id);
+                    }}
+                    className={`p-2.5 rounded-xl border text-left transition-all ${
+                      projProjectType === 'INTERNAL_PROJECT'
+                        ? 'bg-purple-50 border-purple-600 ring-2 ring-purple-600 shadow-xs text-purple-950'
+                        : 'bg-white/60 border-slate-200 text-slate-600 hover:bg-white'
+                    }`}
+                  >
+                    <div className="font-bold text-purple-900 text-xs">Internes Projekt</div>
+                    <div className="text-[10px] text-purple-700 mt-0.5">Mandant = Auftraggeber, standardmäßig non-billable</div>
+                  </button>
+                </div>
+
+                {projProjectType === 'INTERNAL_PROJECT' && (
+                  <div className="pt-2 border-t border-slate-200/80 space-y-2 text-[11px]">
+                    <label className="flex items-center gap-2 cursor-pointer font-medium text-purple-950">
+                      <input
+                        type="checkbox"
+                        checked={projAllowInternalRebilling}
+                        onChange={e => setProjAllowInternalRebilling(e.target.checked)}
+                        className="rounded text-purple-700"
+                      />
+                      <span>Interne Weiterverrechnung erlauben (Ausnahmen für Kostenweiterbelastung)</span>
+                    </label>
+                    <label className="flex items-center gap-2 cursor-pointer font-medium text-slate-700">
+                      <input
+                        type="checkbox"
+                        checked={projIsBillableDefault}
+                        onChange={e => setProjIsBillableDefault(e.target.checked)}
+                        className="rounded text-slate-900"
+                      />
+                      <span>Standardmäßig abrechenbar (Ausnahmefall)</span>
+                    </label>
+                  </div>
+                )}
+              </div>
+
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <label className="font-semibold text-slate-700 block mb-1">{t.client} *</label>
+                  <label className="font-semibold text-slate-700 block mb-1">
+                    {projProjectType === 'INTERNAL_PROJECT' ? 'Auftraggeber (Mandant)' : `${t.client} *`}
+                  </label>
                   <select
                     id="select-create-proj-client"
                     value={projClientId}
@@ -1877,9 +2002,73 @@ export const ProjectsClientsView: React.FC = () => {
                 />
               </div>
 
+              {/* Projekttyp: Kundenprojekt vs. Internes Projekt */}
+              <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-2">
+                <label className="font-bold text-slate-900 block">Projekttyp *</label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEditProjProjectType('CUSTOMER_PROJECT');
+                      setEditProjIsBillableDefault(true);
+                    }}
+                    className={`p-2.5 rounded-xl border text-left transition-all ${
+                      editProjProjectType === 'CUSTOMER_PROJECT'
+                        ? 'bg-white border-slate-900 ring-2 ring-slate-900 shadow-xs'
+                        : 'bg-white/60 border-slate-200 text-slate-600 hover:bg-white'
+                    }`}
+                  >
+                    <div className="font-bold text-slate-900 text-xs">Kundenprojekt</div>
+                    <div className="text-[10px] text-slate-500 mt-0.5">Externer Kunde, standardmäßig billable (abrechenbar)</div>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEditProjProjectType('INTERNAL_PROJECT');
+                      setEditProjIsBillableDefault(false);
+                      const intClient = clients.find(c => c.name.toLowerCase().includes('intern'));
+                      if (intClient) setEditProjClientId(intClient.id);
+                    }}
+                    className={`p-2.5 rounded-xl border text-left transition-all ${
+                      editProjProjectType === 'INTERNAL_PROJECT'
+                        ? 'bg-purple-50 border-purple-600 ring-2 ring-purple-600 shadow-xs text-purple-950'
+                        : 'bg-white/60 border-slate-200 text-slate-600 hover:bg-white'
+                    }`}
+                  >
+                    <div className="font-bold text-purple-900 text-xs">Internes Projekt</div>
+                    <div className="text-[10px] text-purple-700 mt-0.5">Mandant = Auftraggeber, standardmäßig non-billable</div>
+                  </button>
+                </div>
+
+                {editProjProjectType === 'INTERNAL_PROJECT' && (
+                  <div className="pt-2 border-t border-slate-200/80 space-y-2 text-[11px]">
+                    <label className="flex items-center gap-2 cursor-pointer font-medium text-purple-950">
+                      <input
+                        type="checkbox"
+                        checked={editProjAllowInternalRebilling}
+                        onChange={e => setEditProjAllowInternalRebilling(e.target.checked)}
+                        className="rounded text-purple-700"
+                      />
+                      <span>Interne Weiterverrechnung erlauben (Ausnahmen für Kostenweiterbelastung)</span>
+                    </label>
+                    <label className="flex items-center gap-2 cursor-pointer font-medium text-slate-700">
+                      <input
+                        type="checkbox"
+                        checked={editProjIsBillableDefault}
+                        onChange={e => setEditProjIsBillableDefault(e.target.checked)}
+                        className="rounded text-slate-900"
+                      />
+                      <span>Standardmäßig abrechenbar (Ausnahmefall)</span>
+                    </label>
+                  </div>
+                )}
+              </div>
+
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <label className="font-semibold text-slate-700 block mb-1">{t.client} *</label>
+                  <label className="font-semibold text-slate-700 block mb-1">
+                    {editProjProjectType === 'INTERNAL_PROJECT' ? 'Auftraggeber (Mandant)' : `${t.client} *`}
+                  </label>
                   <select
                     id="select-edit-proj-client"
                     value={editProjClientId}

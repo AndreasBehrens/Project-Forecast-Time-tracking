@@ -297,6 +297,42 @@ async function startServer() {
     res.json({ success: true, message: 'Kunde erfolgreich gelöscht' });
   });
 
+  // Partners / Externe Dienstleister (Section Partner)
+  app.get('/api/partners', (req, res) => {
+    const actorId = getActorId(req);
+    const { allOrgs } = req.query as { allOrgs?: string };
+    res.json(storage.getPartners(actorId, allOrgs === 'true'));
+  });
+
+  app.post('/api/partners', (req, res) => {
+    const actorId = getActorId(req);
+    const partner = storage.addPartner(req.body, actorId);
+    res.status(201).json(partner);
+  });
+
+  app.put('/api/partners/:id', (req, res) => {
+    const actorId = getActorId(req);
+    const updated = storage.updatePartner(req.params.id, req.body, actorId);
+    if (!updated) return res.status(404).json({ error: 'Partner not found' });
+    res.json(updated);
+  });
+
+  app.post('/api/partners/:id/archive', (req, res) => {
+    const actorId = getActorId(req);
+    const updated = storage.archivePartner(req.params.id, actorId);
+    if (!updated) return res.status(404).json({ error: 'Partner not found' });
+    res.json(updated);
+  });
+
+  app.delete('/api/partners/:id', (req, res) => {
+    const actorId = getActorId(req);
+    const result = storage.deletePartner(req.params.id, actorId);
+    if (!result.success) {
+      return res.status(400).json({ error: result.error });
+    }
+    res.json({ success: true, message: 'Partner erfolgreich gelöscht' });
+  });
+
   app.get('/api/projects', (req, res) => {
     const actorId = getActorId(req);
     const { allOrgs } = req.query as { allOrgs?: string };
@@ -469,6 +505,12 @@ async function startServer() {
     res.json({ month, comparison });
   });
 
+  app.get('/api/forecasts/history', (req, res) => {
+    const { projectId, userId, month } = req.query as any;
+    const history = storage.getForecastHistory(projectId, userId, month);
+    res.json(history);
+  });
+
   // Aggregated Project-Level Forecast Summary (Financials: Revenue, Margin, Costs with Period Filters & Berlin Holiday Calibration)
   app.get('/api/forecasts/project-summary', (req, res) => {
     const { periodType, periodKey, clientId, billingModel, search, thresholdPercent } = req.query as any;
@@ -477,6 +519,19 @@ async function startServer() {
       periodKey,
       clientId,
       billingModel,
+      search,
+      thresholdPercent: thresholdPercent ? parseFloat(thresholdPercent) : undefined
+    });
+    res.json(summary);
+  });
+
+  // Cross-Project Employee Capacity & Overbooking Analysis (Plan vs. Ist pro Mitarbeiter)
+  app.get('/api/forecasts/employee-capacity', (req, res) => {
+    const { periodType, periodKey, employmentType, search, thresholdPercent } = req.query as any;
+    const summary = storage.getEmployeeCapacitySummary({
+      periodType,
+      periodKey,
+      employmentType,
       search,
       thresholdPercent: thresholdPercent ? parseFloat(thresholdPercent) : undefined
     });
@@ -549,6 +604,81 @@ async function startServer() {
     }
 
     res.json(data);
+  });
+
+  // Billable vs. Non-Billable Stundensummen Export / API (Anforderung: reiner Datenexport/API)
+  app.get('/api/export/billable-summary', (req, res) => {
+    const { from, to, projectId, userId, clientId, projectType, format } = req.query as any;
+    const report = storage.getBillableSummary({
+      from,
+      to,
+      projectId,
+      userId,
+      clientId,
+      projectType
+    });
+
+    if (format === 'csv') {
+      const projectHeaders = [
+        'Projekt ID',
+        'Projektnummer',
+        'Projektname',
+        'Projekttyp',
+        'Abrechnungsmodell',
+        'Auftraggeber/Kunde',
+        'Gesamtstunden (h)',
+        'Billable Stunden (h)',
+        'Non-Billable Stunden (h)',
+        'Billable-Anteil (%)',
+        'Effektiver Stundensatz (EUR)',
+        'Effektiver Kostensatz (EUR)',
+        'Kundenabrechnungssumme (EUR)',
+        'Interne Gesamtkosten (EUR)',
+        'Marge (EUR)',
+        'Marge (%)'
+      ];
+
+      const csvRows = [
+        // Summary Block
+        `"MANDANT";"${report.organization}"`,
+        `"ZEITRAUM";"${report.queryPeriod.from || 'Alle'} bis ${report.queryPeriod.to || 'Alle'}"`,
+        `"GESAMTSTUNDEN";"${report.totals.totalHours.toFixed(2)}"`,
+        `"BILLABLE STUNDEN";"${report.totals.billableHours.toFixed(2)}"`,
+        `"NON-BILLABLE STUNDEN";"${report.totals.nonBillableHours.toFixed(2)}"`,
+        `"BILLABLE ANTEIL (%)";"${report.totals.billableSharePercent.toFixed(1)}%"`,
+        `"ABRECHNUNGSSUMME GESAMT (EUR)";"${report.totals.totalBillingAmount.toFixed(2)}"`,
+        `"INTERNE KOSTEN GESAMT (EUR)";"${report.totals.totalInternalCost.toFixed(2)}"`,
+        `"BRUTTOMARGE (EUR)";"${report.totals.grossMargin.toFixed(2)}"`,
+        `"MARGE (%)";"${report.totals.grossMarginPercent.toFixed(1)}%"`,
+        '',
+        // Project Detail Headers
+        projectHeaders.join(';'),
+        ...report.byProject.map(p => [
+          `"${p.projectId}"`,
+          `"${p.projectNumber}"`,
+          `"${p.projectName}"`,
+          `"${p.projectType === 'INTERNAL_PROJECT' ? 'Internes Projekt' : 'Kundenprojekt'}"`,
+          `"${p.billingModel}"`,
+          `"${p.clientName}"`,
+          p.totalHours.toFixed(2),
+          p.billableHours.toFixed(2),
+          p.nonBillableHours.toFixed(2),
+          `${p.billableSharePercent.toFixed(1)}%`,
+          p.effectiveBillingRate.toFixed(2),
+          p.effectiveCostRate.toFixed(2),
+          p.totalBillingAmount.toFixed(2),
+          p.totalInternalCost.toFixed(2),
+          p.margin.toFixed(2),
+          `${p.marginPercent.toFixed(1)}%`
+        ].join(';'))
+      ];
+
+      res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+      res.setHeader('Content-Disposition', `attachment; filename=billable_summary_${from || 'all'}_${to || 'all'}.csv`);
+      return res.send(csvRows.join('\n'));
+    }
+
+    res.json(report);
   });
 
   // API Keys (Section 12.3)
@@ -642,6 +772,53 @@ async function startServer() {
       month: targetMonth,
       comparison
     });
+  });
+
+  // REST API V1: Billable vs. Non-Billable Stundensummen & Margen-Export
+  app.get('/api/v1/billable-summary', requireApiKey, (req, res) => {
+    const { from, to, projectId, userId, clientId, projectType } = req.query as any;
+    const report = storage.getBillableSummary({
+      from,
+      to,
+      projectId,
+      userId,
+      clientId,
+      projectType
+    });
+    res.json(report);
+  });
+
+  // -------------------------------------------------------------
+  // DATABASE PERSISTENCE & BACKUP / IMPORT API
+  // -------------------------------------------------------------
+  app.get('/api/database/export', (req, res) => {
+    const data = storage.exportDatabase();
+    res.setHeader('Content-Type', 'application/json');
+    res.setHeader('Content-Disposition', `attachment; filename=insight_arcs_backup_${new Date().toISOString().slice(0, 10)}.json`);
+    res.json(data);
+  });
+
+  app.post('/api/database/import', (req, res) => {
+    const backupData = req.body;
+    if (!backupData || !backupData.organizations) {
+      return res.status(400).json({ error: 'Ungültiges Sicherungsdatenformat' });
+    }
+    const success = storage.importDatabase(backupData);
+    if (success) {
+      res.json({ success: true, message: 'Datenbank erfolgreich wiederhergestellt und gespeichert' });
+    } else {
+      res.status(500).json({ error: 'Fehler beim Wiederherstellen der Daten' });
+    }
+  });
+
+  app.post('/api/database/save', (req, res) => {
+    storage.saveToFile();
+    res.json({ success: true, message: 'Datenbank erfolgreich auf Datenträger gespeichert' });
+  });
+
+  app.post('/api/database/reset', (req, res) => {
+    storage.resetToInitialData();
+    res.json({ success: true, message: 'Datenbank auf Werkseinstellungen zurückgesetzt' });
   });
 
   // -------------------------------------------------------------

@@ -4,6 +4,7 @@ import {
   Organization,
   EmployeeJobRole,
   Client,
+  Partner,
   Project,
   Task,
   TimeEntry,
@@ -14,7 +15,9 @@ import {
   Language,
   ClockifyImportReport,
   ForecastComparisonItem,
-  ProjectForecastSummary
+  ProjectForecastSummary,
+  EmployeeCapacitySummaryItem,
+  ForecastAuditHistoryItem
 } from '../types';
 import { translations } from '../i18n/translations';
 
@@ -42,6 +45,7 @@ interface AppContextType {
   activeOrgId: string;
   jobRoles: EmployeeJobRole[];
   clients: Client[];
+  partners: Partner[];
   projects: Project[];
   tasks: Task[];
   timeEntries: TimeEntry[];
@@ -52,6 +56,9 @@ interface AppContextType {
   isLoading: boolean;
   login: (credentials: { email?: string; password?: string; userId?: string; orgId?: string }) => Promise<{ success: boolean; error?: string }>;
   logout: () => Promise<void>;
+  // Formatting helpers (Always 2 decimal places for rates and money)
+  formatRate: (rate?: number | null, currency?: string) => string;
+  formatCurrency: (amount?: number | null, currency?: string) => string;
   // Timer Actions
   activeTimer: ActiveTimer;
   startTimer: (entry?: Partial<ActiveTimer>) => void;
@@ -78,6 +85,10 @@ interface AppContextType {
   createClient: (client: Partial<Client>) => Promise<Client>;
   updateClient: (id: string, updates: Partial<Client>) => Promise<Client>;
   deleteClient: (id: string) => Promise<{ success: boolean; error?: string }>;
+  createPartner: (partner: Partial<Partner>) => Promise<Partner>;
+  updatePartner: (id: string, updates: Partial<Partner>) => Promise<Partner>;
+  archivePartner: (id: string) => Promise<Partner>;
+  deletePartner: (id: string) => Promise<{ success: boolean; error?: string }>;
   createTask: (task: Partial<Task>) => Promise<Task>;
   updateTask: (id: string, updates: Partial<Task>) => Promise<Task>;
   deleteTask: (id: string) => Promise<{ success: boolean; error?: string }>;
@@ -140,6 +151,30 @@ interface AppContextType {
     };
     projects: ProjectForecastSummary[];
   }>;
+  getEmployeeCapacitySummary: (params: {
+    periodType?: string;
+    periodKey?: string;
+    employmentType?: string;
+    search?: string;
+    thresholdPercent?: number;
+  }) => Promise<{
+    periodType: string;
+    periodKey: string;
+    periodLabel: string;
+    startDate: string;
+    endDate: string;
+    stateLocation: string;
+    kpis: {
+      totalEmployeesCount: number;
+      totalOverbookedCount: number;
+      totalCapacityHours: number;
+      totalPlannedHours: number;
+      totalActualHours: number;
+      overallUtilizationPercent: number;
+    };
+    employees: EmployeeCapacitySummaryItem[];
+  }>;
+  getForecastHistory: (projectId?: string, userId?: string, month?: string) => Promise<ForecastAuditHistoryItem[]>;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -150,9 +185,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [users, setUsers] = useState<User[]>([]);
   const [organization, setOrganization] = useState<Organization | null>(null);
   const [organizations, setOrganizations] = useState<Organization[]>([]);
-  const [activeOrgId, setActiveOrgId] = useState<string>('org-insight-arcs-01');
+  const [activeOrgId, setActiveOrgId] = useState<string>('org-insight-arcs-prod');
   const [jobRoles, setJobRoles] = useState<EmployeeJobRole[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
+  const [partners, setPartners] = useState<Partner[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [timeEntries, setTimeEntries] = useState<TimeEntry[]>([]);
@@ -209,16 +245,36 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     return () => clearInterval(interval);
   }, [activeTimer.isRunning, activeTimer.isPaused]);
 
+  // Formatting helpers - Always 2 decimal places
+  const formatRate = (rate?: number | null, currency: string = '€'): string => {
+    const num = typeof rate === 'number' && !isNaN(rate) ? rate : 0;
+    const formatted = num.toLocaleString('de-DE', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    });
+    return `${formatted} ${currency}/Std.`;
+  };
+
+  const formatCurrency = (amount?: number | null, currency: string = '€'): string => {
+    const num = typeof amount === 'number' && !isNaN(amount) ? amount : 0;
+    const formatted = num.toLocaleString('de-DE', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    });
+    return `${formatted} ${currency}`;
+  };
+
   // Fetch All Core Data
   const refreshAllData = useCallback(async () => {
     try {
       setIsLoading(true);
-      const [authRes, orgsRes, usersRes, rolesRes, clientsRes, projectsRes, tasksRes, timeRes, workRes, auditRes, fcRes, keysRes] = await Promise.all([
+      const [authRes, orgsRes, usersRes, rolesRes, clientsRes, partnersRes, projectsRes, tasksRes, timeRes, workRes, auditRes, fcRes, keysRes] = await Promise.all([
         fetch('/api/auth/me').then(r => r.json()),
         fetch('/api/organizations').then(r => r.json()),
         fetch('/api/users').then(r => r.json()),
         fetch('/api/employee-roles').then(r => r.json()),
         fetch('/api/clients').then(r => r.json()),
+        fetch('/api/partners').then(r => r.json()),
         fetch('/api/projects').then(r => r.json()),
         fetch('/api/tasks').then(r => r.json()),
         fetch('/api/time-entries?limit=1000').then(r => r.json()),
@@ -238,6 +294,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       setUsers(usersRes || []);
       setJobRoles(rolesRes || []);
       setClients(clientsRes || []);
+      setPartners(partnersRes || []);
       setProjects(projectsRes || []);
       setTasks(tasksRes || []);
       setTimeEntries(timeRes.data || []);
@@ -610,6 +667,61 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     return { success: true };
   };
 
+  const createPartner = async (partner: Partial<Partner>): Promise<Partner> => {
+    const res = await fetch('/api/partners', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-user-id': currentUser?.id || 'u-1'
+      },
+      body: JSON.stringify(partner)
+    });
+    const created = await res.json();
+    await refreshAllData();
+    return created;
+  };
+
+  const updatePartner = async (id: string, updates: Partial<Partner>): Promise<Partner> => {
+    const res = await fetch(`/api/partners/${id}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-user-id': currentUser?.id || 'u-1'
+      },
+      body: JSON.stringify(updates)
+    });
+    const updated = await res.json();
+    await refreshAllData();
+    return updated;
+  };
+
+  const archivePartner = async (id: string): Promise<Partner> => {
+    const res = await fetch(`/api/partners/${id}/archive`, {
+      method: 'POST',
+      headers: {
+        'x-user-id': currentUser?.id || 'u-1'
+      }
+    });
+    const updated = await res.json();
+    await refreshAllData();
+    return updated;
+  };
+
+  const deletePartner = async (id: string): Promise<{ success: boolean; error?: string }> => {
+    const res = await fetch(`/api/partners/${id}`, {
+      method: 'DELETE',
+      headers: {
+        'x-user-id': currentUser?.id || 'u-1'
+      }
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      return { success: false, error: data.error || 'Fehler beim Löschen des Partners' };
+    }
+    await refreshAllData();
+    return { success: true };
+  };
+
   const createTask = async (task: Partial<Task>): Promise<Task> => {
     const res = await fetch('/api/tasks', {
       method: 'POST',
@@ -831,6 +943,34 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     return await res.json();
   };
 
+  const getEmployeeCapacitySummary = async (params: {
+    periodType?: string;
+    periodKey?: string;
+    employmentType?: string;
+    search?: string;
+    thresholdPercent?: number;
+  }) => {
+    const query = new URLSearchParams();
+    if (params.periodType) query.set('periodType', params.periodType);
+    if (params.periodKey) query.set('periodKey', params.periodKey);
+    if (params.employmentType) query.set('employmentType', params.employmentType);
+    if (params.search) query.set('search', params.search);
+    if (params.thresholdPercent !== undefined) query.set('thresholdPercent', String(params.thresholdPercent));
+
+    const res = await fetch(`/api/forecasts/employee-capacity?${query.toString()}`);
+    return await res.json();
+  };
+
+  const getForecastHistory = async (projectId?: string, userId?: string, month?: string): Promise<ForecastAuditHistoryItem[]> => {
+    const query = new URLSearchParams();
+    if (projectId) query.set('projectId', projectId);
+    if (userId) query.set('userId', userId);
+    if (month) query.set('month', month);
+
+    const res = await fetch(`/api/forecasts/history?${query.toString()}`);
+    return await res.json();
+  };
+
   return (
     <AppContext.Provider
       value={{
@@ -845,6 +985,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         activeOrgId,
         jobRoles,
         clients,
+        partners,
         projects,
         tasks,
         timeEntries,
@@ -855,6 +996,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         isLoading,
         login,
         logout,
+        formatRate,
+        formatCurrency,
         activeTimer,
         startTimer,
         pauseTimer,
@@ -879,6 +1022,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         createClient,
         updateClient,
         deleteClient,
+        createPartner,
+        updatePartner,
+        archivePartner,
+        deletePartner,
         createTask,
         updateTask,
         deleteTask,
@@ -895,7 +1042,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         getPlanVsActual,
         updateOrganization,
         updateOrganizationById,
-        getProjectForecastSummary
+        getProjectForecastSummary,
+        getEmployeeCapacitySummary,
+        getForecastHistory
       }}
     >
       {children}

@@ -27,7 +27,13 @@ import {
   Laptop,
   MapPin,
   Plus,
-  Sparkles
+  Sparkles,
+  Phone,
+  FileText,
+  Globe,
+  ChevronDown,
+  ChevronUp,
+  Info
 } from 'lucide-react';
 
 export const RateHierarchyView: React.FC = () => {
@@ -36,6 +42,7 @@ export const RateHierarchyView: React.FC = () => {
     users,
     jobRoles,
     projects,
+    partners,
     organization,
     activeOrgId,
     timeEntries,
@@ -46,11 +53,16 @@ export const RateHierarchyView: React.FC = () => {
     createJobRole,
     updateJobRole,
     deleteJobRole,
+    formatRate,
+    formatCurrency,
     currentUser
   } = useApp();
 
   const isSuperAdmin = currentUser?.role === 'SUPERADMIN' || currentUser?.id === 'u-1';
   const isAdmin = isSuperAdmin || currentUser?.role === 'ADMIN';
+
+  // Rate Hierarchy Guidance collapsible state
+  const [showHierarchyGuidance, setShowHierarchyGuidance] = useState(false);
 
   // Rate Hierarchy Interactive Tester
   const [testUserId, setTestUserId] = useState(users[0]?.id || 'u-1');
@@ -66,19 +78,31 @@ export const RateHierarchyView: React.FC = () => {
   const [editingRole, setEditingRole] = useState<EmployeeJobRole | null>(null);
   const [roleName, setRoleName] = useState('');
   const [roleDescription, setRoleDescription] = useState('');
-  const [roleBillingRate, setRoleBillingRate] = useState('130');
-  const [roleCostRate, setRoleCostRate] = useState('65');
+  const [roleBillingRate, setRoleBillingRate] = useState('130.00');
+  const [roleCostRate, setRoleCostRate] = useState('65.00');
 
   // Invite Modal
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [inviteEmploymentType, setInviteEmploymentType] = useState<'INTERNAL' | 'EXTERNAL'>('INTERNAL');
+  const [inviteExternalType, setInviteExternalType] = useState<'PARTNER_EMPLOYEE' | 'FREELANCER'>('PARTNER_EMPLOYEE');
+  const [invitePartnerId, setInvitePartnerId] = useState('');
   const [inviteCompanyName, setInviteCompanyName] = useState('');
+  const [inviteContactPerson, setInviteContactPerson] = useState('');
+  const [inviteContactPhone, setInviteContactPhone] = useState('');
+  const [inviteContactEmail, setInviteContactEmail] = useState('');
+  const [inviteBillingEmail, setInviteBillingEmail] = useState('');
+  const [inviteStreet, setInviteStreet] = useState('');
+  const [inviteZip, setInviteZip] = useState('');
+  const [inviteCity, setInviteCity] = useState('');
+  const [inviteCountry, setInviteCountry] = useState('Deutschland');
+  const [inviteTaxId, setInviteTaxId] = useState('');
+
   const [inviteName, setInviteName] = useState('');
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteRole, setInviteRole] = useState<'EMPLOYEE' | 'PROJECT_MANAGER' | 'ADMIN' | 'SUPERADMIN'>('EMPLOYEE');
   const [inviteJobRoleId, setInviteJobRoleId] = useState(jobRoles[0]?.id || 'role-mid');
   const [inviteStateLocation, setInviteStateLocation] = useState(organization?.stateLocation || 'DE-BE');
-  const [inviteCostRate, setInviteCostRate] = useState('65');
+  const [inviteCostRate, setInviteCostRate] = useState('65.00');
   const [inviteWeeklyHours, setInviteWeeklyHours] = useState('40');
   const [invitationLinkResult, setInvitationLinkResult] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
@@ -89,7 +113,19 @@ export const RateHierarchyView: React.FC = () => {
   const [editEmail, setEditEmail] = useState('');
   const [editRole, setEditRole] = useState<'EMPLOYEE' | 'PROJECT_MANAGER' | 'ADMIN' | 'SUPERADMIN'>('EMPLOYEE');
   const [editEmploymentType, setEditEmploymentType] = useState<'INTERNAL' | 'EXTERNAL'>('INTERNAL');
+  const [editExternalType, setEditExternalType] = useState<'PARTNER_EMPLOYEE' | 'FREELANCER'>('PARTNER_EMPLOYEE');
+  const [editPartnerId, setEditPartnerId] = useState('');
   const [editCompanyName, setEditCompanyName] = useState('');
+  const [editContactPerson, setEditContactPerson] = useState('');
+  const [editContactPhone, setEditContactPhone] = useState('');
+  const [editContactEmail, setEditContactEmail] = useState('');
+  const [editBillingEmail, setEditBillingEmail] = useState('');
+  const [editStreet, setEditStreet] = useState('');
+  const [editZip, setEditZip] = useState('');
+  const [editCity, setEditCity] = useState('');
+  const [editCountry, setEditCountry] = useState('Deutschland');
+  const [editTaxId, setEditTaxId] = useState('');
+
   const [editJobRoleId, setEditJobRoleId] = useState('');
   const [editStateLocation, setEditStateLocation] = useState('DE-BE');
   const [editWeeklyHours, setEditWeeklyHours] = useState('40');
@@ -117,8 +153,8 @@ export const RateHierarchyView: React.FC = () => {
     setEditingRole(null);
     setRoleName('');
     setRoleDescription('');
-    setRoleBillingRate('130');
-    setRoleCostRate('65');
+    setRoleBillingRate('130.00');
+    setRoleCostRate('65.00');
     setShowRoleModal(true);
   };
 
@@ -126,8 +162,8 @@ export const RateHierarchyView: React.FC = () => {
     setEditingRole(role);
     setRoleName(role.name);
     setRoleDescription(role.description || '');
-    setRoleBillingRate(String(role.standardBillingRate));
-    setRoleCostRate(String(role.standardCostRate));
+    setRoleBillingRate(Number(role.standardBillingRate).toFixed(2));
+    setRoleCostRate(Number(role.standardCostRate).toFixed(2));
     setShowRoleModal(true);
   };
 
@@ -167,12 +203,27 @@ export const RateHierarchyView: React.FC = () => {
 
   const handleSendInvite = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    const selectedPartner = partners.find(p => p.id === invitePartnerId);
+
     const res = await inviteUser({
       name: inviteName,
       email: inviteEmail,
       role: inviteRole,
       employmentType: inviteEmploymentType,
-      companyName: inviteEmploymentType === 'EXTERNAL' ? inviteCompanyName : undefined,
+      externalType: inviteEmploymentType === 'EXTERNAL' ? inviteExternalType : undefined,
+      partnerId: inviteEmploymentType === 'EXTERNAL' && inviteExternalType === 'PARTNER_EMPLOYEE' ? invitePartnerId : undefined,
+      partnerName: inviteEmploymentType === 'EXTERNAL' && inviteExternalType === 'PARTNER_EMPLOYEE' ? (selectedPartner?.name || inviteCompanyName) : undefined,
+      companyName: inviteEmploymentType === 'EXTERNAL' ? (inviteExternalType === 'PARTNER_EMPLOYEE' ? (selectedPartner?.name || inviteCompanyName) : (inviteCompanyName || inviteName)) : undefined,
+      contactPerson: inviteEmploymentType === 'EXTERNAL' && inviteExternalType === 'FREELANCER' ? inviteContactPerson : undefined,
+      contactPhone: inviteEmploymentType === 'EXTERNAL' && inviteExternalType === 'FREELANCER' ? inviteContactPhone : undefined,
+      contactEmail: inviteEmploymentType === 'EXTERNAL' && inviteExternalType === 'FREELANCER' ? inviteContactEmail : undefined,
+      billingEmail: inviteEmploymentType === 'EXTERNAL' && inviteExternalType === 'FREELANCER' ? inviteBillingEmail : undefined,
+      street: inviteEmploymentType === 'EXTERNAL' && inviteExternalType === 'FREELANCER' ? inviteStreet : undefined,
+      zip: inviteEmploymentType === 'EXTERNAL' && inviteExternalType === 'FREELANCER' ? inviteZip : undefined,
+      city: inviteEmploymentType === 'EXTERNAL' && inviteExternalType === 'FREELANCER' ? inviteCity : undefined,
+      country: inviteEmploymentType === 'EXTERNAL' && inviteExternalType === 'FREELANCER' ? inviteCountry : undefined,
+      taxId: inviteEmploymentType === 'EXTERNAL' && inviteExternalType === 'FREELANCER' ? inviteTaxId : undefined,
       jobRoleId: inviteJobRoleId,
       stateLocation: inviteEmploymentType === 'INTERNAL' && organization?.allowMobileWorkplaces ? inviteStateLocation : organization?.stateLocation,
       individualCostRate: parseFloat(inviteCostRate) || undefined,
@@ -187,13 +238,25 @@ export const RateHierarchyView: React.FC = () => {
     setEditEmail(user.email);
     setEditRole(user.role);
     setEditEmploymentType(user.employmentType || 'INTERNAL');
-    setEditCompanyName(user.companyName || '');
+    setEditExternalType(user.externalType || (user.partnerId ? 'PARTNER_EMPLOYEE' : 'FREELANCER'));
+    setEditPartnerId(user.partnerId || '');
+    setEditCompanyName(user.companyName || user.partnerName || '');
+    setEditContactPerson(user.contactPerson || '');
+    setEditContactPhone(user.contactPhone || '');
+    setEditContactEmail(user.contactEmail || '');
+    setEditBillingEmail(user.billingEmail || '');
+    setEditStreet(user.street || '');
+    setEditZip(user.zip || '');
+    setEditCity(user.city || '');
+    setEditCountry(user.country || 'Deutschland');
+    setEditTaxId(user.taxId || '');
+
     setEditJobRoleId(user.jobRoleId || jobRoles[0]?.id || '');
     setEditStateLocation(user.stateLocation || organization?.stateLocation || 'DE-BE');
     setEditWeeklyHours(String(user.weeklyTargetHours || 40));
     setEditDailyHours(String(user.dailyTargetHours || 8));
-    setEditBillingRate(user.individualBillingRate ? String(user.individualBillingRate) : '');
-    setEditCostRate(user.individualCostRate ? String(user.individualCostRate) : '');
+    setEditBillingRate(user.individualBillingRate !== undefined ? Number(user.individualBillingRate).toFixed(2) : '');
+    setEditCostRate(user.individualCostRate !== undefined ? Number(user.individualCostRate).toFixed(2) : '');
     setEditStatus((user.status as any) || 'ACTIVE');
   };
 
@@ -201,12 +264,26 @@ export const RateHierarchyView: React.FC = () => {
     e.preventDefault();
     if (!editingUser) return;
 
+    const selectedPartner = partners.find(p => p.id === editPartnerId);
+
     await updateUser(editingUser.id, {
       name: editName,
       email: editEmail,
       role: editRole,
       employmentType: editEmploymentType,
-      companyName: editEmploymentType === 'EXTERNAL' ? editCompanyName : undefined,
+      externalType: editEmploymentType === 'EXTERNAL' ? editExternalType : undefined,
+      partnerId: editEmploymentType === 'EXTERNAL' && editExternalType === 'PARTNER_EMPLOYEE' ? editPartnerId : undefined,
+      partnerName: editEmploymentType === 'EXTERNAL' && editExternalType === 'PARTNER_EMPLOYEE' ? (selectedPartner?.name || editCompanyName) : undefined,
+      companyName: editEmploymentType === 'EXTERNAL' ? (editExternalType === 'PARTNER_EMPLOYEE' ? (selectedPartner?.name || editCompanyName) : (editCompanyName || editName)) : undefined,
+      contactPerson: editEmploymentType === 'EXTERNAL' && editExternalType === 'FREELANCER' ? editContactPerson : undefined,
+      contactPhone: editEmploymentType === 'EXTERNAL' && editExternalType === 'FREELANCER' ? editContactPhone : undefined,
+      contactEmail: editEmploymentType === 'EXTERNAL' && editExternalType === 'FREELANCER' ? editContactEmail : undefined,
+      billingEmail: editEmploymentType === 'EXTERNAL' && editExternalType === 'FREELANCER' ? editBillingEmail : undefined,
+      street: editEmploymentType === 'EXTERNAL' && editExternalType === 'FREELANCER' ? editStreet : undefined,
+      zip: editEmploymentType === 'EXTERNAL' && editExternalType === 'FREELANCER' ? editZip : undefined,
+      city: editEmploymentType === 'EXTERNAL' && editExternalType === 'FREELANCER' ? editCity : undefined,
+      country: editEmploymentType === 'EXTERNAL' && editExternalType === 'FREELANCER' ? editCountry : undefined,
+      taxId: editEmploymentType === 'EXTERNAL' && editExternalType === 'FREELANCER' ? editTaxId : undefined,
       jobRoleId: editJobRoleId,
       stateLocation: editEmploymentType === 'INTERNAL' && organization?.allowMobileWorkplaces ? editStateLocation : organization?.stateLocation,
       weeklyTargetHours: parseFloat(editWeeklyHours) || 40,
@@ -289,6 +366,26 @@ export const RateHierarchyView: React.FC = () => {
 
           <div className="flex items-center gap-2">
             <button
+              id="btn-toggle-hierarchy-guidance"
+              type="button"
+              onClick={() => setShowHierarchyGuidance(prev => !prev)}
+              className={`text-xs font-semibold px-3 py-2.5 rounded-xl flex items-center gap-1.5 transition-colors border ${
+                showHierarchyGuidance
+                  ? 'bg-slate-100 text-slate-900 border-slate-300'
+                  : 'bg-white hover:bg-slate-50 text-slate-700 border-slate-200'
+              }`}
+              title="Hierarchie-Logik & Feiertagsregeln ein-/ausblenden"
+            >
+              <Info className="w-4 h-4 text-emerald-600" />
+              <span>Regelwerk</span>
+              {showHierarchyGuidance ? (
+                <ChevronUp className="w-3.5 h-3.5 text-slate-500" />
+              ) : (
+                <ChevronDown className="w-3.5 h-3.5 text-slate-500" />
+              )}
+            </button>
+
+            <button
               id="btn-open-create-role"
               onClick={handleOpenCreateRole}
               className="bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-semibold px-3 py-2.5 rounded-xl flex items-center gap-1.5 transition-colors border border-slate-300/80"
@@ -311,63 +408,70 @@ export const RateHierarchyView: React.FC = () => {
           </div>
         </div>
 
-        {/* Holiday & Workplace Context Banner */}
-        <div className="bg-slate-50 border border-slate-200 rounded-xl p-3.5 grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
-          <div className="flex items-start gap-2.5">
-            <MapPin className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
-            <div>
-              <span className="font-bold text-slate-900 block">Mandanten-Hauptstandort &amp; Feiertagskalender</span>
-              <span className="text-slate-600 block mt-0.5">
-                {organization?.locationCity || 'Berlin'} ({tenantState?.name || 'Berlin'} • {tenantState?.code}) — {tenantState?.extraHolidaysDescription}
-              </span>
+        {/* Collapsible Holiday & Workplace Context + 4-Tier Hierarchy Cards */}
+        {showHierarchyGuidance && (
+          <div className="space-y-3 pt-2 border-t border-slate-100 animate-in fade-in slide-in-from-top-2 duration-200">
+            {/* Holiday & Workplace Context Banner */}
+            <div className="bg-slate-50 border border-slate-200 rounded-xl p-3.5 grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+              <div className="flex items-start gap-2.5">
+                <MapPin className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                <div>
+                  <span className="font-bold text-slate-900 block">Mandanten-Hauptstandort &amp; Feiertagskalender</span>
+                  <span className="text-slate-600 block mt-0.5">
+                    {organization?.locationCity || 'Berlin'} ({tenantState?.name || 'Berlin'} • {tenantState?.code}) — {tenantState?.extraHolidaysDescription}
+                  </span>
+                </div>
+              </div>
+
+              <div className="flex items-start gap-2.5">
+                <Laptop className="w-4 h-4 text-purple-600 shrink-0 mt-0.5" />
+                <div>
+                  <span className="font-bold text-slate-900 block">Mobile Arbeitsplätze Status</span>
+                  <span className="text-slate-600 block mt-0.5">
+                    {organization?.allowMobileWorkplaces ? (
+                      <span className="text-purple-900 font-semibold">
+                        ✓ Aktiviert — Feste MA können individuelles Bundesland wählen. Für Externe gilt stets {organization?.locationCity || 'Berlin'}.
+                      </span>
+                    ) : (
+                      <span className="text-slate-700">
+                        ✕ Deaktiviert — Alle Mitarbeiter &amp; Externe nutzen fix den Mandantenstandort ({organization?.locationCity || 'Berlin'}).
+                      </span>
+                    )}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* 4-Tier Visual Breakdown Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+              <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 space-y-1">
+                <div className="text-[10px] font-bold text-emerald-700 uppercase tracking-wider">1. Höchste Priorität</div>
+                <div className="text-xs font-bold text-slate-900">Projekt-Mitarbeitersatz</div>
+                <p className="text-[11px] text-slate-500">Spezifischer Stundensatz für einen Mitarbeiter auf einem Projekt.</p>
+              </div>
+
+              <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 space-y-1">
+                <div className="text-[10px] font-bold text-blue-700 uppercase tracking-wider">2. Hohe Priorität</div>
+                <div className="text-xs font-bold text-slate-900">Individueller Mitarbeitersatz</div>
+                <p className="text-[11px] text-slate-500">Im Mitarbeiterprofil hinterlegter persönlicher Abrechnungssatz.</p>
+              </div>
+
+              <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 space-y-1">
+                <div className="text-[10px] font-bold text-amber-700 uppercase tracking-wider">3. Mittlere Priorität</div>
+                <div className="text-xs font-bold text-slate-900">Fachliche Mitarbeiterrolle</div>
+                <p className="text-[11px] text-slate-500">Stundensatz der Rolle je Mandant (z.B. Junior, Consultant, Senior, Lead).</p>
+              </div>
+
+              <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 space-y-1">
+                <div className="text-[10px] font-bold text-purple-700 uppercase tracking-wider">4. Basis / Fallback</div>
+                <div className="text-xs font-bold text-slate-900">Organisations-Standard</div>
+                <p className="text-[11px] text-slate-500">
+                  Mandantenweiter Fallback-Satz ({organization?.defaultHourlyBillingRate !== undefined ? formatRate(organization.defaultHourlyBillingRate) : '100,00 € / Std.'}).
+                </p>
+              </div>
             </div>
           </div>
-
-          <div className="flex items-start gap-2.5">
-            <Laptop className="w-4 h-4 text-purple-600 shrink-0 mt-0.5" />
-            <div>
-              <span className="font-bold text-slate-900 block">Mobile Arbeitsplätze Status</span>
-              <span className="text-slate-600 block mt-0.5">
-                {organization?.allowMobileWorkplaces ? (
-                  <span className="text-purple-900 font-semibold">
-                    ✓ Aktiviert — Feste MA können individuelles Bundesland wählen. Für Externe gilt stets {organization?.locationCity || 'Berlin'}.
-                  </span>
-                ) : (
-                  <span className="text-slate-700">
-                    ✕ Deaktiviert — Alle Mitarbeiter &amp; Externe nutzen fix den Mandantenstandort ({organization?.locationCity || 'Berlin'}).
-                  </span>
-                )}
-              </span>
-            </div>
-          </div>
-        </div>
-
-        {/* 4-Tier Visual Breakdown Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-3 pt-1">
-          <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 space-y-1">
-            <div className="text-[10px] font-bold text-emerald-700 uppercase tracking-wider">1. Höchste Priorität</div>
-            <div className="text-xs font-bold text-slate-900">Projekt-Mitarbeitersatz</div>
-            <p className="text-[11px] text-slate-500">Spezifischer Stundensatz für einen Mitarbeiter auf einem Projekt.</p>
-          </div>
-
-          <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 space-y-1">
-            <div className="text-[10px] font-bold text-blue-700 uppercase tracking-wider">2. Hohe Priorität</div>
-            <div className="text-xs font-bold text-slate-900">Individueller Mitarbeitersatz</div>
-            <p className="text-[11px] text-slate-500">Im Mitarbeiterprofil hinterlegter persönlicher Abrechnungssatz.</p>
-          </div>
-
-          <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 space-y-1">
-            <div className="text-[10px] font-bold text-amber-700 uppercase tracking-wider">3. Mittlere Priorität</div>
-            <div className="text-xs font-bold text-slate-900">Fachliche Mitarbeiterrolle</div>
-            <p className="text-[11px] text-slate-500">Stundensatz der Rolle je Mandant (z.B. Junior, Consultant, Senior, Lead).</p>
-          </div>
-
-          <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 space-y-1">
-            <div className="text-[10px] font-bold text-purple-700 uppercase tracking-wider">4. Basis / Fallback</div>
-            <div className="text-xs font-bold text-slate-900">Organisations-Standard</div>
-            <p className="text-[11px] text-slate-500">Mandantenweiter Fallback-Satz ({organization?.defaultHourlyBillingRate} €/h).</p>
-          </div>
-        </div>
+        )}
       </div>
 
       {/* ========================================================================= */}
@@ -379,7 +483,7 @@ export const RateHierarchyView: React.FC = () => {
             <Briefcase className="w-5 h-5 text-indigo-600" />
             <div>
               <h3 className="font-bold text-base text-slate-900">Fachliche Rollen &amp; Stundensätze ({tenantJobRoles.length})</h3>
-              <p className="text-xs text-slate-500">Stundensätze sind je Rolle separat für diesen Mandanten definiert.</p>
+              <p className="text-xs text-slate-500">Stundensätze sind je Rolle separat für diesen Mandanten definiert (immer mit 2 Nachkommastellen).</p>
             </div>
           </div>
 
@@ -417,11 +521,11 @@ export const RateHierarchyView: React.FC = () => {
                 <div className="mt-4 pt-3 border-t border-slate-200/80 space-y-2">
                   <div className="flex items-center justify-between text-xs">
                     <span className="text-slate-500 font-medium">Stundensatz (Kunde):</span>
-                    <span className="font-bold text-emerald-700">{role.standardBillingRate} €/h</span>
+                    <span className="font-bold text-emerald-700">{formatRate(role.standardBillingRate)}</span>
                   </div>
                   <div className="flex items-center justify-between text-xs">
                     <span className="text-slate-500 font-medium">Kostensatz (Basis):</span>
-                    <span className="font-bold text-purple-700">{role.standardCostRate} €/h</span>
+                    <span className="font-bold text-purple-700">{formatRate(role.standardCostRate)}</span>
                   </div>
 
                   <div className="flex items-center justify-end gap-1.5 pt-2">
@@ -474,7 +578,9 @@ export const RateHierarchyView: React.FC = () => {
               className="w-full bg-slate-800 border border-slate-700 text-white text-xs rounded-xl px-3 py-2"
             >
               {users.map(u => (
-                <option key={u.id} value={u.id}>{u.name} ({u.role} • {u.employmentType === 'EXTERNAL' ? 'Extern' : 'Intern'})</option>
+                <option key={u.id} value={u.id}>
+                  {u.name} ({u.role} • {u.employmentType === 'EXTERNAL' ? (u.externalType === 'FREELANCER' ? 'Freelancer' : `Partner: ${u.partnerName || 'Extern'}`) : 'Intern'})
+                </option>
               ))}
             </select>
           </div>
@@ -505,7 +611,7 @@ export const RateHierarchyView: React.FC = () => {
             <div className="bg-slate-800/60 border border-slate-700/60 rounded-xl p-3 flex items-center justify-between">
               <div>
                 <div className="text-[10px] uppercase font-bold text-slate-400">{t.billingRate} (Kunde)</div>
-                <div className="text-xl font-extrabold text-emerald-400">{resolvedResult.billingRate} € / Std.</div>
+                <div className="text-xl font-extrabold text-emerald-400">{formatRate(resolvedResult.billingRate)}</div>
               </div>
               <div className="text-right">
                 <span className="text-[10px] font-semibold bg-emerald-950 text-emerald-300 border border-emerald-800 px-2 py-0.5 rounded">
@@ -517,7 +623,7 @@ export const RateHierarchyView: React.FC = () => {
             <div className="bg-slate-800/60 border border-slate-700/60 rounded-xl p-3 flex items-center justify-between">
               <div>
                 <div className="text-[10px] uppercase font-bold text-slate-400">{t.costRate} (Kostensatz MA)</div>
-                <div className="text-xl font-extrabold text-purple-400">{resolvedResult.costRate} € / Std.</div>
+                <div className="text-xl font-extrabold text-purple-400">{formatRate(resolvedResult.costRate)}</div>
               </div>
               <div className="text-right">
                 <span className="text-[10px] font-semibold bg-purple-950 text-purple-300 border border-purple-800 px-2 py-0.5 rounded">
@@ -596,10 +702,10 @@ export const RateHierarchyView: React.FC = () => {
               <tr>
                 <th className="px-4 py-3">Mitarbeiter</th>
                 <th className="px-4 py-3">Systemrolle</th>
-                <th className="px-4 py-3">Typ</th>
+                <th className="px-4 py-3">Typ &amp; Zuordnung</th>
                 <th className="px-4 py-3">Fachliche Rolle (Stundensatz)</th>
                 <th className="px-4 py-3">Kostensatz / MA</th>
-                <th className="px-4 py-3">Standort &amp; Feiertagskalender</th>
+                <th className="px-4 py-3">Standort &amp; Feiertage</th>
                 <th className="px-4 py-3">Sollstunden</th>
                 <th className="px-4 py-3">Status</th>
                 <th className="px-4 py-3 text-right">Aktionen</th>
@@ -609,6 +715,8 @@ export const RateHierarchyView: React.FC = () => {
               {filteredUsers.map(u => {
                 const jobRole = jobRoles.find(r => r.id === u.jobRoleId);
                 const isExternal = u.employmentType === 'EXTERNAL';
+                const isPartnerEmp = isExternal && (u.externalType === 'PARTNER_EMPLOYEE' || !!u.partnerId);
+                const isFreelancer = isExternal && u.externalType === 'FREELANCER';
                 const resolvedStateCode = resolveUserHolidayState(u, organization);
                 const userStateObj = GERMAN_STATES.find(s => s.code === resolvedStateCode);
                 const userEntries = timeEntries.filter(e => e.userId === u.id);
@@ -623,9 +731,10 @@ export const RateHierarchyView: React.FC = () => {
                     <td className="px-4 py-3">
                       <div className="font-semibold text-slate-900">{u.name}</div>
                       <div className="text-[10px] text-slate-400">{u.email}</div>
-                      {isExternal && u.companyName && (
-                        <div className="text-[10px] text-purple-700 font-medium mt-0.5">
-                          Firma: {u.companyName}
+                      {isFreelancer && (u.billingEmail || u.contactEmail || u.contactPhone) && (
+                        <div className="text-[10px] text-purple-700 font-medium mt-0.5 flex items-center gap-1.5">
+                          {u.billingEmail && <span>Rechnung: {u.billingEmail}</span>}
+                          {u.contactPhone && <span>• Tel: {u.contactPhone}</span>}
                         </div>
                       )}
                     </td>
@@ -654,9 +763,23 @@ export const RateHierarchyView: React.FC = () => {
                     </td>
                     <td className="px-4 py-3">
                       {isExternal ? (
-                        <span className="inline-flex items-center gap-1 text-[10px] font-bold bg-purple-100 text-purple-800 border border-purple-200/60 px-2 py-0.5 rounded">
-                          Extern (Frei)
-                        </span>
+                        isPartnerEmp ? (
+                          <div>
+                            <span className="inline-flex items-center gap-1 text-[10px] font-bold bg-indigo-100 text-indigo-900 border border-indigo-200 px-2 py-0.5 rounded">
+                              <Building2 className="w-3 h-3 text-indigo-600" />
+                              Partner: {u.partnerName || u.companyName || 'Zugeordnet'}
+                            </span>
+                          </div>
+                        ) : (
+                          <div>
+                            <span className="inline-flex items-center gap-1 text-[10px] font-bold bg-purple-100 text-purple-800 border border-purple-200 px-2 py-0.5 rounded">
+                              <span>👤 Freelancer</span>
+                            </span>
+                            {u.city && (
+                              <div className="text-[10px] text-slate-500 mt-0.5">{u.city} {u.country ? `(${u.country})` : ''}</div>
+                            )}
+                          </div>
+                        )
                       ) : (
                         <span className="inline-flex items-center gap-1 text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200/60 px-2 py-0.5 rounded">
                           Intern (Fest)
@@ -666,16 +789,16 @@ export const RateHierarchyView: React.FC = () => {
                     <td className="px-4 py-3">
                       <div className="font-medium text-slate-800">{jobRole?.name || '—'}</div>
                       <div className="text-[10px] text-slate-500">
-                        {u.individualBillingRate ? (
-                          <span className="text-emerald-700 font-semibold">{u.individualBillingRate} €/h (Override)</span>
+                        {u.individualBillingRate !== undefined ? (
+                          <span className="text-emerald-700 font-semibold">{formatRate(u.individualBillingRate)} (Override)</span>
                         ) : (
-                          <span>{jobRole?.standardBillingRate || 130} €/h (Rolle)</span>
+                          <span>{formatRate(jobRole?.standardBillingRate || 130)} (Rolle)</span>
                         )}
                       </div>
                     </td>
                     <td className="px-4 py-3">
                       <span className="font-mono font-bold text-slate-800">
-                        {u.individualCostRate || jobRole?.standardCostRate || 65} €/h
+                        {formatRate(u.individualCostRate !== undefined ? u.individualCostRate : (jobRole?.standardCostRate || 65))}
                       </span>
                     </td>
                     <td className="px-4 py-3">
@@ -882,23 +1005,33 @@ export const RateHierarchyView: React.FC = () => {
       {/* ========================================================================= */}
       {editingUser && (
         <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in">
-          <div className="bg-white rounded-2xl max-w-lg w-full p-6 space-y-4 shadow-xl border border-slate-200 max-h-[90vh] overflow-y-auto">
-            <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
-              <Edit2 className="w-4 h-4 text-emerald-600" />
-              <span>Mitarbeiterprofil bearbeiten: {editingUser.name}</span>
-            </h3>
+          <div className="bg-white rounded-2xl max-w-lg w-full shadow-xl border border-slate-200 max-h-[90vh] flex flex-col overflow-hidden">
+            <div className="p-5 border-b border-slate-100 flex items-center justify-between shrink-0 bg-slate-50/50">
+              <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
+                <Edit2 className="w-4 h-4 text-emerald-600" />
+                <span>Mitarbeiterprofil bearbeiten: {editingUser.name}</span>
+              </h3>
+              <button
+                type="button"
+                onClick={() => setEditingUser(null)}
+                className="text-slate-400 hover:text-slate-600 text-xs px-2 py-1 rounded-lg hover:bg-slate-100"
+              >
+                ✕
+              </button>
+            </div>
 
-            <form onSubmit={handleSaveEditUser} className="space-y-3 text-xs text-left">
-              <div>
-                <label className="font-semibold text-slate-700 block mb-1">Name *</label>
-                <input
-                  type="text"
-                  required
-                  value={editName}
-                  onChange={e => setEditName(e.target.value)}
-                  className="w-full border border-slate-200 rounded-xl px-3 py-2 text-xs"
-                />
-              </div>
+            <form onSubmit={handleSaveEditUser} className="flex flex-col flex-1 overflow-hidden">
+              <div className="p-5 space-y-4 text-xs text-left overflow-y-auto flex-1">
+                <div>
+                  <label className="font-semibold text-slate-700 block mb-1">Name *</label>
+                  <input
+                    type="text"
+                    required
+                    value={editName}
+                    onChange={e => setEditName(e.target.value)}
+                    className="w-full border border-slate-200 rounded-xl px-3 py-2 text-xs"
+                  />
+                </div>
 
               <div>
                 <label className="font-semibold text-slate-700 block mb-1">E-Mail-Adresse *</label>
@@ -921,7 +1054,7 @@ export const RateHierarchyView: React.FC = () => {
                     className="w-full border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold"
                   >
                     <option value="INTERNAL">🏢 Festangestellt (Intern)</option>
-                    <option value="EXTERNAL">🤝 Freier Mitarbeiter / Extern</option>
+                    <option value="EXTERNAL">🤝 Extern (Partner / Freelancer)</option>
                   </select>
                 </div>
 
@@ -939,15 +1072,180 @@ export const RateHierarchyView: React.FC = () => {
               </div>
 
               {editEmploymentType === 'EXTERNAL' && (
-                <div>
-                  <label className="font-semibold text-slate-700 block mb-1">Subunternehmer- / Firmenname</label>
-                  <input
-                    type="text"
-                    value={editCompanyName}
-                    onChange={e => setEditCompanyName(e.target.value)}
-                    placeholder="z.B. AI Cloud Solutions GmbH"
-                    className="w-full border border-slate-200 rounded-xl px-3 py-2 text-xs"
-                  />
+                <div className="p-3 bg-purple-50/60 border border-purple-200/80 rounded-xl space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-purple-950 text-xs flex items-center gap-1.5">
+                      <Building2 className="w-3.5 h-3.5 text-purple-700" />
+                      Externe Klassifizierung &amp; Partnerzuordnung
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setEditExternalType('PARTNER_EMPLOYEE')}
+                      className={`p-2 rounded-lg border text-left transition-all ${
+                        editExternalType === 'PARTNER_EMPLOYEE'
+                          ? 'border-purple-600 bg-white text-purple-950 ring-1 ring-purple-600 font-bold shadow-2xs'
+                          : 'border-purple-200 bg-purple-100/40 text-purple-800'
+                      }`}
+                    >
+                      <div className="text-xs">🏢 Partner-Mitarbeiter</div>
+                      <div className="text-[10px] text-slate-500 font-normal">Gehört zu Agentur / Partnerfirma</div>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setEditExternalType('FREELANCER')}
+                      className={`p-2 rounded-lg border text-left transition-all ${
+                        editExternalType === 'FREELANCER'
+                          ? 'border-purple-600 bg-white text-purple-950 ring-1 ring-purple-600 font-bold shadow-2xs'
+                          : 'border-purple-200 bg-purple-100/40 text-purple-800'
+                      }`}
+                    >
+                      <div className="text-xs">👤 Freiberufler / Freelancer</div>
+                      <div className="text-[10px] text-slate-500 font-normal">Eigene Anschrift &amp; Rechnungs-Mail</div>
+                    </button>
+                  </div>
+
+                  {editExternalType === 'PARTNER_EMPLOYEE' ? (
+                    <div className="space-y-2 pt-1 border-t border-purple-200/50">
+                      <div>
+                        <label className="font-semibold text-purple-950 block mb-1">Partnerfirma zuweisen *</label>
+                        <select
+                          value={editPartnerId}
+                          onChange={e => {
+                            const pId = e.target.value;
+                            setEditPartnerId(pId);
+                            const p = partners.find(item => item.id === pId);
+                            if (p) {
+                              setEditCompanyName(p.name);
+                            }
+                          }}
+                          className="w-full bg-white border border-purple-200 rounded-xl px-3 py-2 text-xs font-semibold text-purple-900"
+                        >
+                          <option value="">-- Partner auswählen --</option>
+                          {partners.map(p => (
+                            <option key={p.id} value={p.id}>{p.name} {p.status === 'ARCHIVED' ? '(Archiviert)' : ''}</option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="font-semibold text-slate-700 block mb-1">Firmenname / Subunternehmer</label>
+                        <input
+                          type="text"
+                          value={editCompanyName}
+                          onChange={e => setEditCompanyName(e.target.value)}
+                          placeholder="z.B. CloudCraft Consulting GmbH"
+                          className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs"
+                        />
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="space-y-2 pt-1 border-t border-purple-200/50">
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <label className="font-semibold text-slate-700 block mb-1">Ansprechpartner</label>
+                          <input
+                            type="text"
+                            value={editContactPerson}
+                            onChange={e => setEditContactPerson(e.target.value)}
+                            placeholder="Name des Freelancers / Kontakts"
+                            className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs"
+                          />
+                        </div>
+                        <div>
+                          <label className="font-semibold text-slate-700 block mb-1">Rechnungs-E-Mail *</label>
+                          <input
+                            type="email"
+                            value={editBillingEmail}
+                            onChange={e => setEditBillingEmail(e.target.value)}
+                            placeholder="rechnung@freelancer.de"
+                            className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-mono"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <label className="font-semibold text-slate-700 block mb-1">Telefon / Mobil</label>
+                          <input
+                            type="tel"
+                            value={editContactPhone}
+                            onChange={e => setEditContactPhone(e.target.value)}
+                            placeholder="+49 170 1234567"
+                            className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs"
+                          />
+                        </div>
+                        <div>
+                          <label className="font-semibold text-slate-700 block mb-1">Kontakt-E-Mail</label>
+                          <input
+                            type="email"
+                            value={editContactEmail}
+                            onChange={e => setEditContactEmail(e.target.value)}
+                            placeholder="kontakt@freelancer.de"
+                            className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-mono"
+                          />
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="font-semibold text-slate-700 block mb-1">Straße &amp; Hausnummer</label>
+                        <input
+                          type="text"
+                          value={editStreet}
+                          onChange={e => setEditStreet(e.target.value)}
+                          placeholder="Musterstr. 12"
+                          className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs"
+                        />
+                      </div>
+
+                      <div className="grid grid-cols-3 gap-2">
+                        <div>
+                          <label className="font-semibold text-slate-700 block mb-1">PLZ</label>
+                          <input
+                            type="text"
+                            value={editZip}
+                            onChange={e => setEditZip(e.target.value)}
+                            placeholder="10115"
+                            className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs"
+                          />
+                        </div>
+                        <div>
+                          <label className="font-semibold text-slate-700 block mb-1">Ort</label>
+                          <input
+                            type="text"
+                            value={editCity}
+                            onChange={e => setEditCity(e.target.value)}
+                            placeholder="Berlin"
+                            className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs"
+                          />
+                        </div>
+                        <div>
+                          <label className="font-semibold text-slate-700 block mb-1">Land</label>
+                          <input
+                            type="text"
+                            value={editCountry}
+                            onChange={e => setEditCountry(e.target.value)}
+                            placeholder="Deutschland"
+                            className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs"
+                          />
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="font-semibold text-slate-700 block mb-1">Steuernummer / USt-IdNr.</label>
+                        <input
+                          type="text"
+                          value={editTaxId}
+                          onChange={e => setEditTaxId(e.target.value)}
+                          placeholder="DE123456789"
+                          className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-mono"
+                        />
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -1089,26 +1387,27 @@ export const RateHierarchyView: React.FC = () => {
                   />
                 </div>
               </div>
+            </div>
 
-              <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
-                <button
-                  type="button"
-                  onClick={() => setEditingUser(null)}
-                  className="px-3 py-1.5 rounded-lg border border-slate-200 text-xs font-medium text-slate-700 hover:bg-slate-50"
-                >
-                  {t.cancel}
-                </button>
-                <button
-                  type="submit"
-                  className="px-4 py-1.5 rounded-lg bg-slate-900 text-white text-xs font-semibold hover:bg-slate-800"
-                >
-                  Änderungen speichern
-                </button>
-              </div>
-            </form>
-          </div>
+            <div className="p-4 bg-slate-50 border-t border-slate-200/80 flex justify-end gap-2 shrink-0">
+              <button
+                type="button"
+                onClick={() => setEditingUser(null)}
+                className="px-4 py-2 rounded-xl border border-slate-200 text-xs font-medium text-slate-700 hover:bg-slate-100 transition-colors"
+              >
+                {t.cancel}
+              </button>
+              <button
+                type="submit"
+                className="px-5 py-2 rounded-xl bg-slate-900 text-white text-xs font-semibold hover:bg-slate-800 shadow-xs transition-colors"
+              >
+                Änderungen speichern
+              </button>
+            </div>
+          </form>
         </div>
-      )}
+      </div>
+    )}
 
       {/* ========================================================================= */}
       {/* MODAL: DELETE USER CONFIRMATION */}
@@ -1220,15 +1519,28 @@ export const RateHierarchyView: React.FC = () => {
       {/* --- INVITATION MODAL --- */}
       {showInviteModal && (
         <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in">
-          <div className="bg-white rounded-2xl max-w-md w-full p-6 space-y-4 shadow-xl border border-slate-200">
-            <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
-              <Mail className="w-5 h-5 text-emerald-600" />
-              {t.inviteUserModalTitle}
-            </h3>
+          <div className="bg-white rounded-2xl max-w-lg w-full shadow-xl border border-slate-200 max-h-[90vh] flex flex-col overflow-hidden">
+            <div className="p-5 border-b border-slate-100 flex items-center justify-between shrink-0 bg-slate-50/50">
+              <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
+                <Mail className="w-5 h-5 text-emerald-600" />
+                <span>{t.inviteUserModalTitle}</span>
+              </h3>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowInviteModal(false);
+                  setInvitationLinkResult(null);
+                }}
+                className="text-slate-400 hover:text-slate-600 text-xs px-2 py-1 rounded-lg hover:bg-slate-100"
+              >
+                ✕
+              </button>
+            </div>
 
             {!invitationLinkResult ? (
-              <form onSubmit={handleSendInvite} className="space-y-3 text-xs text-left">
-                {/* Intern vs. Extern Selection */}
+              <form onSubmit={handleSendInvite} className="flex flex-col flex-1 overflow-hidden">
+                <div className="p-5 space-y-4 text-xs text-left overflow-y-auto flex-1">
+                  {/* Intern vs. Extern Selection */}
                 <div>
                   <label className="font-semibold text-slate-700 block mb-1">Mitarbeitertyp *</label>
                   <div className="grid grid-cols-2 gap-2">
@@ -1254,22 +1566,187 @@ export const RateHierarchyView: React.FC = () => {
                           : 'border-slate-200 text-slate-600 hover:bg-slate-50'
                       }`}
                     >
-                      <div className="font-bold">🤝 Extern (Freier MA)</div>
+                      <div className="font-bold">🤝 Extern (Partner / Freelancer)</div>
                       <div className="text-[10px] text-slate-500 font-normal mt-0.5">Fixer Mandantenstandort</div>
                     </button>
                   </div>
                 </div>
 
                 {inviteEmploymentType === 'EXTERNAL' && (
-                  <div>
-                    <label className="font-semibold text-slate-700 block mb-1">Subunternehmer- / Firmenname</label>
-                    <input
-                      type="text"
-                      value={inviteCompanyName}
-                      onChange={e => setInviteCompanyName(e.target.value)}
-                      placeholder="z.B. AI Cloud Solutions GmbH"
-                      className="w-full border border-slate-200 rounded-xl px-3 py-2 text-xs"
-                    />
+                  <div className="p-3 bg-purple-50/60 border border-purple-200/80 rounded-xl space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="font-bold text-purple-950 text-xs flex items-center gap-1.5">
+                        <Building2 className="w-3.5 h-3.5 text-purple-700" />
+                        Externe Klassifizierung &amp; Partnerzuordnung
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setInviteExternalType('PARTNER_EMPLOYEE')}
+                        className={`p-2 rounded-lg border text-left transition-all ${
+                          inviteExternalType === 'PARTNER_EMPLOYEE'
+                            ? 'border-purple-600 bg-white text-purple-950 ring-1 ring-purple-600 font-bold shadow-2xs'
+                            : 'border-purple-200 bg-purple-100/40 text-purple-800'
+                        }`}
+                      >
+                        <div className="text-xs">🏢 Partner-Mitarbeiter</div>
+                        <div className="text-[10px] text-slate-500 font-normal">Gehört zu Agentur / Partnerfirma</div>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setInviteExternalType('FREELANCER')}
+                        className={`p-2 rounded-lg border text-left transition-all ${
+                          inviteExternalType === 'FREELANCER'
+                            ? 'border-purple-600 bg-white text-purple-950 ring-1 ring-purple-600 font-bold shadow-2xs'
+                            : 'border-purple-200 bg-purple-100/40 text-purple-800'
+                        }`}
+                      >
+                        <div className="text-xs">👤 Freiberufler / Freelancer</div>
+                        <div className="text-[10px] text-slate-500 font-normal">Eigene Anschrift &amp; Rechnungs-Mail</div>
+                      </button>
+                    </div>
+
+                    {inviteExternalType === 'PARTNER_EMPLOYEE' ? (
+                      <div className="space-y-2 pt-1 border-t border-purple-200/50">
+                        <div>
+                          <label className="font-semibold text-purple-950 block mb-1">Partnerfirma zuweisen *</label>
+                          <select
+                            value={invitePartnerId}
+                            onChange={e => {
+                              const pId = e.target.value;
+                              setInvitePartnerId(pId);
+                              const p = partners.find(item => item.id === pId);
+                              if (p) {
+                                setInviteCompanyName(p.name);
+                              }
+                            }}
+                            className="w-full bg-white border border-purple-200 rounded-xl px-3 py-2 text-xs font-semibold text-purple-900"
+                          >
+                            <option value="">-- Partner auswählen --</option>
+                            {partners.map(p => (
+                              <option key={p.id} value={p.id}>{p.name} {p.status === 'ARCHIVED' ? '(Archiviert)' : ''}</option>
+                            ))}
+                          </select>
+                        </div>
+
+                        <div>
+                          <label className="font-semibold text-slate-700 block mb-1">Firmenname / Subunternehmer</label>
+                          <input
+                            type="text"
+                            value={inviteCompanyName}
+                            onChange={e => setInviteCompanyName(e.target.value)}
+                            placeholder="z.B. CloudCraft Consulting GmbH"
+                            className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs"
+                          />
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="space-y-2 pt-1 border-t border-purple-200/50">
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <label className="font-semibold text-slate-700 block mb-1">Ansprechpartner</label>
+                            <input
+                              type="text"
+                              value={inviteContactPerson}
+                              onChange={e => setInviteContactPerson(e.target.value)}
+                              placeholder="Name des Freelancers"
+                              className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs"
+                            />
+                          </div>
+                          <div>
+                            <label className="font-semibold text-slate-700 block mb-1">Rechnungs-E-Mail *</label>
+                            <input
+                              type="email"
+                              value={inviteBillingEmail}
+                              onChange={e => setInviteBillingEmail(e.target.value)}
+                              placeholder="rechnung@freelancer.de"
+                              className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-mono"
+                            />
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <label className="font-semibold text-slate-700 block mb-1">Telefon / Mobil</label>
+                            <input
+                              type="tel"
+                              value={inviteContactPhone}
+                              onChange={e => setInviteContactPhone(e.target.value)}
+                              placeholder="+49 170 1234567"
+                              className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs"
+                            />
+                          </div>
+                          <div>
+                            <label className="font-semibold text-slate-700 block mb-1">Kontakt-E-Mail</label>
+                            <input
+                              type="email"
+                              value={inviteContactEmail}
+                              onChange={e => setInviteContactEmail(e.target.value)}
+                              placeholder="kontakt@freelancer.de"
+                              className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-mono"
+                            />
+                          </div>
+                        </div>
+
+                        <div>
+                          <label className="font-semibold text-slate-700 block mb-1">Straße &amp; Hausnummer</label>
+                          <input
+                            type="text"
+                            value={inviteStreet}
+                            onChange={e => setInviteStreet(e.target.value)}
+                            placeholder="Musterstr. 12"
+                            className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs"
+                          />
+                        </div>
+
+                        <div className="grid grid-cols-3 gap-2">
+                          <div>
+                            <label className="font-semibold text-slate-700 block mb-1">PLZ</label>
+                            <input
+                              type="text"
+                              value={inviteZip}
+                              onChange={e => setInviteZip(e.target.value)}
+                              placeholder="10115"
+                              className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs"
+                            />
+                          </div>
+                          <div>
+                            <label className="font-semibold text-slate-700 block mb-1">Ort</label>
+                            <input
+                              type="text"
+                              value={inviteCity}
+                              onChange={e => setInviteCity(e.target.value)}
+                              placeholder="Berlin"
+                              className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs"
+                            />
+                          </div>
+                          <div>
+                            <label className="font-semibold text-slate-700 block mb-1">Land</label>
+                            <input
+                              type="text"
+                              value={inviteCountry}
+                              onChange={e => setInviteCountry(e.target.value)}
+                              placeholder="Deutschland"
+                              className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs"
+                            />
+                          </div>
+                        </div>
+
+                        <div>
+                          <label className="font-semibold text-slate-700 block mb-1">Steuernummer / USt-IdNr.</label>
+                          <input
+                            type="text"
+                            value={inviteTaxId}
+                            onChange={e => setInviteTaxId(e.target.value)}
+                            placeholder="DE123456789"
+                            className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-mono"
+                          />
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
 
@@ -1397,58 +1874,60 @@ export const RateHierarchyView: React.FC = () => {
                     />
                   </div>
                 </div>
+              </div>
 
-                <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
+              <div className="p-4 bg-slate-50 border-t border-slate-200/80 flex justify-end gap-2 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setShowInviteModal(false)}
+                  className="px-4 py-2 rounded-xl border border-slate-200 text-xs font-medium text-slate-700 hover:bg-slate-100 transition-colors"
+                >
+                  {t.cancel}
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 rounded-xl bg-slate-900 text-white text-xs font-semibold hover:bg-slate-800 shadow-xs transition-colors"
+                >
+                  Einladung generieren
+                </button>
+              </div>
+            </form>
+          ) : (
+            <div className="p-5 space-y-4 text-xs text-left overflow-y-auto">
+              <div className="p-3 bg-emerald-50 text-emerald-800 rounded-xl border border-emerald-200 flex items-center gap-2">
+                <CheckCircle className="w-5 h-5 text-emerald-600 shrink-0" />
+                <span>Einladungslink für <strong>{inviteEmail}</strong> wurde erfolgreich erzeugt!</span>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[11px] text-slate-500 font-medium">Magischer Registrierungslink (Gültig 7 Tage):</label>
+                <div className="flex items-center gap-1.5 p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-mono text-[11px] text-slate-700">
+                  <span className="truncate flex-1">{invitationLinkResult}</span>
                   <button
                     type="button"
-                    onClick={() => setShowInviteModal(false)}
-                    className="px-3 py-1.5 rounded-lg border border-slate-200 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                    onClick={() => copyToClipboard(invitationLinkResult)}
+                    className="p-1.5 hover:bg-slate-200 rounded-lg text-slate-600 shrink-0 transition-colors"
+                    title="In die Zwischenablage kopieren"
                   >
-                    {t.cancel}
-                  </button>
-                  <button
-                    type="submit"
-                    className="px-4 py-1.5 rounded-lg bg-slate-900 text-white text-xs font-semibold hover:bg-slate-800"
-                  >
-                    Einladung generieren
-                  </button>
-                </div>
-              </form>
-            ) : (
-              <div className="space-y-3 text-xs text-left">
-                <div className="p-3 bg-emerald-50 text-emerald-800 rounded-xl border border-emerald-200 flex items-center gap-2">
-                  <CheckCircle className="w-5 h-5 text-emerald-600 shrink-0" />
-                  <span>Einladungslink für <strong>{inviteEmail}</strong> wurde erfolgreich erzeugt!</span>
-                </div>
-
-                <div className="space-y-1">
-                  <label className="text-[11px] text-slate-500 font-medium">Magischer Registrierungslink (Gültig 7 Tage):</label>
-                  <div className="flex items-center gap-1.5 p-2 bg-slate-50 border border-slate-200 rounded-xl font-mono text-[11px] text-slate-700">
-                    <span className="truncate flex-1">{invitationLinkResult}</span>
-                    <button
-                      type="button"
-                      onClick={() => copyToClipboard(invitationLinkResult)}
-                      className="p-1 hover:bg-slate-200 rounded text-slate-600 shrink-0"
-                    >
-                      {copied ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
-                    </button>
-                  </div>
-                </div>
-
-                <div className="flex justify-end pt-2 border-t border-slate-100">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setShowInviteModal(false);
-                      setInvitationLinkResult(null);
-                    }}
-                    className="px-4 py-1.5 rounded-lg bg-slate-900 text-white text-xs font-semibold hover:bg-slate-800"
-                  >
-                    Fertig
+                    {copied ? <Check className="w-4 h-4 text-emerald-600" /> : <Copy className="w-4 h-4" />}
                   </button>
                 </div>
               </div>
-            )}
+
+              <div className="flex justify-end pt-3 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowInviteModal(false);
+                    setInvitationLinkResult(null);
+                  }}
+                  className="px-5 py-2 rounded-xl bg-slate-900 text-white text-xs font-semibold hover:bg-slate-800 transition-colors"
+                >
+                  Fertig
+                </button>
+              </div>
+            </div>
+          )}
           </div>
         </div>
       )}

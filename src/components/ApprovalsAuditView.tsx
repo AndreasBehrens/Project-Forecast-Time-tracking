@@ -114,7 +114,7 @@ export const ApprovalsAuditView: React.FC = () => {
                 onChange={e => setFilterProjectId(e.target.value)}
                 className="bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 font-medium text-slate-800"
               >
-                <option value="all">Alle {isPM && !isAdmin ? 'meine Projekte' : 'Projekte'} ({availableProjects.length})</option>
+                <option value="all">{isPM && !isAdmin ? t.allMyProjects : t.allProjects} ({availableProjects.length})</option>
                 {availableProjects.map(p => (
                   <option key={p.id} value={p.id}>{p.name}</option>
                 ))}
@@ -127,8 +127,8 @@ export const ApprovalsAuditView: React.FC = () => {
                 onChange={e => setFilterStatus(e.target.value)}
                 className="bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 font-medium text-slate-800"
               >
-                <option value="all">Alle Status</option>
-                <option value="SUBMITTED">{t.statusSubmitted} (Ausstehend)</option>
+                <option value="all">{t.allStatuses}</option>
+                <option value="SUBMITTED">{t.statusSubmitted}</option>
                 <option value="DRAFT">{t.statusDraft}</option>
                 <option value="APPROVED">{t.statusApproved}</option>
                 <option value="REJECTED">{t.statusRejected}</option>
@@ -142,7 +142,7 @@ export const ApprovalsAuditView: React.FC = () => {
                 className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition-colors"
               >
                 <Check className="w-3.5 h-3.5" />
-                Alle {filteredEntries.length} Einträge freigeben
+                {t.approveAllEntries.replace('{count}', String(filteredEntries.length))}
               </button>
             )}
           </div>
@@ -155,7 +155,7 @@ export const ApprovalsAuditView: React.FC = () => {
           {filteredEntries.length === 0 ? (
             <div className="p-12 text-center text-slate-400">
               <CheckCircle2 className="w-10 h-10 mx-auto mb-2 text-emerald-500 stroke-1" />
-              <p className="text-sm font-medium">Keine ausstehenden Freigaben in dieser Ansicht.</p>
+              <p className="text-sm font-medium">{t.noPendingApprovalsInView}</p>
             </div>
           ) : (
             <div className="divide-y divide-slate-100">
@@ -236,10 +236,10 @@ export const ApprovalsAuditView: React.FC = () => {
         <div className="bg-white rounded-2xl border border-slate-200/90 shadow-xs overflow-hidden">
           <div className="p-4 bg-slate-50/70 border-b border-slate-200 text-xs text-slate-600 flex items-center justify-between">
             <div className="font-semibold text-slate-800">
-              Audit-Protokollierte Änderungen ({auditLogs.length} Ereignisse)
+              {t.auditLoggedChanges} ({auditLogs.length} {t.events})
             </div>
             <div className="text-[11px] text-slate-500">
-              Aufbewahrungszeitraum: 10 Jahre (EU-DSGVO konform)
+              {t.retentionPeriodNotice}
             </div>
           </div>
 
@@ -248,10 +248,10 @@ export const ApprovalsAuditView: React.FC = () => {
               <thead className="bg-slate-50 text-slate-500 border-b border-slate-200 font-semibold">
                 <tr>
                   <th className="px-4 py-3">{t.timestamp}</th>
-                  <th className="px-4 py-3">Objekt</th>
-                  <th className="px-4 py-3">Aktion</th>
+                  <th className="px-4 py-3">{t.objectEntity}</th>
+                  <th className="px-4 py-3">{t.action}</th>
                   <th className="px-4 py-3">{t.changedBy}</th>
-                  <th className="px-4 py-3">Änderungsdetails (Vorher &rarr; Nachher)</th>
+                  <th className="px-4 py-3">{t.changeDetails}</th>
                   <th className="px-4 py-3">{t.correctionReason}</th>
                 </tr>
               </thead>

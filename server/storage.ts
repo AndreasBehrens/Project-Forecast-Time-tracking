@@ -1,3 +1,5 @@
+import fs from 'fs';
+import path from 'path';
 import {
   Organization,
   User,
@@ -5,7 +7,9 @@ import {
   UserOrganizationMembership,
   EmployeeJobRole,
   Client,
+  Partner,
   Project,
+  ProjectType,
   Task,
   TimeEntry,
   WorkingTimeEntry,
@@ -14,7 +18,14 @@ import {
   ApiKey,
   ClockifyImportReport,
   ForecastComparisonItem,
-  ProjectForecastSummary
+  ProjectForecastSummary,
+  ForecastAuditHistoryItem,
+  EmployeeCapacitySummaryItem,
+  MilestoneProgressSummary,
+  BillableSummaryReport,
+  BillableSummaryTotals,
+  BillableProjectSummary,
+  BillableUserSummary
 } from '../src/types.js';
 import { getGermanHolidays, getWorkingDaysInRange, GERMAN_STATES, HolidayInfo } from './holidays.js';
 
@@ -24,6 +35,7 @@ export class StorageService {
   private users: User[] = [];
   private jobRoles: EmployeeJobRole[] = [];
   private clients: Client[] = [];
+  private partners: Partner[] = [];
   private projects: Project[] = [];
   private tasks: Task[] = [];
   private timeEntries: TimeEntry[] = [];
@@ -32,11 +44,12 @@ export class StorageService {
   private forecasts: ForecastEntry[] = [];
   private apiKeys: ApiKey[] = [];
   private thresholdPercent: number = 20;
+  private storageFilePath: string = path.join(process.cwd(), 'data', 'app_storage.json');
 
   constructor() {
     this.organizations = [
       {
-        id: 'org-insight-arcs-01',
+        id: 'org-insight-arcs-prod',
         name: 'Insight Arcs GmbH (Hauptmandant)',
         code: 'IA-BERLIN',
         defaultHourlyBillingRate: 130,
@@ -45,6 +58,19 @@ export class StorageService {
         stateLocation: 'DE-BE', // Berlin (Hauptsitz)
         locationCity: 'Berlin',
         allowMobileWorkplaces: true, // Mobile Arbeitsplätze für feste Mitarbeiter aktiv
+        logoColor: 'emerald',
+        createdAt: '2025-01-01T08:00:00.000Z'
+      },
+      {
+        id: 'org-insight-arcs-01',
+        name: 'Insight Arcs (Testmandant)',
+        code: 'IA-TEST',
+        defaultHourlyBillingRate: 130,
+        defaultHourlyCostRate: 65,
+        defaultCurrency: 'EUR',
+        stateLocation: 'DE-BE', // Berlin (Sandbox)
+        locationCity: 'Berlin',
+        allowMobileWorkplaces: true,
         logoColor: 'emerald',
         createdAt: '2025-01-01T08:00:00.000Z'
       },
@@ -76,7 +102,318 @@ export class StorageService {
       }
     ];
 
+    this.activeOrgId = 'org-insight-arcs-prod';
     this.seedInitialData();
+    const loaded = this.loadFromFile();
+    if (!loaded) {
+      this.saveToFile();
+    }
+  }
+
+  public saveToFile(): void {
+    try {
+      const dir = path.join(process.cwd(), 'data');
+      if (!fs.existsSync(dir)) {
+        fs.mkdirSync(dir, { recursive: true });
+      }
+      const state = {
+        organizations: this.organizations,
+        activeOrgId: this.activeOrgId,
+        users: this.users,
+        jobRoles: this.jobRoles,
+        clients: this.clients,
+        partners: this.partners,
+        projects: this.projects,
+        tasks: this.tasks,
+        timeEntries: this.timeEntries,
+        workingTimeEntries: this.workingTimeEntries,
+        auditLogs: this.auditLogs,
+        forecasts: this.forecasts,
+        apiKeys: this.apiKeys,
+        thresholdPercent: this.thresholdPercent,
+        savedAt: new Date().toISOString()
+      };
+      fs.writeFileSync(this.storageFilePath, JSON.stringify(state, null, 2), 'utf-8');
+    } catch (err) {
+      console.error('Failed to save persistent storage to disk:', err);
+    }
+  }
+
+  public loadFromFile(): boolean {
+    try {
+      if (fs.existsSync(this.storageFilePath)) {
+        const raw = fs.readFileSync(this.storageFilePath, 'utf-8');
+        const data = JSON.parse(raw);
+        if (data && Array.isArray(data.organizations) && data.organizations.length > 0) {
+          this.organizations = data.organizations;
+          if (data.activeOrgId) this.activeOrgId = data.activeOrgId;
+          if (Array.isArray(data.users)) this.users = data.users;
+          if (Array.isArray(data.jobRoles)) this.jobRoles = data.jobRoles;
+          if (Array.isArray(data.clients)) this.clients = data.clients;
+          if (Array.isArray(data.partners)) this.partners = data.partners;
+          if (Array.isArray(data.projects)) this.projects = data.projects;
+          if (Array.isArray(data.tasks)) this.tasks = data.tasks;
+          if (Array.isArray(data.timeEntries)) this.timeEntries = data.timeEntries;
+          if (Array.isArray(data.workingTimeEntries)) this.workingTimeEntries = data.workingTimeEntries;
+          if (Array.isArray(data.auditLogs)) this.auditLogs = data.auditLogs;
+          if (Array.isArray(data.forecasts)) this.forecasts = data.forecasts;
+          if (Array.isArray(data.apiKeys)) this.apiKeys = data.apiKeys;
+          if (typeof data.thresholdPercent === 'number') this.thresholdPercent = data.thresholdPercent;
+
+          // --- OPTION A AUTOMIGRATION ---
+          // 1. Rename org-insight-arcs-01 to Testmandant
+          const testOrg = this.organizations.find(o => o.id === 'org-insight-arcs-01');
+          if (testOrg) {
+            testOrg.name = 'Insight Arcs (Testmandant)';
+            testOrg.code = 'IA-TEST';
+          }
+
+          // 2. Ensure new clean production tenant exists
+          let prodOrg = this.organizations.find(o => o.id === 'org-insight-arcs-prod');
+          if (!prodOrg) {
+            prodOrg = {
+              id: 'org-insight-arcs-prod',
+              name: 'Insight Arcs GmbH (Hauptmandant)',
+              code: 'IA-BERLIN',
+              defaultHourlyBillingRate: 130,
+              defaultHourlyCostRate: 65,
+              defaultCurrency: 'EUR',
+              stateLocation: 'DE-BE',
+              locationCity: 'Berlin',
+              allowMobileWorkplaces: true,
+              logoColor: 'emerald',
+              createdAt: '2025-01-01T08:00:00.000Z'
+            };
+            this.organizations.unshift(prodOrg);
+          }
+
+          // 3. Ensure standard job roles exist for org-insight-arcs-prod
+          const prodRoles = [
+            { id: 'role-prod-jr', orgId: 'org-insight-arcs-prod', name: 'Junior Consultant / Developer', standardBillingRate: 95, standardCostRate: 45, status: 'ACTIVE' as const },
+            { id: 'role-prod-mid', orgId: 'org-insight-arcs-prod', name: 'Consultant / Engineer', standardBillingRate: 130, standardCostRate: 65, status: 'ACTIVE' as const },
+            { id: 'role-prod-sr', orgId: 'org-insight-arcs-prod', name: 'Senior Consultant / Specialist', standardBillingRate: 165, standardCostRate: 85, status: 'ACTIVE' as const },
+            { id: 'role-prod-lead', orgId: 'org-insight-arcs-prod', name: 'Lead Architect / Principal', standardBillingRate: 200, standardCostRate: 105, status: 'ACTIVE' as const }
+          ];
+          prodRoles.forEach(pr => {
+            if (!this.jobRoles.some(r => r.id === pr.id || (r.orgId === 'org-insight-arcs-prod' && r.name === pr.name))) {
+              this.jobRoles.push(pr);
+            }
+          });
+
+          // 4. Ensure u-1 is the sole primary Superadmin user in org-insight-arcs-prod
+          // and all other demo employees belong to org-insight-arcs-01 (Testmandant)
+          this.users.forEach(u => {
+            if (u.id === 'u-1') {
+              u.orgId = 'org-insight-arcs-prod';
+              u.jobRoleId = 'role-prod-lead';
+              if (!u.memberships) u.memberships = [];
+              const hasProd = u.memberships.find(m => m.orgId === 'org-insight-arcs-prod');
+              if (hasProd) {
+                hasProd.isDefault = true;
+                hasProd.role = 'SUPERADMIN';
+                hasProd.jobRoleId = 'role-prod-lead';
+              } else {
+                u.memberships.unshift({
+                  orgId: 'org-insight-arcs-prod',
+                  orgName: 'Insight Arcs GmbH (Hauptmandant)',
+                  role: 'SUPERADMIN',
+                  employmentType: 'INTERNAL',
+                  jobRoleId: 'role-prod-lead',
+                  individualBillingRate: 220,
+                  individualCostRate: 110,
+                  isDefault: true
+                });
+              }
+              const hasTest = u.memberships.find(m => m.orgId === 'org-insight-arcs-01');
+              if (hasTest) {
+                hasTest.orgName = 'Insight Arcs (Testmandant)';
+                hasTest.isDefault = false;
+                hasTest.role = 'SUPERADMIN';
+              } else {
+                u.memberships.push({
+                  orgId: 'org-insight-arcs-01',
+                  orgName: 'Insight Arcs (Testmandant)',
+                  role: 'SUPERADMIN',
+                  employmentType: 'INTERNAL',
+                  jobRoleId: 'role-lead',
+                  individualBillingRate: 220,
+                  individualCostRate: 110,
+                  isDefault: false
+                });
+              }
+            } else if (u.id.startsWith('u-') && parseInt(u.id.replace('u-', ''), 10) >= 2 && parseInt(u.id.replace('u-', ''), 10) <= 25) {
+              // Move seeded demo team members strictly to Testmandant
+              u.orgId = 'org-insight-arcs-01';
+              if (u.jobRoleId && u.jobRoleId.startsWith('role-prod-')) {
+                u.jobRoleId = u.jobRoleId.replace('role-prod-', 'role-');
+              }
+              if (u.memberships) {
+                // Remove org-insight-arcs-prod from demo users
+                u.memberships = u.memberships.filter(m => m.orgId !== 'org-insight-arcs-prod');
+                const testMem = u.memberships.find(m => m.orgId === 'org-insight-arcs-01');
+                if (testMem) {
+                  testMem.isDefault = true;
+                  testMem.orgName = 'Insight Arcs (Testmandant)';
+                } else {
+                  u.memberships.unshift({
+                    orgId: 'org-insight-arcs-01',
+                    orgName: 'Insight Arcs (Testmandant)',
+                    role: u.role,
+                    employmentType: u.employmentType || 'INTERNAL',
+                    jobRoleId: u.jobRoleId,
+                    individualBillingRate: u.individualBillingRate,
+                    individualCostRate: u.individualCostRate,
+                    isDefault: true
+                  });
+                }
+              }
+            }
+          });
+
+          // 5. Move seeded demo clients (c-1..c-5) and partners to Testmandant
+          this.clients.forEach(c => {
+            if (['c-1', 'c-2', 'c-3', 'c-4', 'c-5'].includes(c.id)) {
+              c.orgId = 'org-insight-arcs-01';
+            }
+          });
+          this.partners.forEach(p => {
+            if (['partner-1', 'partner-2', 'partner-3'].includes(p.id)) {
+              p.orgId = 'org-insight-arcs-01';
+            }
+          });
+
+          // 6. Move seeded demo projects (p-1..p-5) and timeEntries to Testmandant
+          this.projects.forEach(p => {
+            if (['p-1', 'p-2', 'p-3', 'p-4', 'p-5'].includes(p.id)) {
+              p.orgId = 'org-insight-arcs-01';
+            }
+          });
+          this.timeEntries.forEach(te => {
+            if (['te-101', 'te-102', 'te-103', 'te-104', 'te-105'].includes(te.id)) {
+              te.orgId = 'org-insight-arcs-01';
+            }
+          });
+          this.forecasts.forEach(fc => {
+            if (fc.id.startsWith('fc-')) {
+              fc.orgId = 'org-insight-arcs-01';
+            }
+          });
+
+          // 7. Default active org to org-insight-arcs-prod (Hauptmandant)
+          if (!this.activeOrgId) {
+            this.activeOrgId = 'org-insight-arcs-prod';
+          }
+
+          this.saveToFile();
+          return true;
+        }
+      }
+    } catch (err) {
+      console.error('Failed to load persistent storage from disk:', err);
+    }
+    return false;
+  }
+
+  public exportDatabase() {
+    return {
+      organizations: this.organizations,
+      activeOrgId: this.activeOrgId,
+      users: this.users,
+      jobRoles: this.jobRoles,
+      clients: this.clients,
+      partners: this.partners,
+      projects: this.projects,
+      tasks: this.tasks,
+      timeEntries: this.timeEntries,
+      workingTimeEntries: this.workingTimeEntries,
+      auditLogs: this.auditLogs,
+      forecasts: this.forecasts,
+      apiKeys: this.apiKeys,
+      thresholdPercent: this.thresholdPercent,
+      exportedAt: new Date().toISOString()
+    };
+  }
+
+  public importDatabase(data: any): boolean {
+    if (data && Array.isArray(data.organizations) && data.organizations.length > 0) {
+      this.organizations = data.organizations;
+      if (data.activeOrgId) this.activeOrgId = data.activeOrgId;
+      if (Array.isArray(data.users)) this.users = data.users;
+      if (Array.isArray(data.jobRoles)) this.jobRoles = data.jobRoles;
+      if (Array.isArray(data.clients)) this.clients = data.clients;
+      if (Array.isArray(data.partners)) this.partners = data.partners;
+      if (Array.isArray(data.projects)) this.projects = data.projects;
+      if (Array.isArray(data.tasks)) this.tasks = data.tasks;
+      if (Array.isArray(data.timeEntries)) this.timeEntries = data.timeEntries;
+      if (Array.isArray(data.workingTimeEntries)) this.workingTimeEntries = data.workingTimeEntries;
+      if (Array.isArray(data.auditLogs)) this.auditLogs = data.auditLogs;
+      if (Array.isArray(data.forecasts)) this.forecasts = data.forecasts;
+      if (Array.isArray(data.apiKeys)) this.apiKeys = data.apiKeys;
+      if (typeof data.thresholdPercent === 'number') this.thresholdPercent = data.thresholdPercent;
+      this.saveToFile();
+      return true;
+    }
+    return false;
+  }
+
+  public resetToInitialData(): void {
+    this.organizations = [
+      {
+        id: 'org-insight-arcs-prod',
+        name: 'Insight Arcs GmbH (Hauptmandant)',
+        code: 'IA-BERLIN',
+        defaultHourlyBillingRate: 130,
+        defaultHourlyCostRate: 65,
+        defaultCurrency: 'EUR',
+        stateLocation: 'DE-BE',
+        locationCity: 'Berlin',
+        allowMobileWorkplaces: true,
+        logoColor: 'emerald',
+        createdAt: '2025-01-01T08:00:00.000Z'
+      },
+      {
+        id: 'org-insight-arcs-01',
+        name: 'Insight Arcs (Testmandant)',
+        code: 'IA-TEST',
+        defaultHourlyBillingRate: 130,
+        defaultHourlyCostRate: 65,
+        defaultCurrency: 'EUR',
+        stateLocation: 'DE-BE',
+        locationCity: 'Berlin',
+        allowMobileWorkplaces: true,
+        logoColor: 'emerald',
+        createdAt: '2025-01-01T08:00:00.000Z'
+      },
+      {
+        id: 'org-novatech-solutions-02',
+        name: 'NovaTech Solutions GmbH',
+        code: 'NOV-MUC',
+        defaultHourlyBillingRate: 150,
+        defaultHourlyCostRate: 75,
+        defaultCurrency: 'EUR',
+        stateLocation: 'DE-BY',
+        locationCity: 'München',
+        allowMobileWorkplaces: false,
+        logoColor: 'blue',
+        createdAt: '2025-02-01T08:00:00.000Z'
+      },
+      {
+        id: 'org-helios-consulting-03',
+        name: 'Helios Digital Advisory AG',
+        code: 'HEL-HAM',
+        defaultHourlyBillingRate: 180,
+        defaultHourlyCostRate: 90,
+        defaultCurrency: 'EUR',
+        stateLocation: 'DE-HH',
+        locationCity: 'Hamburg',
+        allowMobileWorkplaces: true,
+        logoColor: 'amber',
+        createdAt: '2025-03-01T08:00:00.000Z'
+      }
+    ];
+    this.activeOrgId = 'org-insight-arcs-prod';
+    this.seedInitialData();
+    this.saveToFile();
   }
 
   private get organization(): Organization {
@@ -84,16 +421,25 @@ export class StorageService {
   }
 
   private seedInitialData() {
-    const org1 = this.organizations[0].id;
-    const org2 = this.organizations[1].id;
-    const org3 = this.organizations[2].id;
+    const orgProd = 'org-insight-arcs-prod';
+    const orgTest = 'org-insight-arcs-01';
+    const org1 = orgTest; // Kunden, Projekte und Daten gehören zum Testmandanten
+    const org2 = 'org-novatech-solutions-02';
+    const org3 = 'org-helios-consulting-03';
 
-    // 1. Fachliche Mitarbeiterrollen für Org 1
+    // 1. Fachliche Mitarbeiterrollen
     this.jobRoles = [
-      { id: 'role-jr', orgId: org1, name: 'Junior Consultant / Developer', standardBillingRate: 95, standardCostRate: 45, status: 'ACTIVE' },
-      { id: 'role-mid', orgId: org1, name: 'Consultant / Engineer', standardBillingRate: 130, standardCostRate: 65, status: 'ACTIVE' },
-      { id: 'role-sr', orgId: org1, name: 'Senior Consultant / Specialist', standardBillingRate: 165, standardCostRate: 85, status: 'ACTIVE' },
-      { id: 'role-lead', orgId: org1, name: 'Lead Architect / Principal', standardBillingRate: 200, standardCostRate: 105, status: 'ACTIVE' },
+      // Prod Roles (Hauptmandant)
+      { id: 'role-prod-jr', orgId: orgProd, name: 'Junior Consultant / Developer', standardBillingRate: 95, standardCostRate: 45, status: 'ACTIVE' },
+      { id: 'role-prod-mid', orgId: orgProd, name: 'Consultant / Engineer', standardBillingRate: 130, standardCostRate: 65, status: 'ACTIVE' },
+      { id: 'role-prod-sr', orgId: orgProd, name: 'Senior Consultant / Specialist', standardBillingRate: 165, standardCostRate: 85, status: 'ACTIVE' },
+      { id: 'role-prod-lead', orgId: orgProd, name: 'Lead Architect / Principal', standardBillingRate: 200, standardCostRate: 105, status: 'ACTIVE' },
+
+      // Test Org Roles (Testmandant)
+      { id: 'role-jr', orgId: orgTest, name: 'Junior Consultant / Developer', standardBillingRate: 95, standardCostRate: 45, status: 'ACTIVE' },
+      { id: 'role-mid', orgId: orgTest, name: 'Consultant / Engineer', standardBillingRate: 130, standardCostRate: 65, status: 'ACTIVE' },
+      { id: 'role-sr', orgId: orgTest, name: 'Senior Consultant / Specialist', standardBillingRate: 165, standardCostRate: 85, status: 'ACTIVE' },
+      { id: 'role-lead', orgId: orgTest, name: 'Lead Architect / Principal', standardBillingRate: 200, standardCostRate: 105, status: 'ACTIVE' },
       
       // Org 2 Job Roles
       { id: 'role-nova-dev', orgId: org2, name: 'Senior Cloud Engineer', standardBillingRate: 155, standardCostRate: 75, status: 'ACTIVE' },
@@ -115,50 +461,172 @@ export class StorageService {
       { id: 'u-8', name: 'Elena Meyer', email: 'elena.meyer@insightarcs.de', role: 'EMPLOYEE', jobRoleId: 'role-mid', targetH: 40, empType: 'INTERNAL' },
       { id: 'u-9', name: 'Jan Richter', email: 'jan.richter@insightarcs.de', role: 'EMPLOYEE', jobRoleId: 'role-mid', targetH: 40, empType: 'INTERNAL' },
       { id: 'u-10', name: 'Sarah Koch', email: 'sarah.koch@insightarcs.de', role: 'EMPLOYEE', jobRoleId: 'role-mid', targetH: 40, empType: 'INTERNAL' },
-      { id: 'u-11', name: 'Felix Bauer', email: 'felix.bauer@freelance-tech.de', role: 'EMPLOYEE', jobRoleId: 'role-sr', targetH: 40, empType: 'EXTERNAL', company: 'Bauer Cloud Consulting' },
+      { 
+        id: 'u-11', 
+        name: 'Felix Bauer', 
+        email: 'felix.bauer@freelance-tech.de', 
+        role: 'EMPLOYEE', 
+        jobRoleId: 'role-sr', 
+        targetH: 40, 
+        empType: 'EXTERNAL', 
+        externalType: 'FREELANCER',
+        company: 'Bauer Cloud Consulting',
+        contactPerson: 'Felix Bauer',
+        contactPhone: '+49 171 1234567',
+        contactEmail: 'felix.bauer@freelance-tech.de',
+        billingEmail: 'rechnung@bauer-cloud.de',
+        street: 'Kastanienallee 14',
+        zip: '10435',
+        city: 'Berlin',
+        country: 'Deutschland',
+        taxId: 'DE345678901'
+      },
       { id: 'u-12', name: 'Miriam Wolf', email: 'miriam.wolf@insightarcs.de', role: 'EMPLOYEE', jobRoleId: 'role-mid', targetH: 30, empType: 'INTERNAL' },
       { id: 'u-13', name: 'Patrick Schwarz', email: 'patrick.schwarz@insightarcs.de', role: 'EMPLOYEE', jobRoleId: 'role-jr', targetH: 40, empType: 'INTERNAL' },
       { id: 'u-14', name: 'Hanna Zimmermann', email: 'hanna.zimmermann@insightarcs.de', role: 'EMPLOYEE', jobRoleId: 'role-jr', targetH: 40, empType: 'INTERNAL' },
-      { id: 'u-15', name: 'Christian Braun', email: 'c.braun@braun-security.com', role: 'EMPLOYEE', jobRoleId: 'role-sr', targetH: 40, empType: 'EXTERNAL', company: 'Braun IT-Security Services' },
+      { 
+        id: 'u-15', 
+        name: 'Christian Braun', 
+        email: 'c.braun@braun-security.com', 
+        role: 'EMPLOYEE', 
+        jobRoleId: 'role-sr', 
+        targetH: 40, 
+        empType: 'EXTERNAL', 
+        externalType: 'PARTNER_EMPLOYEE',
+        partnerId: 'partner-2',
+        partnerName: 'Braun IT-Security Partners GbR',
+        company: 'Braun IT-Security Partners GbR',
+        contactPerson: 'Christian Braun',
+        contactPhone: '+49 89 77889900',
+        contactEmail: 'c.braun@braun-security.com',
+        billingEmail: 'invoicing@braun-security.com',
+        street: 'Maximilianstraße 45',
+        zip: '80539',
+        city: 'München',
+        country: 'Deutschland',
+        taxId: 'DE312456789'
+      },
       { id: 'u-16', name: 'Lisa Krüger', email: 'lisa.krueger@insightarcs.de', role: 'EMPLOYEE', jobRoleId: 'role-mid', targetH: 40, empType: 'INTERNAL' },
-      { id: 'u-17', name: 'David Schmitt', email: 'd.schmitt@devcontractors.eu', role: 'EMPLOYEE', jobRoleId: 'role-mid', targetH: 40, empType: 'EXTERNAL', company: 'DevContractors EU' },
+      { 
+        id: 'u-17', 
+        name: 'David Schmitt', 
+        email: 'd.schmitt@devcontractors.eu', 
+        role: 'EMPLOYEE', 
+        jobRoleId: 'role-mid', 
+        targetH: 40, 
+        empType: 'EXTERNAL', 
+        externalType: 'PARTNER_EMPLOYEE',
+        partnerId: 'partner-1',
+        partnerName: 'DevContractors EU GmbH',
+        company: 'DevContractors EU GmbH',
+        contactPerson: 'David Schmitt',
+        contactPhone: '+49 30 55443322',
+        contactEmail: 'd.schmitt@devcontractors.eu',
+        billingEmail: 'rechnung@devcontractors.eu',
+        street: 'Friedrichstraße 120',
+        zip: '10117',
+        city: 'Berlin',
+        country: 'Deutschland',
+        taxId: 'DE289348123'
+      },
       { id: 'u-18', name: 'Anja Frank', email: 'anja.frank@insightarcs.de', role: 'EMPLOYEE', jobRoleId: 'role-mid', targetH: 20, empType: 'INTERNAL' },
       { id: 'u-19', name: 'Stefan Lange', email: 'stefan.lange@insightarcs.de', role: 'EMPLOYEE', jobRoleId: 'role-mid', targetH: 40, empType: 'INTERNAL' },
-      { id: 'u-20', name: 'Vanessa Hartmann', email: 'v.hartmann@external-expert.de', role: 'EMPLOYEE', jobRoleId: 'role-jr', targetH: 40, empType: 'EXTERNAL', company: 'Hartmann Consulting & Support' },
-      { id: 'u-21', name: 'Michael Keller', email: 'm.keller@keller-pm-services.de', role: 'PROJECT_MANAGER', jobRoleId: 'role-sr', targetH: 40, empType: 'EXTERNAL', company: 'Keller Agile PM Services GmbH' },
+      { 
+        id: 'u-20', 
+        name: 'Vanessa Hartmann', 
+        email: 'v.hartmann@external-expert.de', 
+        role: 'EMPLOYEE', 
+        jobRoleId: 'role-jr', 
+        targetH: 40, 
+        empType: 'EXTERNAL', 
+        externalType: 'FREELANCER',
+        company: 'Hartmann Consulting & Support',
+        contactPerson: 'Vanessa Hartmann',
+        contactPhone: '+49 172 9876543',
+        contactEmail: 'v.hartmann@external-expert.de',
+        billingEmail: 'buchhaltung@hartmann-consulting.de',
+        street: 'Sonnenallee 88',
+        zip: '12045',
+        city: 'Berlin',
+        country: 'Deutschland',
+        taxId: 'DE398712345'
+      },
+      { 
+        id: 'u-21', 
+        name: 'Michael Keller', 
+        email: 'm.keller@keller-pm-services.de', 
+        role: 'PROJECT_MANAGER', 
+        jobRoleId: 'role-sr', 
+        targetH: 40, 
+        empType: 'EXTERNAL', 
+        externalType: 'PARTNER_EMPLOYEE',
+        partnerId: 'partner-3',
+        partnerName: 'Keller PM Advisory Services',
+        company: 'Keller PM Advisory Services',
+        contactPerson: 'Michael Keller',
+        contactPhone: '+49 40 33221100',
+        contactEmail: 'm.keller@keller-pm-services.de',
+        billingEmail: 'accounting@keller-pm-services.de',
+        street: 'Neuer Wall 18',
+        zip: '20354',
+        city: 'Hamburg',
+        country: 'Deutschland',
+        taxId: 'DE298765432'
+      },
     ];
 
     this.users = team.map((t, idx) => {
-      // Dr. Andreas Behrens, Laura Klein, Markus Weber, Tobias Fischer sind mehreren Mandanten zugeordnet
-      let memberships: UserOrganizationMembership[] = [
-        { orgId: org1, orgName: 'Insight Arcs GmbH (Hauptmandant)', role: t.role as any, employmentType: (t as any).empType || 'INTERNAL', jobRoleId: t.jobRoleId, individualBillingRate: (t as any).indBilling, individualCostRate: (t as any).indCost, isDefault: true }
-      ];
+      const isSuperAdmin = t.id === 'u-1';
+      const userOrgId = isSuperAdmin ? orgProd : orgTest;
+      const userJobRoleId = isSuperAdmin ? 'role-prod-lead' : (t.jobRoleId || 'role-mid');
 
-      if (t.id === 'u-1') {
-        memberships.push(
+      let memberships: UserOrganizationMembership[] = [];
+
+      if (isSuperAdmin) {
+        memberships = [
+          { orgId: orgProd, orgName: 'Insight Arcs GmbH (Hauptmandant)', role: 'SUPERADMIN', employmentType: 'INTERNAL', jobRoleId: 'role-prod-lead', individualBillingRate: 220, individualCostRate: 110, isDefault: true },
+          { orgId: orgTest, orgName: 'Insight Arcs (Testmandant)', role: 'SUPERADMIN', employmentType: 'INTERNAL', jobRoleId: 'role-lead', individualBillingRate: 220, individualCostRate: 110, isDefault: false },
           { orgId: org2, orgName: 'NovaTech Solutions GmbH', role: 'SUPERADMIN', employmentType: 'INTERNAL', individualBillingRate: 240, individualCostRate: 120 },
           { orgId: org3, orgName: 'Helios Digital Advisory AG', role: 'SUPERADMIN', employmentType: 'INTERNAL', individualBillingRate: 260, individualCostRate: 130 }
-        );
-      } else if (t.id === 'u-2' || t.id === 'u-3') {
-        memberships.push(
-          { orgId: org2, orgName: 'NovaTech Solutions GmbH', role: 'PROJECT_MANAGER', employmentType: 'INTERNAL', jobRoleId: 'role-nova-pm', individualBillingRate: 180, individualCostRate: 90 }
-        );
-      } else if (t.id === 'u-5' || t.id === 'u-8') {
-        memberships.push(
-          { orgId: org2, orgName: 'NovaTech Solutions GmbH', role: 'EMPLOYEE', employmentType: 'INTERNAL', jobRoleId: 'role-nova-dev', individualBillingRate: 160, individualCostRate: 80 },
-          { orgId: org3, orgName: 'Helios Digital Advisory AG', role: 'EMPLOYEE', employmentType: 'EXTERNAL', individualBillingRate: 190, individualCostRate: 95 }
-        );
+        ];
+      } else {
+        memberships = [
+          { orgId: orgTest, orgName: 'Insight Arcs (Testmandant)', role: t.role as any, employmentType: (t as any).empType || 'INTERNAL', jobRoleId: t.jobRoleId, individualBillingRate: (t as any).indBilling, individualCostRate: (t as any).indCost, isDefault: true }
+        ];
+
+        if (t.id === 'u-2' || t.id === 'u-3') {
+          memberships.push(
+            { orgId: org2, orgName: 'NovaTech Solutions GmbH', role: 'PROJECT_MANAGER', employmentType: 'INTERNAL', jobRoleId: 'role-nova-pm', individualBillingRate: 180, individualCostRate: 90 }
+          );
+        } else if (t.id === 'u-5' || t.id === 'u-8') {
+          memberships.push(
+            { orgId: org2, orgName: 'NovaTech Solutions GmbH', role: 'EMPLOYEE', employmentType: 'INTERNAL', jobRoleId: 'role-nova-dev', individualBillingRate: 160, individualCostRate: 80 },
+            { orgId: org3, orgName: 'Helios Digital Advisory AG', role: 'EMPLOYEE', employmentType: 'EXTERNAL', individualBillingRate: 190, individualCostRate: 95 }
+          );
+        }
       }
 
       return {
         id: t.id,
-        orgId: org1,
+        orgId: userOrgId,
         name: t.name,
         email: t.email,
         role: t.role as any,
         employmentType: ((t as any).empType || 'INTERNAL') as any,
         companyName: (t as any).company,
-        jobRoleId: t.jobRoleId,
+        partnerId: (t as any).partnerId,
+        partnerName: (t as any).partnerName,
+        externalType: (t as any).externalType,
+        contactPerson: (t as any).contactPerson,
+        contactPhone: (t as any).contactPhone,
+        contactEmail: (t as any).contactEmail,
+        billingEmail: (t as any).billingEmail,
+        street: (t as any).street,
+        zip: (t as any).zip,
+        city: (t as any).city,
+        country: (t as any).country,
+        taxId: (t as any).taxId,
+        jobRoleId: userJobRoleId,
         individualBillingRate: (t as any).indBilling,
         individualCostRate: (t as any).indCost,
         weeklyTargetHours: t.targetH,
@@ -172,16 +640,101 @@ export class StorageService {
       };
     });
 
-    const orgId = org1;
+    const orgId = orgTest;
+
+    // 2.5 Partners
+    this.partners = [
+      {
+        id: 'partner-1',
+        orgId: org1,
+        name: 'DevContractors EU GmbH',
+        partnerNumber: 'PART-001',
+        contactPerson: 'David Schmitt',
+        contactPhone: '+49 30 55443322',
+        contactEmail: 'd.schmitt@devcontractors.eu',
+        billingEmail: 'rechnung@devcontractors.eu',
+        street: 'Friedrichstraße 120',
+        zip: '10117',
+        city: 'Berlin',
+        country: 'Deutschland',
+        phone: '+49 30 55443300',
+        website: 'https://devcontractors.eu',
+        taxId: 'DE289348123',
+        defaultHourlyRate: 95.00,
+        notes: 'Full-Stack Entwicklung und Cloud Infrastruktur Partner.',
+        status: 'ACTIVE',
+        createdAt: '2025-01-05T08:00:00Z'
+      },
+      {
+        id: 'partner-2',
+        orgId: org1,
+        name: 'Braun IT-Security Partners GbR',
+        partnerNumber: 'PART-002',
+        contactPerson: 'Christian Braun',
+        contactPhone: '+49 89 77889900',
+        contactEmail: 'c.braun@braun-security.com',
+        billingEmail: 'invoicing@braun-security.com',
+        street: 'Maximilianstraße 45',
+        zip: '80539',
+        city: 'München',
+        country: 'Deutschland',
+        phone: '+49 89 77889901',
+        website: 'https://braun-security.com',
+        taxId: 'DE312456789',
+        defaultHourlyRate: 110.00,
+        notes: 'Spezialisten für IT-Sicherheitsaudits, Penetrationstests und DSGVO-Audits.',
+        status: 'ACTIVE',
+        createdAt: '2025-01-08T09:00:00Z'
+      },
+      {
+        id: 'partner-3',
+        orgId: org1,
+        name: 'Keller PM Advisory Services',
+        partnerNumber: 'PART-003',
+        contactPerson: 'Michael Keller',
+        contactPhone: '+49 40 33221100',
+        contactEmail: 'm.keller@keller-pm-services.de',
+        billingEmail: 'accounting@keller-pm-services.de',
+        street: 'Neuer Wall 18',
+        zip: '20354',
+        city: 'Hamburg',
+        country: 'Deutschland',
+        phone: '+49 40 33221101',
+        website: 'https://keller-pm-services.de',
+        taxId: 'DE298765432',
+        defaultHourlyRate: 125.00,
+        notes: 'Agile Projektbegleitung, Scrum Master und Program-Management.',
+        status: 'ACTIVE',
+        createdAt: '2025-01-10T10:00:00Z'
+      },
+      {
+        id: 'partner-nov-1',
+        orgId: org2,
+        name: 'Alpine Code Crafters GmbH',
+        partnerNumber: 'NOV-PART-01',
+        contactPerson: 'Florian Huber',
+        contactPhone: '+49 89 12345678',
+        contactEmail: 'florian@alpinecode.de',
+        billingEmail: 'billing@alpinecode.de',
+        street: 'Leopoldstraße 88',
+        zip: '80802',
+        city: 'München',
+        country: 'Deutschland',
+        taxId: 'DE388291029',
+        defaultHourlyRate: 105.00,
+        status: 'ACTIVE',
+        createdAt: '2025-02-05T09:00:00Z'
+      }
+    ];
 
     // 3. Clients
     this.clients = [
-      // Org 1 (Insight Arcs) Clients
-      { id: 'c-1', orgId: org1, name: 'MedTech Solutions AG', clientNumber: 'KND-1001', contactPerson: 'Dr. Michael Hansen', email: 'hansen@medtech-sol.de', status: 'ACTIVE', createdAt: '2025-01-10T10:00:00Z' },
-      { id: 'c-2', orgId: org1, name: 'FinSecure Bank SE', clientNumber: 'KND-1002', contactPerson: 'Claudia von Berg', email: 'c.berg@finsecure.de', status: 'ACTIVE', createdAt: '2025-01-12T11:00:00Z' },
-      { id: 'c-3', orgId: org1, name: 'LogiChain Mobility GmbH', clientNumber: 'KND-1003', contactPerson: 'Ralf Richter', email: 'r.richter@logichain.com', status: 'ACTIVE', createdAt: '2025-01-15T09:30:00Z' },
-      { id: 'c-4', orgId: org1, name: 'GreenEnergy Systems AG', clientNumber: 'KND-1004', contactPerson: 'Sarah Vogt', email: 'vogt@greenenergy.de', status: 'ACTIVE', createdAt: '2025-02-01T08:00:00Z' },
-      { id: 'c-5', orgId: org1, name: 'Insight Arcs (Intern)', clientNumber: 'INT-0001', contactPerson: 'Internal Operations', email: 'ops@insightarcs.de', status: 'ACTIVE', createdAt: '2025-01-01T08:00:00Z' },
+      // Org Test (Insight Arcs Testmandant) Clients
+      { id: 'c-1', orgId: orgTest, name: 'MedTech Solutions AG', clientNumber: 'KND-1001', contactPerson: 'Dr. Michael Hansen', email: 'hansen@medtech-sol.de', status: 'ACTIVE', createdAt: '2025-01-10T10:00:00Z' },
+      { id: 'c-2', orgId: orgTest, name: 'FinSecure Bank SE', clientNumber: 'KND-1002', contactPerson: 'Claudia von Berg', email: 'c.berg@finsecure.de', status: 'ACTIVE', createdAt: '2025-01-12T11:00:00Z' },
+      { id: 'c-3', orgId: orgTest, name: 'LogiChain Mobility GmbH', clientNumber: 'KND-1003', contactPerson: 'Ralf Richter', email: 'r.richter@logichain.com', status: 'ACTIVE', createdAt: '2025-01-15T09:30:00Z' },
+      { id: 'c-4', orgId: orgTest, name: 'GreenEnergy Systems AG', clientNumber: 'KND-1004', contactPerson: 'Sarah Vogt', email: 'vogt@greenenergy.de', status: 'ACTIVE', createdAt: '2025-02-01T08:00:00Z' },
+      { id: 'c-5', orgId: orgTest, name: 'Insight Arcs (Intern)', clientNumber: 'INT-0001', contactPerson: 'Internal Operations', email: 'ops@insightarcs.de', status: 'ACTIVE', createdAt: '2025-01-01T08:00:00Z' },
 
       // Org 2 (NovaTech Solutions) Clients
       { id: 'c-nov-1', orgId: org2, name: 'Bavaria Automotive Group', clientNumber: 'NOV-KND-01', contactPerson: 'Maximilian Huber', email: 'm.huber@bavaria-auto.de', status: 'ACTIVE', createdAt: '2025-02-05T09:00:00Z' },
@@ -195,11 +748,13 @@ export class StorageService {
     this.projects = [
       {
         id: 'p-1',
-        orgId: org1,
+        orgId: orgTest,
         clientId: 'c-1',
         clientName: 'MedTech Solutions AG',
         name: 'AI-Clinical-Workflow Assistant',
         projectNumber: 'PRJ-2025-01',
+        projectType: 'CUSTOMER_PROJECT',
+        isBillableDefault: true,
         projectManagerId: 'u-2',
         projectManagerName: 'Laura Klein',
         managerUserIds: ['u-2'],
@@ -219,11 +774,13 @@ export class StorageService {
       },
       {
         id: 'p-2',
-        orgId: org1,
+        orgId: orgTest,
         clientId: 'c-2',
         clientName: 'FinSecure Bank SE',
         name: 'Banking Core Cloud Migration',
         projectNumber: 'PRJ-2025-02',
+        projectType: 'CUSTOMER_PROJECT',
+        isBillableDefault: true,
         projectManagerId: 'u-3',
         projectManagerName: 'Markus Weber',
         managerUserIds: ['u-3'],
@@ -235,7 +792,7 @@ export class StorageService {
         requiredFields: { description: true, task: true, breaks: true },
         restrictToAssignedMembers: true,
         assignedUserIds: ['u-1', 'u-3', 'u-7', 'u-8', 'u-9', 'u-10'],
-        allowPmViewCosts: false, // PM Kostenansicht hier testweise deaktiviert
+        allowPmViewCosts: false,
         memberRates: [],
         fixedPriceAllocations: [
           { id: 'fpa-1', projectId: 'p-2', title: 'Phase 1: Architektur & PoC', amount: 25000, targetDate: '2025-03-31', status: 'PAID' },
@@ -246,11 +803,13 @@ export class StorageService {
       },
       {
         id: 'p-3',
-        orgId: org1,
+        orgId: orgTest,
         clientId: 'c-3',
         clientName: 'LogiChain Mobility GmbH',
         name: 'Fleet Telematics Cloud Hub',
         projectNumber: 'PRJ-2025-03',
+        projectType: 'CUSTOMER_PROJECT',
+        isBillableDefault: true,
         projectManagerId: 'u-2',
         projectManagerName: 'Laura Klein',
         managerUserIds: ['u-2'],
@@ -267,11 +826,13 @@ export class StorageService {
       },
       {
         id: 'p-4',
-        orgId: org1,
+        orgId: orgTest,
         clientId: 'c-4',
         clientName: 'GreenEnergy Systems AG',
         name: 'Solar Yield Forecast Engine',
         projectNumber: 'PRJ-2025-04',
+        projectType: 'CUSTOMER_PROJECT',
+        isBillableDefault: true,
         projectManagerId: 'u-21',
         projectManagerName: 'Michael Keller',
         managerUserIds: ['u-21'],
@@ -288,11 +849,14 @@ export class StorageService {
       },
       {
         id: 'p-5',
-        orgId: org1,
+        orgId: orgTest,
         clientId: 'c-5',
         clientName: 'Insight Arcs (Intern)',
         name: 'Allgemeine Verwaltung & Weiterbildung',
         projectNumber: 'INT-ADM-01',
+        projectType: 'INTERNAL_PROJECT',
+        isBillableDefault: false,
+        allowInternalRebilling: true,
         projectManagerId: 'u-1',
         projectManagerName: 'Dr. Andreas Behrens',
         managerUserIds: ['u-1'],
@@ -315,6 +879,8 @@ export class StorageService {
         clientName: 'Bavaria Automotive Group',
         name: 'Autonomous Driving Sensor Data Ingestion',
         projectNumber: 'NOV-2025-01',
+        projectType: 'CUSTOMER_PROJECT',
+        isBillableDefault: true,
         projectManagerId: 'u-2',
         projectManagerName: 'Laura Klein',
         managerUserIds: ['u-2'],
@@ -339,6 +905,8 @@ export class StorageService {
         clientName: 'Hanseatic Port Logistics AG',
         name: 'Digital Port Twin Strategy & Roadmap',
         projectNumber: 'HEL-2025-01',
+        projectType: 'CUSTOMER_PROJECT',
+        isBillableDefault: true,
         projectManagerId: 'u-3',
         projectManagerName: 'Markus Weber',
         managerUserIds: ['u-3'],
@@ -1092,6 +1660,7 @@ export class StorageService {
     const org = this.organizations.find(o => o.id === orgId);
     if (!org) return null;
     this.activeOrgId = orgId;
+    this.saveToFile();
     return org;
   }
 
@@ -1246,6 +1815,14 @@ export class StorageService {
   
   public getJobRoles() { return this.jobRoles.filter(r => r.orgId === this.activeOrgId); }
 
+  public getPartners(actorId?: string, allOrgs: boolean = false): Partner[] {
+    const roleInfo = this.getActorRoleInfo(actorId);
+    if (roleInfo.isSuperAdmin && allOrgs) {
+      return this.partners;
+    }
+    return this.partners.filter(p => p.orgId === this.activeOrgId);
+  }
+
   public getClients(actorId?: string, allOrgs: boolean = false): Client[] { 
     const roleInfo = this.getActorRoleInfo(actorId);
     if (roleInfo.isSuperAdmin && allOrgs) {
@@ -1349,6 +1926,13 @@ export class StorageService {
       ? (userData.stateLocation || this.organization.stateLocation || 'DE-BE')
       : (this.organization.stateLocation || 'DE-BE');
 
+    // Resolve partner name if partnerId provided
+    let partnerName = userData.partnerName;
+    if (userData.partnerId && !partnerName) {
+      const p = this.partners.find(part => part.id === userData.partnerId);
+      if (p) partnerName = p.name;
+    }
+
     const newUser: User = {
       id: 'u-' + (this.users.length + 1),
       orgId: this.activeOrgId || this.organization.id,
@@ -1356,7 +1940,19 @@ export class StorageService {
       email: userData.email || '',
       role: requestedRole,
       employmentType: userData.employmentType || 'INTERNAL',
-      companyName: userData.companyName,
+      companyName: userData.companyName || partnerName,
+      partnerId: userData.partnerId,
+      partnerName: partnerName,
+      externalType: userData.externalType || (userData.partnerId ? 'PARTNER_EMPLOYEE' : (userData.employmentType === 'EXTERNAL' ? 'FREELANCER' : undefined)),
+      contactPerson: userData.contactPerson,
+      contactPhone: userData.contactPhone,
+      contactEmail: userData.contactEmail,
+      billingEmail: userData.billingEmail,
+      street: userData.street,
+      zip: userData.zip,
+      city: userData.city,
+      country: userData.country,
+      taxId: userData.taxId,
       jobRoleId: userData.jobRoleId || 'role-mid',
       individualBillingRate: userData.individualBillingRate,
       individualCostRate: userData.individualCostRate,
@@ -1420,6 +2016,16 @@ export class StorageService {
     const empType = sanitizedUpdates.employmentType !== undefined ? sanitizedUpdates.employmentType : this.users[idx].employmentType;
     if (empType === 'EXTERNAL' || !this.organization.allowMobileWorkplaces) {
       stateLocation = this.organization.stateLocation;
+    }
+
+    // Resolve partner name if partnerId updated
+    if (sanitizedUpdates.partnerId !== undefined) {
+      if (sanitizedUpdates.partnerId) {
+        const p = this.partners.find(part => part.id === sanitizedUpdates.partnerId);
+        if (p) sanitizedUpdates.partnerName = p.name;
+      } else {
+        sanitizedUpdates.partnerName = undefined;
+      }
     }
 
     this.users[idx] = { 
@@ -1654,16 +2260,164 @@ export class StorageService {
     return { success: true };
   }
 
+  // --- Partners ---
+  public addPartner(partnerData: Partial<Partner>, actorId: string): Partner {
+    const partner: Partner = {
+      id: 'partner-' + (this.partners.length + 1) + '-' + Math.random().toString(36).substring(2, 6),
+      orgId: this.organization.id,
+      name: partnerData.name || 'Neuer Partner',
+      partnerNumber: partnerData.partnerNumber || `PART-${String(this.partners.length + 1).padStart(3, '0')}`,
+      contactPerson: partnerData.contactPerson,
+      contactPhone: partnerData.contactPhone,
+      contactEmail: partnerData.contactEmail,
+      billingEmail: partnerData.billingEmail,
+      street: partnerData.street,
+      zip: partnerData.zip,
+      city: partnerData.city,
+      country: partnerData.country || 'Deutschland',
+      phone: partnerData.phone,
+      website: partnerData.website,
+      taxId: partnerData.taxId,
+      defaultHourlyRate: partnerData.defaultHourlyRate,
+      notes: partnerData.notes,
+      status: partnerData.status || 'ACTIVE',
+      createdAt: new Date().toISOString()
+    };
+    this.partners.push(partner);
+
+    this.logAudit({
+      entityType: 'PARTNER',
+      entityId: partner.id,
+      action: 'CREATE',
+      userId: actorId,
+      userName: this.users.find(u => u.id === actorId)?.name || 'Admin',
+      changes: [{ field: 'partner', oldValue: null, newValue: `${partner.name} (${partner.partnerNumber})` }],
+      reason: 'Neuer Partner angelegt'
+    });
+
+    return partner;
+  }
+
+  public updatePartner(partnerId: string, updates: Partial<Partner>, actorId: string): Partner | null {
+    const idx = this.partners.findIndex(p => p.id === partnerId);
+    if (idx === -1) return null;
+    const old = { ...this.partners[idx] };
+    this.partners[idx] = { 
+      ...this.partners[idx], 
+      ...updates,
+      updatedAt: new Date().toISOString()
+    };
+
+    // If partner name changed, update denormalized partnerName in users
+    if (updates.name && updates.name !== old.name) {
+      this.users.forEach(u => {
+        if (u.partnerId === partnerId) {
+          u.partnerName = updates.name!;
+          if (!u.companyName || u.companyName === old.name) {
+            u.companyName = updates.name!;
+          }
+        }
+      });
+    }
+
+    this.logAudit({
+      entityType: 'PARTNER',
+      entityId: partnerId,
+      action: 'UPDATE',
+      userId: actorId,
+      userName: this.users.find(u => u.id === actorId)?.name || 'Admin',
+      changes: Object.keys(updates).map(k => ({ field: k, oldValue: (old as any)[k], newValue: (updates as any)[k] })),
+      reason: 'Partner-Stammdaten aktualisiert'
+    });
+
+    return this.partners[idx];
+  }
+
+  public archivePartner(partnerId: string, actorId: string): Partner | null {
+    const partner = this.partners.find(p => p.id === partnerId);
+    if (!partner) return null;
+    partner.status = partner.status === 'ARCHIVED' ? 'ACTIVE' : 'ARCHIVED';
+    partner.updatedAt = new Date().toISOString();
+
+    this.logAudit({
+      entityType: 'PARTNER',
+      entityId: partnerId,
+      action: 'UPDATE',
+      userId: actorId,
+      userName: this.users.find(u => u.id === actorId)?.name || 'Admin',
+      changes: [{ field: 'status', oldValue: partner.status === 'ARCHIVED' ? 'ACTIVE' : 'ARCHIVED', newValue: partner.status }],
+      reason: partner.status === 'ARCHIVED' ? 'Partner archiviert' : 'Partner reaktiviert'
+    });
+
+    return partner;
+  }
+
+  public deletePartner(partnerId: string, actorId: string): { success: boolean; error?: string } {
+    const partner = this.partners.find(p => p.id === partnerId);
+    if (!partner) return { success: false, error: 'Partner nicht gefunden' };
+
+    const assignedUsers = this.users.filter(u => u.partnerId === partnerId);
+    if (assignedUsers.length > 0) {
+      return {
+        success: false,
+        error: `Partner "${partner.name}" kann nicht gelöscht werden, da ihm noch ${assignedUsers.length} externe Mitarbeiter zugeordnet sind (${assignedUsers.map(u => u.name).join(', ')}). Bitte weisen Sie die Mitarbeiter zuerst um oder archivieren Sie den Partner stattdessen.`
+      };
+    }
+
+    this.partners = this.partners.filter(p => p.id !== partnerId);
+
+    this.logAudit({
+      entityType: 'PARTNER',
+      entityId: partnerId,
+      action: 'DELETE',
+      userId: actorId,
+      userName: this.users.find(u => u.id === actorId)?.name || 'Admin',
+      changes: [{ field: 'partner', oldValue: partner.name, newValue: null }],
+      reason: 'Partner gelöscht'
+    });
+
+    return { success: true };
+  }
+
   public addProject(projectData: Partial<Project>, actorId: string): Project {
-    const client = this.clients.find(c => c.id === projectData.clientId);
+    const projectType: ProjectType = projectData.projectType || 'CUSTOMER_PROJECT';
+    const isInternal = projectType === 'INTERNAL_PROJECT';
+
+    // For internal projects, if no client is specified, default to internal organization client
+    let client = projectData.clientId ? this.clients.find(c => c.id === projectData.clientId) : undefined;
+    if (!client && isInternal) {
+      client = this.clients.find(c => c.name.toLowerCase().includes('intern') || c.name.toLowerCase().includes(this.organization.name.toLowerCase()));
+      if (!client) {
+        // Create an internal client if none exists
+        client = this.addClient({
+          name: `${this.organization.name} (Intern)`,
+          clientNumber: 'INT-0001',
+          contactPerson: 'Internal Operations',
+          email: 'intern@' + (this.organization.code || 'org').toLowerCase() + '.local'
+        });
+      }
+    } else if (!client) {
+      client = this.clients[0];
+    }
+
     const pm = projectData.projectManagerId ? this.users.find(u => u.id === projectData.projectManagerId) : undefined;
+    const isBillableDefault = projectData.isBillableDefault !== undefined
+      ? projectData.isBillableDefault
+      : (isInternal ? false : true);
+    const allowInternalRebilling = projectData.allowInternalRebilling !== undefined
+      ? projectData.allowInternalRebilling
+      : (isInternal ? true : false);
+
     const project: Project = {
       id: 'p-' + (this.projects.length + 1),
       orgId: this.organization.id,
-      clientId: projectData.clientId || this.clients[0].id,
+      clientId: client?.id || this.clients[0]?.id || 'c-1',
       clientName: client?.name || '',
       name: projectData.name || 'Neues Projekt',
-      projectNumber: projectData.projectNumber || `PRJ-${new Date().getFullYear()}-${String(this.projects.length + 1).padStart(2, '0')}`,
+      projectNumber: projectData.projectNumber || (isInternal ? `INT-${new Date().getFullYear()}-${String(this.projects.length + 1).padStart(2, '0')}` : `PRJ-${new Date().getFullYear()}-${String(this.projects.length + 1).padStart(2, '0')}`),
+      projectType,
+      isBillableDefault,
+      allowInternalRebilling,
       projectManagerId: projectData.projectManagerId,
       projectManagerName: pm?.name || projectData.projectManagerName,
       managerUserIds: projectData.managerUserIds || (projectData.projectManagerId ? [projectData.projectManagerId] : []),
@@ -1688,7 +2442,7 @@ export class StorageService {
       action: 'CREATE',
       userId: actorId,
       userName: this.users.find(u => u.id === actorId)?.name || 'Admin',
-      changes: [{ field: 'project', oldValue: null, newValue: project.name }]
+      changes: [{ field: 'project', oldValue: null, newValue: `${project.name} (${projectType === 'INTERNAL_PROJECT' ? 'Intern' : 'Kunde'})` }]
     });
 
     return project;
@@ -1705,6 +2459,12 @@ export class StorageService {
     }
     if (updates.projectManagerId && (!updates.managerUserIds || updates.managerUserIds.length === 0)) {
       updates.managerUserIds = [updates.projectManagerId];
+    }
+
+    if (updates.projectType && updates.projectType !== old.projectType) {
+      if (updates.isBillableDefault === undefined) {
+        updates.isBillableDefault = updates.projectType === 'INTERNAL_PROJECT' ? false : true;
+      }
     }
 
     this.projects[idx] = { ...this.projects[idx], ...updates };
@@ -1952,7 +2712,23 @@ export class StorageService {
 
     // Rate resolution
     const rateInfo = this.resolveRates(user?.id || actorId, project?.id, entryData.date);
-    const isBillable = entryData.isBillable ?? (task ? task.isBillableDefault : true);
+    
+    // Determine billable status:
+    // 1. Explicit entryData flag
+    // 2. Task-level flag (inherited during time booking)
+    // 3. Project-level default (Internal projects = non-billable by default, Customer projects = billable)
+    let isBillable: boolean;
+    if (entryData.isBillable !== undefined) {
+      isBillable = !!entryData.isBillable;
+    } else if (task && task.isBillableDefault !== undefined) {
+      isBillable = !!task.isBillableDefault;
+    } else if (project) {
+      isBillable = project.isBillableDefault !== undefined
+        ? !!project.isBillableDefault
+        : (project.projectType === 'INTERNAL_PROJECT' ? false : true);
+    } else {
+      isBillable = true;
+    }
 
     const durationMinutes = entryData.durationMinutes || (
       entryData.startTime && entryData.endTime
@@ -1961,8 +2737,11 @@ export class StorageService {
     );
     const durationHoursDecimal = Math.round((durationMinutes / 60) * 100) / 100;
 
-    const hourlyBillingRate = isBillable ? (entryData.hourlyBillingRate || rateInfo.billingRate) : 0;
+    // Billing rate & amount: only active for billable entries
+    const hourlyBillingRate = isBillable ? (entryData.hourlyBillingRate !== undefined ? entryData.hourlyBillingRate : rateInfo.billingRate) : 0;
     const calculatedAmount = Math.round(durationHoursDecimal * hourlyBillingRate * 100) / 100;
+
+    // Cost rate & internal cost: ALWAYS active regardless of billability status
     const hourlyCostRate = rateInfo.costRate;
     const calculatedCost = Math.round(durationHoursDecimal * hourlyCostRate * 100) / 100;
 
@@ -2203,6 +2982,7 @@ export class StorageService {
         totalNetHoursDecimal: netHours,
         updatedAt: new Date().toISOString()
       };
+      this.saveToFile();
       return this.workingTimeEntries[existingIdx];
     } else {
       const entry: WorkingTimeEntry = {
@@ -2222,6 +3002,7 @@ export class StorageService {
         updatedAt: new Date().toISOString()
       };
       this.workingTimeEntries.push(entry);
+      this.saveToFile();
       return entry;
     }
   }
@@ -2335,6 +3116,7 @@ export class StorageService {
     // Check existing version
     const existing = this.forecasts.filter(f => f.projectId === entry.projectId && f.userId === entry.userId && f.month === entry.month);
     const nextVersion = existing.length > 0 ? Math.max(...existing.map(e => e.version)) + 1 : 1;
+    const previousPlannedHours = existing.length > 0 ? existing.sort((a, b) => b.version - a.version)[0].plannedHours : undefined;
 
     const newForecast: ForecastEntry = {
       id: 'fc-' + (Date.now() + Math.floor(Math.random() * 1000)),
@@ -2351,22 +3133,76 @@ export class StorageService {
       plannedCost,
       plannedMargin,
       version: nextVersion,
+      changeReason: entry.changeReason || (nextVersion === 1 ? 'INITIAL_PLANNING' : 'OTHER'),
+      changeNote: entry.changeNote || '',
       createdBy: actorId,
       createdAt: new Date().toISOString()
     };
 
     this.forecasts.push(newForecast);
 
+    const actorUser = this.users.find(u => u.id === actorId);
     this.logAudit({
       entityType: 'FORECAST',
       entityId: newForecast.id,
-      action: 'CREATE',
+      action: nextVersion === 1 ? 'CREATE' : 'UPDATE',
       userId: actorId,
-      userName: this.users.find(u => u.id === actorId)?.name || 'Admin',
-      changes: [{ field: 'forecast', oldValue: null, newValue: `v${nextVersion}: ${plannedHours}h on ${newForecast.projectName}` }]
+      userName: actorUser?.name || 'Admin',
+      changes: [
+        {
+          field: 'plannedHours',
+          oldValue: previousPlannedHours !== undefined ? `${previousPlannedHours}h` : null,
+          newValue: `${plannedHours}h`
+        },
+        {
+          field: 'version',
+          oldValue: previousPlannedHours !== undefined ? `v${nextVersion - 1}` : null,
+          newValue: `v${nextVersion}`
+        },
+        {
+          field: 'changeReason',
+          oldValue: null,
+          newValue: newForecast.changeReason || 'INITIAL_PLANNING'
+        }
+      ],
+      reason: newForecast.changeNote || `Forecast ${newForecast.changeReason || 'Planung'}`
     });
 
     return newForecast;
+  }
+
+  public getForecastHistory(projectId?: string, userId?: string, month?: string): ForecastAuditHistoryItem[] {
+    let list = [...this.forecasts];
+    if (projectId) list = list.filter(f => f.projectId === projectId);
+    if (userId) list = list.filter(f => f.userId === userId);
+    if (month) list = list.filter(f => f.month === month);
+
+    // Sort by createdAt descending
+    list.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+    return list.map(f => {
+      const creator = this.users.find(u => u.id === f.createdBy);
+      const prev = this.forecasts.find(
+        other => other.projectId === f.projectId && other.userId === f.userId && other.month === f.month && other.version === f.version - 1
+      );
+      return {
+        id: f.id,
+        forecastId: f.id,
+        projectId: f.projectId,
+        projectName: f.projectName,
+        userId: f.userId,
+        userName: f.userName,
+        month: f.month,
+        plannedHours: f.plannedHours,
+        previousPlannedHours: prev ? prev.plannedHours : undefined,
+        version: f.version,
+        changeReason: f.changeReason,
+        changeNote: f.changeNote,
+        createdById: f.createdBy,
+        createdByName: creator?.name || 'System',
+        createdAt: f.createdAt
+      };
+    });
   }
 
   public getForecastPlanVsActual(month: string): ForecastComparisonItem[] {
@@ -2418,7 +3254,13 @@ export class StorageService {
       const extrapolatedCostMonthEnd = Math.round(actualCostSoFar * extrapolationFactor * 100) / 100;
 
       const deviationHours = fc.plannedHours > 0 ? ((extrapolatedHoursMonthEnd - fc.plannedHours) / fc.plannedHours) * 100 : 0;
-      const isThresholdExceeded = Math.abs(deviationHours) >= this.thresholdPercent;
+      const deviationRevenue = fc.plannedRevenue > 0 ? ((extrapolatedRevenueMonthEnd - fc.plannedRevenue) / fc.plannedRevenue) * 100 : 0;
+      const deviationCost = fc.plannedCost > 0 ? ((extrapolatedCostMonthEnd - fc.plannedCost) / fc.plannedCost) * 100 : 0;
+
+      const isHoursThresholdExceeded = Math.abs(deviationHours) >= this.thresholdPercent;
+      const isRevenueThresholdExceeded = Math.abs(deviationRevenue) >= this.thresholdPercent;
+      const isCostThresholdExceeded = Math.abs(deviationCost) >= this.thresholdPercent;
+      const isThresholdExceeded = isHoursThresholdExceeded || isRevenueThresholdExceeded || isCostThresholdExceeded;
 
       list.push({
         projectId: fc.projectId,
@@ -2437,7 +3279,15 @@ export class StorageService {
         extrapolatedRevenueMonthEnd,
         extrapolatedCostMonthEnd,
         hoursDeviationPercent: Math.round(deviationHours * 10) / 10,
-        isThresholdExceeded
+        revenueDeviationPercent: Math.round(deviationRevenue * 10) / 10,
+        costDeviationPercent: Math.round(deviationCost * 10) / 10,
+        isHoursThresholdExceeded,
+        isRevenueThresholdExceeded,
+        isCostThresholdExceeded,
+        isThresholdExceeded,
+        changeReason: fc.changeReason,
+        changeNote: fc.changeNote,
+        version: fc.version
       });
     });
 
@@ -2582,8 +3432,13 @@ export class StorageService {
       const activePeriodForecasts = Array.from(forecastMap.values());
 
       // 2. Gather all actual time entries for this project in the period
+      // Rule: Non-billable hours are considered in Forecast/Capacity management ONLY for Time-&-Material projects (not for Fixed Price projects).
+      const isTmProject = project.billingModel === 'TIME_AND_MATERIAL';
       const actualEntries = this.timeEntries.filter(
-        t => t.projectId === project.id && t.date >= startDate && t.date <= endDate
+        t => t.projectId === project.id && 
+             t.date >= startDate && 
+             t.date <= endDate &&
+             (isTmProject ? true : t.isBillable)
       );
 
       const actualHoursSoFar = Math.round(actualEntries.reduce((sum, e) => sum + e.durationHoursDecimal, 0) * 10) / 10;
@@ -2679,19 +3534,62 @@ export class StorageService {
         ? Math.round((extrapolatedMarginEnd / extrapolatedRevenueEnd) * 1000) / 10
         : 0;
 
-      // 5. Deviations & Alerts
+      // 5. Deviations & Alerts (Hours, Revenue, Cost)
       const hoursDeviationPercent = plannedHours > 0
         ? Math.round(((extrapolatedHoursEnd - plannedHours) / plannedHours) * 1000) / 10
         : 0;
       const revenueDeviationPercent = plannedRevenue > 0
         ? Math.round(((extrapolatedRevenueEnd - plannedRevenue) / plannedRevenue) * 1000) / 10
         : 0;
+      const costDeviationPercent = plannedCost > 0
+        ? Math.round(((extrapolatedCostEnd - plannedCost) / plannedCost) * 1000) / 10
+        : 0;
 
-      const isThresholdExceeded = Math.abs(hoursDeviationPercent) >= threshold;
-      const alertSeverity = isThresholdExceeded ? 'CRITICAL' : Math.abs(hoursDeviationPercent) >= 10 ? 'WARNING' : 'OK';
+      const isHoursThresholdExceeded = Math.abs(hoursDeviationPercent) >= threshold;
+      const isRevenueThresholdExceeded = Math.abs(revenueDeviationPercent) >= threshold;
+      const isCostThresholdExceeded = Math.abs(costDeviationPercent) >= threshold;
+      const isThresholdExceeded = isHoursThresholdExceeded || isRevenueThresholdExceeded || isCostThresholdExceeded;
+
+      const alertSeverity = isThresholdExceeded
+        ? 'CRITICAL'
+        : (Math.abs(hoursDeviationPercent) >= 10 || Math.abs(costDeviationPercent) >= 10 || Math.abs(revenueDeviationPercent) >= 10)
+          ? 'WARNING'
+          : 'OK';
 
       const remainingBudgetHours = project.budgetHours ? Math.round(Math.max(0, project.budgetHours - actualHoursSoFar) * 10) / 10 : undefined;
       const hoursBurnPercent = project.budgetHours ? Math.round((actualHoursSoFar / project.budgetHours) * 100) : undefined;
+
+      // Fixed Price and Milestone Metrics
+      const fixedPriceAllocations = project.fixedPriceAllocations || [];
+      const invoicedMilestonesTotal = Math.round(fixedPriceAllocations.filter(m => m.status === 'INVOICED' || m.status === 'PAID').reduce((sum, m) => sum + m.amount, 0) * 100) / 100;
+      const paidMilestonesTotal = Math.round(fixedPriceAllocations.filter(m => m.status === 'PAID').reduce((sum, m) => sum + m.amount, 0) * 100) / 100;
+      const plannedMilestonesTotal = Math.round(fixedPriceAllocations.filter(m => m.status === 'PLANNED').reduce((sum, m) => sum + m.amount, 0) * 100) / 100;
+
+      const remainingFixedPriceBudget = project.billingModel === 'FIXED_PRICE' && project.totalFixedPrice
+        ? Math.round(Math.max(0, project.totalFixedPrice - actualCostSoFar) * 100) / 100
+        : undefined;
+
+      let completionPercentagePoC: number | undefined = undefined;
+      if (project.billingModel === 'FIXED_PRICE') {
+        if (project.totalFixedPrice && project.totalFixedPrice > 0 && fixedPriceAllocations.length > 0) {
+          completionPercentagePoC = Math.min(100, Math.round((invoicedMilestonesTotal / project.totalFixedPrice) * 100));
+        } else if (project.budgetHours && project.budgetHours > 0) {
+          completionPercentagePoC = Math.min(100, Math.round((actualHoursSoFar / project.budgetHours) * 100));
+        }
+      }
+
+      const milestonesSummary = fixedPriceAllocations.map(m => ({
+        id: m.id,
+        title: m.title,
+        amount: m.amount,
+        targetDate: m.targetDate,
+        period: m.period,
+        status: m.status,
+        percentageOfTotal: (project.totalFixedPrice && project.totalFixedPrice > 0)
+          ? Math.round((m.amount / project.totalFixedPrice) * 1000) / 10
+          : 0,
+        isPaidOrInvoiced: m.status === 'INVOICED' || m.status === 'PAID'
+      }));
 
       // 6. Member Breakdown
       const userIds = new Set<string>();
@@ -2741,6 +3639,8 @@ export class StorageService {
           actualCost: uActualCost,
           actualMargin: uActualMargin,
           hoursDeviationPercent: uDevPercent,
+          revenueDeviationPercent: uPlannedRev > 0 ? Math.round(((uActualRev - uPlannedRev) / uPlannedRev) * 1000) / 10 : 0,
+          costDeviationPercent: uPlannedCost > 0 ? Math.round(((uActualCost - uPlannedCost) / uPlannedCost) * 1000) / 10 : 0,
           isExceeded
         };
       });
@@ -2818,8 +3718,18 @@ export class StorageService {
         extrapolatedMarginPercentEnd,
         hoursDeviationPercent,
         revenueDeviationPercent,
+        costDeviationPercent,
+        isHoursThresholdExceeded,
+        isRevenueThresholdExceeded,
+        isCostThresholdExceeded,
         isThresholdExceeded,
         alertSeverity,
+        remainingFixedPriceBudget,
+        completionPercentagePoC,
+        milestonesSummary,
+        invoicedMilestonesTotal,
+        paidMilestonesTotal,
+        plannedMilestonesTotal,
         teamBreakdown,
         monthlyBreakdown
       });
@@ -2885,8 +3795,297 @@ export class StorageService {
     };
   }
 
+  /**
+   * Cross-Project Employee Capacity & Overbooking Analysis (Plan vs. Ist pro Mitarbeiter)
+   * Evaluates each user's workload across all parallel projects against individual weekly/daily target hours
+   * taking into account federal state holiday calendars and working days.
+   */
+  public getEmployeeCapacitySummary(options: {
+    periodType?: 'MONTH' | 'QUARTER' | 'HALF_YEAR' | 'YEAR';
+    periodKey?: string;
+    employmentType?: string;
+    search?: string;
+    thresholdPercent?: number;
+  }) {
+    const periodType = options.periodType || 'MONTH';
+    const periodKey = options.periodKey || '2026-08';
+    const defaultStateCode = this.organization.stateLocation || 'DE-BE';
+
+    const monthNamesDE = ['Januar', 'Februar', 'März', 'April', 'Mai', 'Juni', 'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember'];
+
+    let months: string[] = [];
+    let startDate = '';
+    let endDate = '';
+    let periodLabel = '';
+
+    if (periodType === 'MONTH' || /^\d{4}-\d{2}$/.test(periodKey)) {
+      const [yStr, mStr] = periodKey.split('-');
+      const y = parseInt(yStr, 10);
+      const m = parseInt(mStr, 10);
+      const days = new Date(y, m, 0).getDate();
+      months = [periodKey];
+      startDate = `${periodKey}-01`;
+      endDate = `${periodKey}-${String(days).padStart(2, '0')}`;
+      periodLabel = `${monthNamesDE[m - 1]} ${y}`;
+    } else if (periodType === 'QUARTER' || /^\d{4}-Q[1-4]$/.test(periodKey)) {
+      const y = parseInt(periodKey.substring(0, 4), 10);
+      const q = parseInt(periodKey.substring(6, 7), 10);
+      if (q === 1) {
+        months = [`${y}-01`, `${y}-02`, `${y}-03`];
+        startDate = `${y}-01-01`;
+        endDate = `${y}-03-31`;
+        periodLabel = `Q1 ${y} (Jan - Mär)`;
+      } else if (q === 2) {
+        months = [`${y}-04`, `${y}-05`, `${y}-06`];
+        startDate = `${y}-04-01`;
+        endDate = `${y}-06-30`;
+        periodLabel = `Q2 ${y} (Apr - Jun)`;
+      } else if (q === 3) {
+        months = [`${y}-07`, `${y}-08`, `${y}-09`];
+        startDate = `${y}-07-01`;
+        endDate = `${y}-09-30`;
+        periodLabel = `Q3 ${y} (Jul - Sep)`;
+      } else {
+        months = [`${y}-10`, `${y}-11`, `${y}-12`];
+        startDate = `${y}-10-01`;
+        endDate = `${y}-12-31`;
+        periodLabel = `Q4 ${y} (Okt - Dez)`;
+      }
+    } else if (periodType === 'HALF_YEAR' || /^\d{4}-H[1-2]$/.test(periodKey)) {
+      const y = parseInt(periodKey.substring(0, 4), 10);
+      const h = parseInt(periodKey.substring(6, 7), 10);
+      if (h === 1) {
+        months = [`${y}-01`, `${y}-02`, `${y}-03`, `${y}-04`, `${y}-05`, `${y}-06`];
+        startDate = `${y}-01-01`;
+        endDate = `${y}-06-30`;
+        periodLabel = `H1 ${y} (1. Halbjahr)`;
+      } else {
+        months = [`${y}-07`, `${y}-08`, `${y}-09`, `${y}-10`, `${y}-11`, `${y}-12`];
+        startDate = `${y}-07-01`;
+        endDate = `${y}-12-31`;
+        periodLabel = `H2 ${y} (2. Halbjahr)`;
+      }
+    } else {
+      const y = parseInt(periodKey.substring(0, 4), 10) || 2026;
+      months = Array.from({ length: 12 }, (_, i) => `${y}-${String(i + 1).padStart(2, '0')}`);
+      startDate = `${y}-01-01`;
+      endDate = `${y}-12-31`;
+      periodLabel = `Gesamtjahr ${y}`;
+    }
+
+    const today = new Date();
+    const todayStr = today.toISOString().substring(0, 10);
+    const isPastPeriod = endDate < todayStr;
+    const isFuturePeriod = startDate > todayStr;
+
+    // Filter users
+    let userList = this.users.filter(u => u.status === 'ACTIVE');
+    if (options.employmentType) {
+      userList = userList.filter(u => u.employmentType === options.employmentType);
+    }
+    if (options.search) {
+      const s = options.search.toLowerCase();
+      userList = userList.filter(u =>
+        u.name.toLowerCase().includes(s) ||
+        u.email.toLowerCase().includes(s) ||
+        (u.companyName && u.companyName.toLowerCase().includes(s))
+      );
+    }
+
+    const employeesSummary: any[] = [];
+
+    userList.forEach(user => {
+      const userState = user.stateLocation || defaultStateCode;
+      const workdaysInfo = getWorkingDaysInRange(startDate, endDate, userState);
+      const targetWorkdaysInPeriod = workdaysInfo.totalWorkdays;
+      const passedWorkdays = isPastPeriod
+        ? targetWorkdaysInPeriod
+        : isFuturePeriod
+          ? 0
+          : workdaysInfo.workdayDates.filter(d => d <= todayStr).length;
+
+      const extrapolationFactor = (passedWorkdays > 0 && !isPastPeriod && !isFuturePeriod)
+        ? (targetWorkdaysInPeriod / passedWorkdays)
+        : 1;
+
+      const dailyTarget = user.dailyTargetHours || (user.weeklyTargetHours ? Math.round((user.weeklyTargetHours / 5) * 10) / 10 : 8);
+      const targetCapacityHours = Math.round(targetWorkdaysInPeriod * dailyTarget * 10) / 10;
+
+      // 1. Gather all forecast entries for this user in the period across all active contracted projects
+      const userForecasts = this.forecasts.filter(f => f.userId === user.id && months.includes(f.month));
+      // Deduplicate to latest version per project per month
+      const forecastMap = new Map<string, ForecastEntry>();
+      userForecasts.forEach(f => {
+        const key = `${f.month}_${f.projectId}`;
+        const existing = forecastMap.get(key);
+        if (!existing || existing.version < f.version) {
+          forecastMap.set(key, f);
+        }
+      });
+      const activeUserForecasts = Array.from(forecastMap.values());
+
+      // 2. Gather all actual time entries for this user in period
+      const userActualEntries = this.timeEntries.filter(
+        t => t.userId === user.id && t.date >= startDate && t.date <= endDate
+      );
+
+      // 3. Project breakdown for this user
+      const projectIds = new Set<string>();
+      activeUserForecasts.forEach(f => projectIds.add(f.projectId));
+      userActualEntries.forEach(t => projectIds.add(t.projectId));
+
+      let totalPlannedHours = 0;
+      let totalActualHours = 0;
+      let totalExtrapolatedHours = 0;
+      let totalPlannedRevenue = 0;
+      let totalPlannedCost = 0;
+      let totalActualRevenue = 0;
+      let totalActualCost = 0;
+
+      const projectAllocations: any[] = [];
+
+      projectIds.forEach(pId => {
+        const project = this.projects.find(p => p.id === pId);
+        if (!project || project.status === 'ARCHIVED' || project.clientId === 'c-5') return;
+
+        const pForecasts = activeUserForecasts.filter(f => f.projectId === pId);
+        const isTmProject = project.billingModel === 'TIME_AND_MATERIAL';
+        const pActualEntries = userActualEntries.filter(t => t.projectId === pId && (isTmProject ? true : t.isBillable));
+
+        const pPlannedH = Math.round(pForecasts.reduce((sum, f) => sum + f.plannedHours, 0) * 10) / 10;
+        const pPlannedRev = Math.round(pForecasts.reduce((sum, f) => sum + f.plannedRevenue, 0) * 100) / 100;
+        const pPlannedCost = Math.round(pForecasts.reduce((sum, f) => sum + f.plannedCost, 0) * 100) / 100;
+        const pPlannedMargin = Math.round((pPlannedRev - pPlannedCost) * 100) / 100;
+
+        const pActualH = Math.round(pActualEntries.reduce((sum, t) => sum + t.durationHoursDecimal, 0) * 10) / 10;
+        const pActualRev = Math.round(pActualEntries.reduce((sum, t) => sum + t.calculatedAmount, 0) * 100) / 100;
+        const pActualCost = Math.round(pActualEntries.reduce((sum, t) => sum + (t.calculatedCost || 0), 0) * 100) / 100;
+        const pActualMargin = Math.round((pActualRev - pActualCost) * 100) / 100;
+
+        const pExtrapolatedH = isPastPeriod
+          ? pActualH
+          : isFuturePeriod
+            ? pPlannedH
+            : Math.round(pActualH * extrapolationFactor * 10) / 10;
+
+        totalPlannedHours += pPlannedH;
+        totalActualHours += pActualH;
+        totalExtrapolatedHours += pExtrapolatedH;
+        totalPlannedRevenue += pPlannedRev;
+        totalPlannedCost += pPlannedCost;
+        totalActualRevenue += pActualRev;
+        totalActualCost += pActualCost;
+
+        projectAllocations.push({
+          projectId: project.id,
+          projectNumber: project.projectNumber,
+          projectName: project.name,
+          clientName: project.clientName,
+          billingModel: project.billingModel,
+          plannedHours: pPlannedH,
+          actualHours: pActualH,
+          extrapolatedHours: pExtrapolatedH,
+          plannedRevenue: pPlannedRev,
+          plannedCost: pPlannedCost,
+          plannedMargin: pPlannedMargin,
+          actualRevenue: pActualRev,
+          actualCost: pActualCost,
+          actualMargin: pActualMargin
+        });
+      });
+
+      totalPlannedHours = Math.round(totalPlannedHours * 10) / 10;
+      totalActualHours = Math.round(totalActualHours * 10) / 10;
+      totalExtrapolatedHours = Math.round(totalExtrapolatedHours * 10) / 10;
+      totalPlannedRevenue = Math.round(totalPlannedRevenue * 100) / 100;
+      totalPlannedCost = Math.round(totalPlannedCost * 100) / 100;
+      const totalPlannedMargin = Math.round((totalPlannedRevenue - totalPlannedCost) * 100) / 100;
+      totalActualRevenue = Math.round(totalActualRevenue * 100) / 100;
+      totalActualCost = Math.round(totalActualCost * 100) / 100;
+      const totalActualMargin = Math.round((totalActualRevenue - totalActualCost) * 100) / 100;
+
+      // Capacity Utilization & Overbooking Check
+      const capacityUtilizationPlannedPercent = targetCapacityHours > 0
+        ? Math.round((totalPlannedHours / targetCapacityHours) * 1000) / 10
+        : 0;
+      const capacityUtilizationActualPercent = targetCapacityHours > 0
+        ? Math.round((totalActualHours / targetCapacityHours) * 1000) / 10
+        : 0;
+      const capacityUtilizationExtrapolatedPercent = targetCapacityHours > 0
+        ? Math.round((totalExtrapolatedHours / targetCapacityHours) * 1000) / 10
+        : 0;
+
+      const isOverbooked = totalPlannedHours > targetCapacityHours;
+      const overbookingHours = Math.round(Math.max(0, totalPlannedHours - targetCapacityHours) * 10) / 10;
+      const freeCapacityHours = Math.round(Math.max(0, targetCapacityHours - totalPlannedHours) * 10) / 10;
+
+      const roleObj = user.jobRoleId ? this.jobRoles.find(r => r.id === user.jobRoleId) : undefined;
+
+      employeesSummary.push({
+        userId: user.id,
+        userName: user.name,
+        userEmail: user.email,
+        role: user.role,
+        employmentType: user.employmentType,
+        companyName: user.companyName,
+        jobRoleName: roleObj?.name,
+        weeklyTargetHours: user.weeklyTargetHours || 40,
+        dailyTargetHours: dailyTarget,
+        stateLocation: userState,
+        targetWorkdaysInPeriod,
+        targetCapacityHours,
+        totalPlannedHours,
+        totalActualHours,
+        totalExtrapolatedHours,
+        capacityUtilizationPlannedPercent,
+        capacityUtilizationActualPercent,
+        capacityUtilizationExtrapolatedPercent,
+        isOverbooked,
+        overbookingHours,
+        freeCapacityHours,
+        totalPlannedRevenue,
+        totalPlannedCost,
+        totalPlannedMargin,
+        totalActualRevenue,
+        totalActualCost,
+        totalActualMargin,
+        projects: projectAllocations
+      });
+    });
+
+    // Summary KPIs
+    const totalCapacityHours = Math.round(employeesSummary.reduce((sum, e) => sum + e.targetCapacityHours, 0) * 10) / 10;
+    const totalPlannedHoursAll = Math.round(employeesSummary.reduce((sum, e) => sum + e.totalPlannedHours, 0) * 10) / 10;
+    const totalActualHoursAll = Math.round(employeesSummary.reduce((sum, e) => sum + e.totalActualHours, 0) * 10) / 10;
+    const totalOverbookedCount = employeesSummary.filter(e => e.isOverbooked).length;
+    const overallUtilizationPercent = totalCapacityHours > 0
+      ? Math.round((totalPlannedHoursAll / totalCapacityHours) * 1000) / 10
+      : 0;
+
+    return {
+      periodType,
+      periodKey,
+      periodLabel,
+      startDate,
+      endDate,
+      stateLocation: defaultStateCode,
+      kpis: {
+        totalEmployeesCount: employeesSummary.length,
+        totalOverbookedCount,
+        totalCapacityHours,
+        totalPlannedHours: totalPlannedHoursAll,
+        totalActualHours: totalActualHoursAll,
+        overallUtilizationPercent
+      },
+      employees: employeesSummary
+    };
+  }
+
   // --- Clockify CSV Importer (Section 10) ---
   public importClockifyData(rows: any[], actorId: string): ClockifyImportReport {
+    const currentOrg = this.organization;
+    const currentOrgId = currentOrg.id;
+
     const report: ClockifyImportReport = {
       totalRows: rows.length,
       importedEntries: 0,
@@ -2899,22 +4098,81 @@ export class StorageService {
       timestamp: new Date().toISOString()
     };
 
+    // Helper: Normalize date string (DD.MM.YYYY, DD/MM/YYYY, YYYY-MM-DD) to ISO YYYY-MM-DD
+    const normalizeDate = (rawDate: any): string => {
+      if (!rawDate || typeof rawDate !== 'string') {
+        return new Date().toISOString().split('T')[0];
+      }
+      const clean = rawDate.trim().replace(/^["']|["']$/g, '');
+
+      // DD.MM.YYYY or D.M.YYYY (e.g. 18.08.2026)
+      if (/^\d{1,2}\.\d{1,2}\.\d{4}$/.test(clean)) {
+        const [d, m, y] = clean.split('.');
+        return `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
+      }
+
+      // YYYY-MM-DD
+      if (/^\d{4}-\d{1,2}-\d{1,2}$/.test(clean)) {
+        const [y, m, d] = clean.split('-');
+        return `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
+      }
+
+      // DD/MM/YYYY or MM/DD/YYYY
+      if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(clean)) {
+        const parts = clean.split('/');
+        if (parseInt(parts[0], 10) > 12) {
+          return `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
+        }
+        if (parseInt(parts[1], 10) > 12) {
+          return `${parts[2]}-${parts[0].padStart(2, '0')}-${parts[1].padStart(2, '0')}`;
+        }
+        return `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
+      }
+
+      const parsed = new Date(clean);
+      if (!isNaN(parsed.getTime())) {
+        return parsed.toISOString().split('T')[0];
+      }
+      return new Date().toISOString().split('T')[0];
+    };
+
+    // Helper: Normalize time string (HH:mm:ss -> HH:mm)
+    const normalizeTime = (rawTime: any): string | undefined => {
+      if (!rawTime || typeof rawTime !== 'string') return undefined;
+      const clean = rawTime.trim().replace(/^["']|["']$/g, '');
+      if (!clean) return undefined;
+      const m = clean.match(/^(\d{1,2}):(\d{2})(?::\d{2})?$/);
+      if (m) {
+        return `${m[1].padStart(2, '0')}:${m[2]}`;
+      }
+      return clean;
+    };
+
     rows.forEach((row, index) => {
       try {
-        const clientName = row['Client'] || row['Kunde'] || 'Standard Kunde';
-        const projectName = row['Project'] || row['Projekt'] || 'Standard Projekt';
-        const userName = row['User'] || row['Benutzer'] || row['Mitarbeiter'] || 'Importierter Mitarbeiter';
-        const userEmail = row['Email'] || row['E-Mail'] || `${userName.toLowerCase().replace(/\s+/g, '.')}@example.com`;
-        const taskName = row['Task'] || row['Aufgabe'];
+        const clientName = String(row['Client'] || row['Kunde'] || 'Standard Kunde').trim();
+        const projectName = String(row['Project'] || row['Projekt'] || 'Standard Projekt').trim();
+
+        // Skip potential header rows
+        if (clientName.toLowerCase() === 'client' && projectName.toLowerCase() === 'project') {
+          return;
+        }
+
+        const userName = String(row['User'] || row['Benutzer'] || row['Mitarbeiter'] || 'Importierter Mitarbeiter').trim();
+        const userEmail = String(row['Email'] || row['E-Mail'] || `${userName.toLowerCase().replace(/\s+/g, '.')}@example.com`).trim();
+        const userGroup = String(row['Group'] || row['Gruppe'] || '').trim();
+        const taskName = row['Task'] || row['Aufgabe'] ? String(row['Task'] || row['Aufgabe']).trim() : undefined;
         const description = row['Description'] || row['Beschreibung'] || '';
-        const date = row['Start Date'] || row['Datum'] || row['Date'] || new Date().toISOString().split('T')[0];
-        const startTime = row['Start Time'] || row['Startzeit'];
-        const endTime = row['End Time'] || row['Endzeit'];
+        
+        const rawDate = row['Start Date'] || row['Datum'] || row['Date'];
+        const date = normalizeDate(rawDate);
+        const startTime = normalizeTime(row['Start Time'] || row['Startzeit']);
+        const endTime = normalizeTime(row['End Time'] || row['Endzeit']);
 
         // Duration parsing
         let durationMinutes = 60;
         if (row['Duration (decimal)']) {
-          durationMinutes = Math.round(parseFloat(row['Duration (decimal)']) * 60);
+          durationMinutes = Math.round(parseFloat(String(row['Duration (decimal)']).replace(',', '.')) * 60);
         } else if (row['Duration (h)']) {
           const parts = String(row['Duration (h)']).split(':');
           if (parts.length >= 2) {
@@ -2924,19 +4182,36 @@ export class StorageService {
           durationMinutes = this.calculateMinutes(startTime, endTime);
         }
 
+        if (durationMinutes <= 0) {
+          durationMinutes = 60;
+        }
+
+        // Billable Rate extraction
+        let hourlyBillingRate: number | undefined = undefined;
+        for (const key of Object.keys(row)) {
+          const k = key.toLowerCase();
+          if ((k.includes('billable rate') || k.includes('stundensatz') || k.includes('hourly rate')) && row[key]) {
+            const val = parseFloat(String(row[key]).replace(',', '.').trim());
+            if (!isNaN(val) && val > 0) {
+              hourlyBillingRate = val;
+              break;
+            }
+          }
+        }
+
         const isBillable = String(row['Billable'] || row['Abrechenbar'] || 'Yes').toLowerCase().includes('y') ||
                            String(row['Billable'] || '').toLowerCase().includes('ja') ||
                            row['Billable'] === true;
 
-        // 1. Ensure Client exists
-        let client = this.clients.find(c => c.name.toLowerCase() === clientName.toLowerCase());
+        // 1. Ensure Client exists in current organization
+        let client = this.clients.find(c => c.orgId === currentOrgId && c.name.toLowerCase() === clientName.toLowerCase());
         if (!client) {
           client = this.addClient({ name: clientName });
           report.createdClients.push(clientName);
         }
 
-        // 2. Ensure Project exists
-        let project = this.projects.find(p => p.name.toLowerCase() === projectName.toLowerCase());
+        // 2. Ensure Project exists in current organization
+        let project = this.projects.find(p => p.orgId === currentOrgId && p.name.toLowerCase() === projectName.toLowerCase());
         if (!project) {
           project = this.addProject({ name: projectName, clientId: client.id, billingModel: 'TIME_AND_MATERIAL' }, actorId);
           report.createdProjects.push(projectName);
@@ -2952,15 +4227,50 @@ export class StorageService {
           }
         }
 
-        // 4. Ensure User exists
-        let user = this.users.find(u => u.email.toLowerCase() === userEmail.toLowerCase() || u.name.toLowerCase() === userName.toLowerCase());
+        // 4. Ensure User exists and has membership in current organization
+        let user = this.users.find(u => 
+          (u.orgId === currentOrgId || (u.memberships && u.memberships.some(m => m.orgId === currentOrgId))) &&
+          (u.email.toLowerCase() === userEmail.toLowerCase() || u.name.toLowerCase() === userName.toLowerCase())
+        );
+
         if (!user) {
-          user = this.addUser({ name: userName, email: userEmail, role: 'EMPLOYEE' }, actorId);
-          report.createdUsers.push(userName);
+          // Check if user exists globally in another org
+          const existingGlobalUser = this.users.find(u => 
+            u.email.toLowerCase() === userEmail.toLowerCase() || u.name.toLowerCase() === userName.toLowerCase()
+          );
+
+          const isExternal = userGroup && !userGroup.toLowerCase().includes('insight arcs');
+
+          if (existingGlobalUser) {
+            user = existingGlobalUser;
+            if (!user.memberships) user.memberships = [];
+            if (!user.memberships.some(m => m.orgId === currentOrgId)) {
+              user.memberships.push({
+                orgId: currentOrgId,
+                orgName: currentOrg.name,
+                role: 'EMPLOYEE',
+                employmentType: isExternal ? 'EXTERNAL' : 'INTERNAL',
+                individualBillingRate: hourlyBillingRate,
+                isDefault: false
+              });
+            }
+          } else {
+            user = this.addUser({
+              name: userName,
+              email: userEmail,
+              role: 'EMPLOYEE',
+              status: 'ACTIVE',
+              employmentType: isExternal ? 'EXTERNAL' : 'INTERNAL',
+              companyName: isExternal ? userGroup : undefined,
+              individualBillingRate: hourlyBillingRate
+            }, actorId);
+            report.createdUsers.push(userName);
+          }
         }
 
-        // 5. Duplicate Check
+        // 5. Duplicate Check within current organization
         const isDuplicate = this.timeEntries.some(e =>
+          e.orgId === currentOrgId &&
           e.userId === user!.id &&
           e.projectId === project!.id &&
           e.date === date &&
@@ -2990,6 +4300,7 @@ export class StorageService {
           durationMinutes,
           description,
           isBillable,
+          hourlyBillingRate,
           approvalStatus: 'APPROVED'
         }, actorId);
 
@@ -3000,6 +4311,161 @@ export class StorageService {
     });
 
     return report;
+  }
+
+  /**
+   * Provides aggregated and granular billable vs. non-billable hour sums, rates, and costs
+   * across projects, users, and clients as a pure data export/API.
+   * - Kostensatz-Erfassung bleibt unabhängig vom Billable-Status immer aktiv
+   * - Kundenabrechnungssatz greift ausschließlich bei billable Buchungen
+   */
+  public getBillableSummary(options?: {
+    from?: string;
+    to?: string;
+    projectId?: string;
+    userId?: string;
+    clientId?: string;
+    projectType?: 'CUSTOMER_PROJECT' | 'INTERNAL_PROJECT';
+  }): BillableSummaryReport {
+    let list = this.timeEntries.filter(t => t.orgId === this.activeOrgId);
+
+    if (options?.from) {
+      list = list.filter(t => t.date >= options.from!);
+    }
+    if (options?.to) {
+      list = list.filter(t => t.date <= options.to!);
+    }
+    if (options?.projectId) {
+      list = list.filter(t => t.projectId === options.projectId);
+    }
+    if (options?.userId) {
+      list = list.filter(t => t.userId === options.userId);
+    }
+    if (options?.clientId) {
+      list = list.filter(t => t.clientId === options.clientId);
+    }
+    if (options?.projectType) {
+      const matchingProjIds = this.projects
+        .filter(p => p.orgId === this.activeOrgId && (p.projectType || 'CUSTOMER_PROJECT') === options.projectType)
+        .map(p => p.id);
+      list = list.filter(t => matchingProjIds.includes(t.projectId));
+    }
+
+    const totalHours = Math.round(list.reduce((sum, e) => sum + e.durationHoursDecimal, 0) * 10) / 10;
+    const billableHours = Math.round(list.filter(e => e.isBillable).reduce((sum, e) => sum + e.durationHoursDecimal, 0) * 10) / 10;
+    const nonBillableHours = Math.round(list.filter(e => !e.isBillable).reduce((sum, e) => sum + e.durationHoursDecimal, 0) * 10) / 10;
+    const billableSharePercent = totalHours > 0 ? Math.round((billableHours / totalHours) * 1000) / 10 : 0;
+
+    // Billing amount is generated exclusively by billable hours
+    const totalBillingAmount = Math.round(list.filter(e => e.isBillable).reduce((sum, e) => sum + e.calculatedAmount, 0) * 100) / 100;
+
+    // Internal cost rate calculation is always active for ALL hours (billable + non-billable)
+    const totalInternalCost = Math.round(list.reduce((sum, e) => sum + (e.calculatedCost || 0), 0) * 100) / 100;
+    const grossMargin = Math.round((totalBillingAmount - totalInternalCost) * 100) / 100;
+    const grossMarginPercent = totalBillingAmount > 0 ? Math.round((grossMargin / totalBillingAmount) * 1000) / 10 : 0;
+
+    const totals: BillableSummaryTotals = {
+      totalHours,
+      billableHours,
+      nonBillableHours,
+      billableSharePercent,
+      totalBillingAmount,
+      totalInternalCost,
+      grossMargin,
+      grossMarginPercent
+    };
+
+    // By Project Breakdown
+    const activeProjects = this.projects.filter(p => p.orgId === this.activeOrgId);
+    const byProject: BillableProjectSummary[] = activeProjects
+      .filter(p => {
+        if (options?.projectId && p.id !== options.projectId) return false;
+        if (options?.clientId && p.clientId !== options.clientId) return false;
+        if (options?.projectType && (p.projectType || 'CUSTOMER_PROJECT') !== options.projectType) return false;
+        return true;
+      })
+      .map(p => {
+        const pEntries = list.filter(e => e.projectId === p.id);
+        const pHours = Math.round(pEntries.reduce((sum, e) => sum + e.durationHoursDecimal, 0) * 10) / 10;
+        const pBillableHours = Math.round(pEntries.filter(e => e.isBillable).reduce((sum, e) => sum + e.durationHoursDecimal, 0) * 10) / 10;
+        const pNonBillableHours = Math.round(pEntries.filter(e => !e.isBillable).reduce((sum, e) => sum + e.durationHoursDecimal, 0) * 10) / 10;
+        const pBillableSharePercent = pHours > 0 ? Math.round((pBillableHours / pHours) * 1000) / 10 : 0;
+
+        const pBillingAmount = Math.round(pEntries.filter(e => e.isBillable).reduce((sum, e) => sum + e.calculatedAmount, 0) * 100) / 100;
+        const pCost = Math.round(pEntries.reduce((sum, e) => sum + (e.calculatedCost || 0), 0) * 100) / 100;
+        const pMargin = Math.round((pBillingAmount - pCost) * 100) / 100;
+        const pMarginPercent = pBillingAmount > 0 ? Math.round((pMargin / pBillingAmount) * 1000) / 10 : 0;
+
+        const effectiveBillingRate = pBillableHours > 0 ? Math.round((pBillingAmount / pBillableHours) * 100) / 100 : 0;
+        const effectiveCostRate = pHours > 0 ? Math.round((pCost / pHours) * 100) / 100 : 0;
+
+        return {
+          projectId: p.id,
+          projectNumber: p.projectNumber,
+          projectName: p.name,
+          projectType: p.projectType || 'CUSTOMER_PROJECT',
+          billingModel: p.billingModel,
+          clientId: p.clientId,
+          clientName: p.clientName || '',
+          totalHours: pHours,
+          billableHours: pBillableHours,
+          nonBillableHours: pNonBillableHours,
+          billableSharePercent: pBillableSharePercent,
+          effectiveBillingRate,
+          effectiveCostRate,
+          totalBillingAmount: pBillingAmount,
+          totalInternalCost: pCost,
+          margin: pMargin,
+          marginPercent: pMarginPercent
+        };
+      })
+      .filter(p => p.totalHours > 0 || (options?.projectId && p.projectId === options.projectId));
+
+    // By User Breakdown
+    const activeUsers = this.getUsers();
+    const byUser: BillableUserSummary[] = activeUsers
+      .filter(u => {
+        if (options?.userId && u.id !== options.userId) return false;
+        return true;
+      })
+      .map(u => {
+        const uEntries = list.filter(e => e.userId === u.id);
+        const uHours = Math.round(uEntries.reduce((sum, e) => sum + e.durationHoursDecimal, 0) * 10) / 10;
+        const uBillableHours = Math.round(uEntries.filter(e => e.isBillable).reduce((sum, e) => sum + e.durationHoursDecimal, 0) * 10) / 10;
+        const uNonBillableHours = Math.round(uEntries.filter(e => !e.isBillable).reduce((sum, e) => sum + e.durationHoursDecimal, 0) * 10) / 10;
+        const uBillableSharePercent = uHours > 0 ? Math.round((uBillableHours / uHours) * 1000) / 10 : 0;
+
+        const uBillingAmount = Math.round(uEntries.filter(e => e.isBillable).reduce((sum, e) => sum + e.calculatedAmount, 0) * 100) / 100;
+        const uCost = Math.round(uEntries.reduce((sum, e) => sum + (e.calculatedCost || 0), 0) * 100) / 100;
+        const uMargin = Math.round((uBillingAmount - uCost) * 100) / 100;
+
+        const role = this.jobRoles.find(r => r.id === u.jobRoleId);
+
+        return {
+          userId: u.id,
+          userName: u.name,
+          userRole: u.role,
+          employmentType: u.employmentType,
+          jobRoleName: role?.name,
+          totalHours: uHours,
+          billableHours: uBillableHours,
+          nonBillableHours: uNonBillableHours,
+          billableSharePercent: uBillableSharePercent,
+          totalBillingAmount: uBillingAmount,
+          totalInternalCost: uCost,
+          margin: uMargin
+        };
+      })
+      .filter(u => u.totalHours > 0 || (options?.userId && u.userId === options.userId));
+
+    return {
+      organization: this.organization.name,
+      queryPeriod: { from: options?.from, to: options?.to },
+      totals,
+      byProject,
+      byUser,
+      generatedAt: new Date().toISOString()
+    };
   }
 
   // --- API Key Management (Section 12.3) ---
@@ -3014,6 +4480,7 @@ export class StorageService {
       permissions: ['read:time-entries', 'read:working-time', 'read:forecasts']
     };
     this.apiKeys.push(key);
+    this.saveToFile();
     return key;
   }
 
@@ -3021,6 +4488,7 @@ export class StorageService {
     const key = this.apiKeys.find(k => k.id === keyId);
     if (!key) return false;
     key.status = 'REVOKED';
+    this.saveToFile();
     return true;
   }
 
@@ -3028,6 +4496,7 @@ export class StorageService {
     const found = this.apiKeys.find(k => k.key === apiKeyString && k.status === 'ACTIVE');
     if (found) {
       found.lastUsedAt = new Date().toISOString();
+      this.saveToFile();
       return true;
     }
     return false;
@@ -3053,6 +4522,7 @@ export class StorageService {
       timestamp: new Date().toISOString(),
       ...entry
     });
+    this.saveToFile();
   }
 }
 

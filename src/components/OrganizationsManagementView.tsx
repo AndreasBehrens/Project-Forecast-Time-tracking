@@ -27,11 +27,17 @@ import {
   Trash2,
   ExternalLink,
   ChevronRight,
-  Info
+  Info,
+  Database,
+  Download,
+  Upload,
+  HardDrive,
+  RefreshCw
 } from 'lucide-react';
 
 export const OrganizationsManagementView: React.FC = () => {
   const {
+    t,
     organizations,
     organization,
     activeOrgId,
@@ -49,13 +55,18 @@ export const OrganizationsManagementView: React.FC = () => {
     refreshAllData
   } = useApp();
 
-  const [activeTab, setActiveTab] = useState<'mandanten' | 'admins' | 'superadmins' | 'rbac'>('mandanten');
+  const [activeTab, setActiveTab] = useState<'mandanten' | 'admins' | 'superadmins' | 'rbac' | 'database'>('mandanten');
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [editingOrg, setEditingOrg] = useState<Organization | null>(null);
   const [switchingToOrgId, setSwitchingToOrgId] = useState<string | null>(null);
 
+  // Database Persistence States
+  const [dbMessage, setDbMessage] = useState<{ type: 'success' | 'error' | 'info'; text: string } | null>(null);
+  const [isDbProcessing, setIsDbProcessing] = useState(false);
+
   // Superadmin Management States
   const [showCreateSuperadminModal, setShowCreateSuperadminModal] = useState(false);
+  const [showResetConfirmModal, setShowResetConfirmModal] = useState(false);
   const [superadminName, setSuperadminName] = useState('');
   const [superadminEmail, setSuperadminEmail] = useState('');
   const [superadminMsg, setSuperadminMsg] = useState<string | null>(null);
@@ -216,6 +227,73 @@ export const OrganizationsManagementView: React.FC = () => {
     }, 1500);
   };
 
+  // Database persistence and backup handlers
+  const handleExportDatabase = () => {
+    window.open('/api/database/export', '_blank');
+  };
+
+  const handleManualSave = async () => {
+    try {
+      setIsDbProcessing(true);
+      const res = await fetch('/api/database/save', { method: 'POST' });
+      const data = await res.json();
+      setDbMessage({ type: 'success', text: data.message || 'Datenbank erfolgreich auf Datenträger gespeichert!' });
+      setTimeout(() => setDbMessage(null), 3000);
+    } catch {
+      setDbMessage({ type: 'error', text: 'Fehler beim Speichern der Datenbank' });
+    } finally {
+      setIsDbProcessing(false);
+    }
+  };
+
+  const handleImportDatabase = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      setIsDbProcessing(true);
+      const text = await file.text();
+      const backupData = JSON.parse(text);
+      const res = await fetch('/api/database/import', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(backupData)
+      });
+      const data = await res.json();
+      if (data.success) {
+        setDbMessage({ type: 'success', text: 'Datenbank erfolgreich aus Backup wiederhergestellt!' });
+        await refreshAllData();
+      } else {
+        setDbMessage({ type: 'error', text: data.error || 'Fehler beim Importieren der Daten' });
+      }
+    } catch {
+      setDbMessage({ type: 'error', text: 'Ungültige JSON-Sicherungsdatei' });
+    } finally {
+      setIsDbProcessing(false);
+      e.target.value = '';
+      setTimeout(() => setDbMessage(null), 4000);
+    }
+  };
+
+  const handleResetDatabase = () => {
+    setShowResetConfirmModal(true);
+  };
+
+  const executeResetDatabase = async () => {
+    try {
+      setIsDbProcessing(true);
+      const res = await fetch('/api/database/reset', { method: 'POST' });
+      const data = await res.json();
+      setDbMessage({ type: 'success', text: data.message || 'Datenbank erfolgreich auf Werkseinstellungen zurückgesetzt.' });
+      setShowResetConfirmModal(false);
+      await refreshAllData();
+      setTimeout(() => setDbMessage(null), 4000);
+    } catch {
+      setDbMessage({ type: 'error', text: 'Fehler beim Zurücksetzen der Datenbank.' });
+    } finally {
+      setIsDbProcessing(false);
+    }
+  };
+
   const superadmins = users.filter(u => u.role === 'SUPERADMIN' || u.id === 'u-1');
   const tenantAdmins = users.filter(u => u.role === 'ADMIN');
   const projectManagers = users.filter(u => u.role === 'PROJECT_MANAGER');
@@ -312,6 +390,19 @@ export const OrganizationsManagementView: React.FC = () => {
           >
             <KeyRound className="w-3.5 h-3.5 text-indigo-500" />
             <span>5-Regeln-Architektur &amp; RBAC</span>
+          </button>
+
+          <button
+            id="tab-btn-database"
+            onClick={() => setActiveTab('database')}
+            className={`px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-2 transition-all ${
+              activeTab === 'database'
+                ? 'bg-emerald-700 text-white shadow-xs'
+                : 'bg-slate-100 text-slate-600 hover:bg-slate-200 hover:text-slate-900'
+            }`}
+          >
+            <Database className="w-3.5 h-3.5 text-emerald-400" />
+            <span>Datensicherung &amp; Persistenz</span>
           </button>
         </div>
       </div>
@@ -881,6 +972,139 @@ export const OrganizationsManagementView: React.FC = () => {
       )}
 
       {/* ========================================================================= */}
+      {/* TAB 5: DATENSICHERUNG & PERSISTENZ */}
+      {/* ========================================================================= */}
+      {activeTab === 'database' && (
+        <div className="space-y-6 animate-in fade-in duration-150">
+          {/* Status Banner */}
+          <div className="bg-emerald-900 text-white rounded-2xl p-6 shadow-md border border-emerald-800">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div className="flex items-start gap-4">
+                <div className="w-12 h-12 rounded-xl bg-emerald-800/80 border border-emerald-700 flex items-center justify-center shrink-0">
+                  <HardDrive className="w-6 h-6 text-emerald-300" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-lg font-bold text-white">Permanente Datenträgerspeicherung aktiv</h3>
+                    <span className="bg-emerald-500/20 text-emerald-200 border border-emerald-400/40 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider">
+                      GoBD &amp; Revisionssicher
+                    </span>
+                  </div>
+                  <p className="text-xs text-emerald-200 mt-1 max-w-2xl leading-relaxed">
+                    Alle Änderungen an Zeiteinträgen, Arbeitszeiten, Projekten, Kunden, Forecasts und Mandanten-Einstellungen werden automatisch und unmittelbar auf dem persistenten Datenträger gesichert. Bei Server-Neustarts oder Veröffentlichungen (Publish) bleiben sämtliche Daten vollständig erhalten.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  id="btn-manual-db-save"
+                  onClick={handleManualSave}
+                  disabled={isDbProcessing}
+                  className="inline-flex items-center gap-2 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold rounded-xl transition-all shadow-xs disabled:opacity-50"
+                >
+                  <RefreshCw className={`w-4 h-4 ${isDbProcessing ? 'animate-spin' : ''}`} />
+                  Jetzt manuell sichern
+                </button>
+              </div>
+            </div>
+
+            {dbMessage && (
+              <div className={`mt-4 p-3 rounded-xl text-xs font-medium flex items-center gap-2 ${
+                dbMessage.type === 'success' ? 'bg-emerald-800/90 text-emerald-100 border border-emerald-700' :
+                dbMessage.type === 'error' ? 'bg-rose-900/90 text-rose-100 border border-rose-700' :
+                'bg-slate-800 text-slate-100 border border-slate-700'
+              }`}>
+                <Info className="w-4 h-4 shrink-0" />
+                <span>{dbMessage.text}</span>
+              </div>
+            )}
+          </div>
+
+          {/* Backup & Restore Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* Download Backup */}
+            <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-2xs space-y-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-700 flex items-center justify-center">
+                  <Download className="w-5 h-5" />
+                </div>
+                <div>
+                  <h4 className="font-bold text-slate-900 text-sm">Vollständiges Backup exportieren</h4>
+                  <p className="text-xs text-slate-500">Sichert alle Datenstrukturen als revisionssichere JSON-Datei</p>
+                </div>
+              </div>
+
+              <p className="text-xs text-slate-600 leading-relaxed">
+                Laden Sie eine vollständige Momentaufnahme des gesamten Systems herunter – inklusive aller Mandanten, Nutzer, Projekte, Zeiteinträge, Stundensätze und Audit-Logs.
+              </p>
+
+              <div className="pt-2">
+                <button
+                  id="btn-export-backup-json"
+                  onClick={handleExportDatabase}
+                  className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-xl transition-all shadow-xs"
+                >
+                  <Download className="w-4 h-4" />
+                  JSON-Backup jetzt herunterladen
+                </button>
+              </div>
+            </div>
+
+            {/* Restore Backup */}
+            <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-2xs space-y-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-amber-50 text-amber-700 flex items-center justify-center">
+                  <Upload className="w-5 h-5" />
+                </div>
+                <div>
+                  <h4 className="font-bold text-slate-900 text-sm">Backup wiederherstellen (Import)</h4>
+                  <p className="text-xs text-slate-500">Stellt einen vorherigen Stand aus einer JSON-Sicherung wieder her</p>
+                </div>
+              </div>
+
+              <p className="text-xs text-slate-600 leading-relaxed">
+                Wählen Sie eine zuvor exportierte JSON-Sicherungsdatei aus, um den Systemstand vollständig wiederherzustellen.
+              </p>
+
+              <div className="pt-2">
+                <label className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold rounded-xl transition-all shadow-xs cursor-pointer">
+                  <Upload className="w-4 h-4" />
+                  JSON-Sicherung auswählen &amp; einspielen
+                  <input
+                    type="file"
+                    accept=".json,application/json"
+                    onChange={handleImportDatabase}
+                    className="hidden"
+                  />
+                </label>
+              </div>
+            </div>
+          </div>
+
+          {/* Reset Box for Superadmins */}
+          {isSuperAdmin && (
+            <div className="bg-slate-50 rounded-2xl border border-slate-200 p-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div>
+                <h4 className="text-sm font-bold text-slate-900">Demodaten / Werkseinstellungen</h4>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Setzt die gesamte Datenbank auf den definierten Werkseinstellungs-Stand zurück: Hauptmandant sauber bereinigt (nur Superadmin), Demodaten im Testmandanten.
+                </p>
+              </div>
+              <button
+                id="btn-reset-db-demo"
+                onClick={handleResetDatabase}
+                disabled={isDbProcessing}
+                className="px-4 py-2 bg-white hover:bg-rose-50 text-rose-700 border border-rose-200 hover:border-rose-300 text-xs font-semibold rounded-xl transition-colors shrink-0 disabled:opacity-50"
+              >
+                Auf Werkseinstellungen zurücksetzen
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ========================================================================= */}
       {/* MODAL: CREATE ORGANIZATION */}
       {/* ========================================================================= */}
       {showCreateModal && (
@@ -1354,6 +1578,81 @@ export const OrganizationsManagementView: React.FC = () => {
                 </div>
               </form>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* MODAL: CONFIRM RESET TO FACTORY SETTINGS */}
+      {/* ========================================================================= */}
+      {showResetConfirmModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-200 text-left">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3 mb-4">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-rose-100 text-rose-700 flex items-center justify-center font-bold">
+                  <AlertTriangle className="w-5 h-5 text-rose-600" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-slate-900 text-sm">Auf Werkseinstellungen zurücksetzen</h3>
+                  <p className="text-xs text-slate-500">Superadmin-Aktion</p>
+                </div>
+              </div>
+              <button
+                onClick={() => !isDbProcessing && setShowResetConfirmModal(false)}
+                className="text-slate-400 hover:text-slate-600 text-lg leading-none"
+              >
+                &times;
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div className="bg-rose-50 border border-rose-200 rounded-xl p-3.5 text-xs text-rose-900 leading-relaxed space-y-2">
+                <p className="font-bold">Achtung: Diese Aktion setzt alle Daten auf Werkseinstellungen zurück!</p>
+                <p className="text-rose-800">
+                  Die Datenbank wird auf den definierten Werkseinstellungs-Stand zurückgesetzt:
+                </p>
+                <ul className="list-disc list-inside space-y-1 text-rose-700 text-[11px] pl-1">
+                  <li><strong>Hauptmandant (Insight Arcs GmbH):</strong> Vollständig bereinigt (ausschließlich Superadmin Dr. Andreas Behrens)</li>
+                  <li><strong>Testmandant (Insight Arcs):</strong> 20 Mitarbeiter, Demo-Kunden, Projekte, Aufgaben, Zeiteinträge &amp; Forecasts</li>
+                  <li><strong>Partnergesellschaften:</strong> NovaTech Solutions GmbH &amp; Helios Digital Advisory AG</li>
+                </ul>
+              </div>
+
+              <p className="text-xs text-slate-600">
+                Möchten Sie diesen Vorgang jetzt wirklich ausführen?
+              </p>
+
+              <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
+                <button
+                  type="button"
+                  disabled={isDbProcessing}
+                  onClick={() => setShowResetConfirmModal(false)}
+                  className="px-3.5 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-100 rounded-xl transition-colors disabled:opacity-50"
+                >
+                  Abbrechen
+                </button>
+                <button
+                  id="btn-confirm-factory-reset"
+                  type="button"
+                  disabled={isDbProcessing}
+                  onClick={executeResetDatabase}
+                  className="inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold text-white bg-rose-600 hover:bg-rose-700 rounded-xl shadow-xs transition-colors disabled:opacity-50"
+                >
+                  {isDbProcessing ? (
+                    <>
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                      Wird zurückgesetzt...
+                    </>
+                  ) : (
+                    <>
+                      <AlertTriangle className="w-3.5 h-3.5" />
+                      Ja, Werkseinstellungen laden
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}

@@ -77,7 +77,7 @@ const MainLayout: React.FC = () => {
     },
     {
       id: 'projectsClients' as const,
-      label: isPM ? 'Meine Projekte & Team' : t.navProjectsClients,
+      label: isPM ? t.navMyProjectsTeam : t.navProjectsClients,
       icon: FolderKanban,
       badge: null,
       // Visible to Admins and PMs (PMs only see their own projects and assigned staff/costs)
@@ -93,7 +93,7 @@ const MainLayout: React.FC = () => {
     },
     {
       id: 'forecast' as const,
-      label: isPM ? 'Projekt-Forecast' : t.navForecast,
+      label: isPM ? t.navProjectForecast : t.navForecast,
       icon: TrendingUp,
       badge: null,
       // Admins and PMs
@@ -115,9 +115,9 @@ const MainLayout: React.FC = () => {
     },
     {
       id: 'organizations' as const,
-      label: 'Mandanten',
+      label: t.navOrganizations,
       icon: Building2,
-      badge: isSuperAdmin ? 'Superadmin' : null,
+      badge: isSuperAdmin ? (t.roleSuperadmin || 'Superadmin') : null,
       visible: isSuperAdmin
     },
   ];

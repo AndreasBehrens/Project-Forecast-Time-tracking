@@ -42,14 +42,17 @@ export const ApiDocsView: React.FC = () => {
 
   const activeKey = apiKeys.find(k => k.status === 'ACTIVE');
 
-  const executeTestApiCall = async () => {
+  const [testEndpoint, setTestEndpoint] = useState<string>('/api/v1/billable-summary');
+
+  const executeTestApiCall = async (endpointToCall?: string) => {
     if (!activeKey) {
       alert('Bitte erstellen Sie zuerst einen aktiven API-Schlüssel.');
       return;
     }
+    const ep = endpointToCall || testEndpoint;
     try {
       setIsCallingApi(true);
-      const res = await fetch('/api/v1/time-entries?limit=5', {
+      const res = await fetch(ep, {
         headers: { 'x-api-key': activeKey.key }
       });
       const data = await res.json();
@@ -101,7 +104,7 @@ export const ApiDocsView: React.FC = () => {
           {t.apiDocsTitle}
         </h2>
         <p className="text-xs text-slate-500 mt-1">
-          {t.apiDocsSubtitle} (Beliebiger Zeitraum, Delta-Abrufe über <code>updatedAt</code>, EU-DSGVO konform).
+          {t.apiDocsSubtitle}
         </p>
       </div>
 
@@ -114,7 +117,7 @@ export const ApiDocsView: React.FC = () => {
               {t.apiKeys}
             </h3>
             <p className="text-xs text-slate-500">
-              Mandantengebundene API-Schlüssel für Power Automate, Excel und externe Analyse-Tools.
+              {t.apiKeysDesc}
             </p>
 
             <form onSubmit={handleCreateKey} className="flex gap-2">
@@ -123,7 +126,7 @@ export const ApiDocsView: React.FC = () => {
                 type="text"
                 value={newKeyName}
                 onChange={e => setNewKeyName(e.target.value)}
-                placeholder="z.B. Power Automate Sync"
+                placeholder="e.g. Power Automate Sync"
                 className="w-full border border-slate-200 rounded-xl px-3 py-2 text-xs"
               />
               <button
@@ -131,7 +134,7 @@ export const ApiDocsView: React.FC = () => {
                 type="submit"
                 className="bg-slate-900 hover:bg-slate-800 text-white font-semibold px-3.5 py-2 rounded-xl text-xs flex items-center gap-1 shrink-0"
               >
-                <Plus className="w-4 h-4" /> Erzeugen
+                <Plus className="w-4 h-4" /> {t.save}
               </button>
             </form>
 
@@ -144,7 +147,7 @@ export const ApiDocsView: React.FC = () => {
                     <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
                       key.status === 'ACTIVE' ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'
                     }`}>
-                      {key.status}
+                      {key.status === 'ACTIVE' ? t.active : t.inactive}
                     </span>
                   </div>
 
@@ -162,7 +165,7 @@ export const ApiDocsView: React.FC = () => {
                         <button
                           onClick={() => revokeApiKey(key.id)}
                           className="p-1 hover:bg-rose-50 rounded text-slate-400 hover:text-rose-600"
-                          title="Widerrufen"
+                          title={t.revokeKey}
                         >
                           <Trash2 className="w-3.5 h-3.5" />
                         </button>
@@ -179,16 +182,26 @@ export const ApiDocsView: React.FC = () => {
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2 font-bold text-xs">
                 <Terminal className="w-4 h-4 text-emerald-400" />
-                Live API-Abfrage testen
+                {t.testApiCall}
               </div>
-              <button
-                id="btn-test-api"
-                onClick={executeTestApiCall}
-                disabled={isCallingApi}
-                className="bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] font-semibold px-3 py-1 rounded-lg transition-colors"
-              >
-                {isCallingApi ? 'Lade...' : 'GET /api/v1/time-entries'}
-              </button>
+              <div className="flex items-center gap-1.5">
+                <button
+                  id="btn-test-billable-summary"
+                  onClick={() => executeTestApiCall('/api/v1/billable-summary')}
+                  disabled={isCallingApi}
+                  className="bg-purple-600 hover:bg-purple-500 text-white text-[11px] font-semibold px-2.5 py-1 rounded-lg transition-colors"
+                >
+                  {isCallingApi ? t.loading : 'GET billable-summary'}
+                </button>
+                <button
+                  id="btn-test-api"
+                  onClick={() => executeTestApiCall('/api/v1/time-entries?limit=5')}
+                  disabled={isCallingApi}
+                  className="bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] font-semibold px-2.5 py-1 rounded-lg transition-colors"
+                >
+                  {isCallingApi ? t.loading : 'GET time-entries'}
+                </button>
+              </div>
             </div>
 
             <div className="text-[11px] text-slate-400 font-mono">
@@ -219,7 +232,7 @@ export const ApiDocsView: React.FC = () => {
                   <span className="font-bold text-slate-900">/api/v1/time-entries</span>
                 </div>
                 <p className="text-[11px] text-slate-600">
-                  Liefert Zeiteinträge für jeden beliebigen Zeitraum. Filter: <code>from</code>, <code>to</code>, <code>projectId</code>, <code>clientId</code>, <code>approvalStatus</code>, <code>updatedAfter</code>.
+                  Returns time entries for any custom timeframe. Filter: <code>from</code>, <code>to</code>, <code>projectId</code>, <code>clientId</code>, <code>approvalStatus</code>, <code>updatedAfter</code>.
                 </p>
               </div>
 
@@ -229,7 +242,7 @@ export const ApiDocsView: React.FC = () => {
                   <span className="font-bold text-slate-900">/api/v1/working-time</span>
                 </div>
                 <p className="text-[11px] text-slate-600">
-                  Liefert allgemeine Tagesarbeitszeiten (Anwesenheit) mit Beginn, Ende, Pausen und Netto-Arbeitszeit.
+                  Returns daily attendance hours (clock-in, clock-out, break minutes, net time).
                 </p>
               </div>
 
@@ -239,8 +252,42 @@ export const ApiDocsView: React.FC = () => {
                   <span className="font-bold text-slate-900">/api/v1/forecasts</span>
                 </div>
                 <p className="text-[11px] text-slate-600">
-                  Liefert Plan- und Ist-Werte inklusive Hochrechnung auf Basis der verstrichenen Arbeitstage.
+                  Returns plan and actual values including live extrapolation based on passed workdays.
                 </p>
+              </div>
+
+              <div className="p-3 bg-purple-50/70 border border-purple-200 rounded-xl space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 font-mono">
+                    <span className="bg-purple-700 text-white font-bold px-1.5 py-0.5 rounded text-[10px]">GET</span>
+                    <span className="font-bold text-purple-950">/api/v1/billable-summary</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <a
+                      href="/api/export/billable-summary?format=csv"
+                      download="billable_summary.csv"
+                      className="px-2 py-0.5 bg-white hover:bg-purple-100 text-purple-900 border border-purple-200 rounded font-semibold text-[10px] transition-colors"
+                    >
+                      CSV Export
+                    </a>
+                    <a
+                      href="/api/export/billable-summary"
+                      target="_blank"
+                      rel="noreferrer"
+                      className="px-2 py-0.5 bg-purple-700 hover:bg-purple-800 text-white rounded font-semibold text-[10px] transition-colors"
+                    >
+                      JSON API
+                    </a>
+                  </div>
+                </div>
+                <p className="text-[11px] text-purple-900 leading-relaxed">
+                  <strong>Reiner Datenexport & REST-API</strong>: Aggregierte & granulare Auswertung von Billable vs. Non-Billable Stunden, effektiven Stundensätzen, internen Kostensätzen, Abrechnungssummen und Bruttomargen nach Projekten & Mitarbeitern.
+                </p>
+                <div className="text-[10px] text-purple-800 space-y-0.5 font-mono">
+                  <div>• Filter: <code>from</code>, <code>to</code>, <code>projectId</code>, <code>userId</code>, <code>clientId</code>, <code>projectType</code> (<code>CUSTOMER_PROJECT</code> | <code>INTERNAL_PROJECT</code>)</div>
+                  <div>• Kostensätze: Werden unabhängig vom Billable-Status für <strong>alle</strong> Stunden erfasst.</div>
+                  <div>• Kundenabrechnungssatz: Greift ausschließlich bei <strong>billable</strong> Buchungen.</div>
+                </div>
               </div>
             </div>
           </div>
@@ -249,23 +296,23 @@ export const ApiDocsView: React.FC = () => {
           <div className="space-y-3 pt-2 border-t border-slate-100">
             <h3 className="font-bold text-sm text-slate-900 flex items-center gap-2">
               <FileCode className="w-4 h-4 text-emerald-600" />
-              {t.powerAutomateGuide} (Excel-Synchronisation)
+              {t.powerAutomateGuide}
             </h3>
 
             <div className="space-y-2 text-xs text-slate-600">
               <div className="p-2.5 bg-slate-50 rounded-lg border border-slate-200">
-                <strong>Schritt 1: HTTP-Aktion in Power Automate anlegen</strong>
+                <strong>Step 1: Create HTTP Action in Power Automate</strong>
                 <ul className="list-disc list-inside mt-1 space-y-0.5 text-[11px]">
-                  <li>Methode: <code>GET</code></li>
-                  <li>URI: <code>https://[Ihre-App-URL]/api/v1/time-entries?from=@{'{'}triggerOutputs()...{'}'}</code></li>
-                  <li>Header: <code>x-api-key: [Ihr-API-Schlüssel]</code></li>
+                  <li>Method: <code>GET</code></li>
+                  <li>URI: <code>https://[your-app-url]/api/v1/time-entries?from=@{'{'}triggerOutputs()...{'}'}</code></li>
+                  <li>Header: <code>x-api-key: [your-api-key]</code></li>
                 </ul>
               </div>
 
               <div className="p-2.5 bg-slate-50 rounded-lg border border-slate-200">
-                <strong>Schritt 2: Aktion "JSON analysieren" (Parse JSON)</strong>
+                <strong>Step 2: Parse JSON Action</strong>
                 <p className="text-[11px] mt-1">
-                  Verwenden Sie das folgende Schema für die automatische Excel-Zeilen-Generierung ohne Duplikate:
+                  Use the following JSON schema for automatic deduplicated record insertion into Excel / Power BI:
                 </p>
                 <pre className="mt-1 bg-white p-2 rounded border border-slate-200 text-[10px] font-mono text-slate-800 max-h-36 overflow-y-auto">
                   {samplePowerAutomateJson}
@@ -273,9 +320,9 @@ export const ApiDocsView: React.FC = () => {
               </div>
 
               <div className="p-2.5 bg-slate-50 rounded-lg border border-slate-200">
-                <strong>Schritt 3: Excel Online (Business) - Zeile aktualisieren oder einfügen</strong>
+                <strong>Step 3: Excel Online (Business) - Insert / Update Row</strong>
                 <p className="text-[11px] mt-1">
-                  Schlüsselfeld: <code>id</code> (verhindert doppelte Zeileneinträge bei wiederholten Sync-Durchläufen).
+                  Key column: <code>id</code> (prevents duplicates during repeated synchronization intervals).
                 </p>
               </div>
             </div>
