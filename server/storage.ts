@@ -1813,7 +1813,10 @@ export class StorageService {
     return this.users.filter(u => u.orgId === this.activeOrgId || u.memberships?.some(m => m.orgId === this.activeOrgId));
   }
   
-  public getJobRoles() { return this.jobRoles.filter(r => r.orgId === this.activeOrgId); }
+  public getJobRoles(allOrgs: boolean = false) { 
+    if (allOrgs) return this.jobRoles;
+    return this.jobRoles.filter(r => r.orgId === this.activeOrgId); 
+  }
 
   public getPartners(actorId?: string, allOrgs: boolean = false): Partner[] {
     const roleInfo = this.getActorRoleInfo(actorId);

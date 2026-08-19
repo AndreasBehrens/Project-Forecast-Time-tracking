@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useApp } from '../context/AppContext';
 import { GERMAN_STATES } from '../utils/holidays';
-import { Organization, User } from '../types';
+import { Organization, User, Project, Client } from '../types';
 import {
   Building2,
   Plus,
@@ -59,6 +59,30 @@ export const OrganizationsManagementView: React.FC = () => {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [editingOrg, setEditingOrg] = useState<Organization | null>(null);
   const [switchingToOrgId, setSwitchingToOrgId] = useState<string | null>(null);
+
+  // Global Cross-Org datasets for Superadmin Management
+  const [allUsers, setAllUsers] = useState<User[]>([]);
+  const [allProjects, setAllProjects] = useState<Project[]>([]);
+  const [allClients, setAllClients] = useState<Client[]>([]);
+
+  const fetchCrossOrgData = useCallback(async () => {
+    try {
+      const [uRes, pRes, cRes] = await Promise.all([
+        fetch('/api/users?allOrgs=true').then(r => r.json()),
+        fetch('/api/projects?allOrgs=true').then(r => r.json()),
+        fetch('/api/clients?allOrgs=true').then(r => r.json())
+      ]);
+      if (Array.isArray(uRes)) setAllUsers(uRes);
+      if (Array.isArray(pRes)) setAllProjects(pRes);
+      if (Array.isArray(cRes)) setAllClients(cRes);
+    } catch (err) {
+      console.error('Failed to load cross-org overview data:', err);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchCrossOrgData();
+  }, [fetchCrossOrgData, organizations, activeOrgId]);
 
   // Database Persistence States
   const [dbMessage, setDbMessage] = useState<{ type: 'success' | 'error' | 'info'; text: string } | null>(null);
@@ -175,13 +199,14 @@ export const OrganizationsManagementView: React.FC = () => {
   const handleSwitchTenant = async (orgId: string) => {
     setSwitchingToOrgId(orgId);
     await switchOrganization(orgId);
+    await fetchCrossOrgData();
     setSwitchingToOrgId(null);
   };
 
   // Handle assigning/promoting an Admin to a tenant
   const handleOpenAssignAdmin = (org: Organization) => {
     setSelectedOrgForAdmin(org);
-    setSelectedUserIdForAdmin(users[0]?.id || '');
+    setSelectedUserIdForAdmin(displayUsers[0]?.id || '');
     setAdminAssignMsg(null);
     setShowAssignAdminModal(true);
   };
@@ -190,13 +215,14 @@ export const OrganizationsManagementView: React.FC = () => {
     e.preventDefault();
     if (!selectedOrgForAdmin || !selectedUserIdForAdmin) return;
 
-    const user = users.find(u => u.id === selectedUserIdForAdmin);
+    const user = displayUsers.find(u => u.id === selectedUserIdForAdmin);
     if (!user) return;
 
     // Update user role to ADMIN
     await updateUser(user.id, {
       role: 'ADMIN'
     });
+    await fetchCrossOrgData();
 
     setAdminAssignMsg(`Benutzer "${user.name}" wurde erfolgreich als Administrator für "${selectedOrgForAdmin.name}" ernannt.`);
     setTimeout(() => {
@@ -217,6 +243,7 @@ export const OrganizationsManagementView: React.FC = () => {
       employmentType: 'INTERNAL',
       weeklyTargetHours: 40
     });
+    await fetchCrossOrgData();
 
     setSuperadminMsg(`Superadmin "${superadminName}" wurde erfolgreich angelegt.`);
     setSuperadminName('');
@@ -286,6 +313,7 @@ export const OrganizationsManagementView: React.FC = () => {
       setDbMessage({ type: 'success', text: data.message || 'Datenbank erfolgreich auf Werkseinstellungen zurückgesetzt.' });
       setShowResetConfirmModal(false);
       await refreshAllData();
+      await fetchCrossOrgData();
       setTimeout(() => setDbMessage(null), 4000);
     } catch {
       setDbMessage({ type: 'error', text: 'Fehler beim Zurücksetzen der Datenbank.' });
@@ -294,9 +322,13 @@ export const OrganizationsManagementView: React.FC = () => {
     }
   };
 
-  const superadmins = users.filter(u => u.role === 'SUPERADMIN' || u.id === 'u-1');
-  const tenantAdmins = users.filter(u => u.role === 'ADMIN');
-  const projectManagers = users.filter(u => u.role === 'PROJECT_MANAGER');
+  const displayUsers = allUsers.length > 0 ? allUsers : users;
+  const displayProjects = allProjects.length > 0 ? allProjects : projects;
+  const displayClients = allClients.length > 0 ? allClients : clients;
+
+  const superadmins = displayUsers.filter(u => u.role === 'SUPERADMIN' || u.id === 'u-1');
+  const tenantAdmins = displayUsers.filter(u => u.role === 'ADMIN' || u.memberships?.some(m => m.role === 'ADMIN'));
+  const projectManagers = displayUsers.filter(u => u.role === 'PROJECT_MANAGER' || u.memberships?.some(m => m.role === 'PROJECT_MANAGER'));
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto pb-12">
@@ -450,10 +482,13 @@ export const OrganizationsManagementView: React.FC = () => {
             {organizations.map(org => {
               const isActive = org.id === activeOrgId;
               const stateInfo = GERMAN_STATES.find(s => s.code === org.stateLocation);
-              const orgUsers = users.filter(u => u.orgId === org.id || u.memberships?.some(m => m.orgId === org.id));
-              const orgAdmins = orgUsers.filter(u => u.role === 'ADMIN');
-              const orgProjectsCount = projects.filter(p => p.orgId === org.id).length;
-              const orgClientsCount = clients.filter(c => c.orgId === org.id).length;
+              const orgUsers = displayUsers.filter(u => u.orgId === org.id || u.memberships?.some(m => m.orgId === org.id));
+              const orgAdmins = orgUsers.filter(u => {
+                const mem = u.memberships?.find(m => m.orgId === org.id);
+                return (mem ? mem.role === 'ADMIN' : u.role === 'ADMIN') || u.role === 'ADMIN';
+              });
+              const orgProjectsCount = displayProjects.filter(p => p.orgId === org.id).length;
+              const orgClientsCount = displayClients.filter(c => c.orgId === org.id).length;
 
               return (
                 <div
@@ -647,7 +682,7 @@ export const OrganizationsManagementView: React.FC = () => {
                 <tbody className="divide-y divide-slate-100">
                   {tenantAdmins.map(admin => {
                     const org = organizations.find(o => o.id === admin.orgId);
-                    const managedProjects = projects.filter(p => p.projectManagerId === admin.id || p.managerUserIds?.includes(admin.id));
+                    const managedProjects = displayProjects.filter(p => p.projectManagerId === admin.id || p.managerUserIds?.includes(admin.id));
                     const isAlsoPM = managedProjects.length > 0;
 
                     return (
@@ -1465,7 +1500,7 @@ export const OrganizationsManagementView: React.FC = () => {
                     onChange={e => setSelectedUserIdForAdmin(e.target.value)}
                     className="w-full text-xs border border-slate-300 rounded-xl px-3 py-2 font-medium"
                   >
-                    {users.map(u => (
+                    {displayUsers.map(u => (
                       <option key={u.id} value={u.id}>
                         {u.name} ({u.email}) — Aktuell: {u.role}
                       </option>

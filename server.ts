@@ -244,7 +244,8 @@ async function startServer() {
 
   // Fachliche Mitarbeiterrollen (Section 24)
   app.get('/api/employee-roles', (req, res) => {
-    res.json(storage.getJobRoles());
+    const { allOrgs } = req.query as { allOrgs?: string };
+    res.json(storage.getJobRoles(allOrgs === 'true'));
   });
 
   app.post('/api/employee-roles', (req, res) => {

@@ -1,0 +1,2171 @@
+{
+  "organizations": [
+    {
+      "id": "org-insight-arcs-prod",
+      "name": "Insight Arcs GmbH (Hauptmandant)",
+      "code": "IA-BERLIN",
+      "defaultHourlyBillingRate": 130,
+      "defaultHourlyCostRate": 65,
+      "defaultCurrency": "EUR",
+      "stateLocation": "DE-BE",
+      "locationCity": "Berlin",
+      "allowMobileWorkplaces": true,
+      "logoColor": "emerald",
+      "createdAt": "2025-01-01T08:00:00.000Z"
+    },
+    {
+      "id": "org-insight-arcs-01",
+      "name": "Insight Arcs (Testmandant)",
+      "code": "IA-TEST",
+      "defaultHourlyBillingRate": 130,
+      "defaultHourlyCostRate": 65,
+      "defaultCurrency": "EUR",
+      "stateLocation": "DE-BE",
+      "locationCity": "Berlin",
+      "allowMobileWorkplaces": true,
+      "logoColor": "emerald",
+      "createdAt": "2025-01-01T08:00:00.000Z"
+    },
+    {
+      "id": "org-novatech-solutions-02",
+      "name": "NovaTech Solutions GmbH",
+      "code": "NOV-MUC",
+      "defaultHourlyBillingRate": 150,
+      "defaultHourlyCostRate": 75,
+      "defaultCurrency": "EUR",
+      "stateLocation": "DE-BY",
+      "locationCity": "München",
+      "allowMobileWorkplaces": false,
+      "logoColor": "blue",
+      "createdAt": "2025-02-01T08:00:00.000Z"
+    },
+    {
+      "id": "org-helios-consulting-03",
+      "name": "Helios Digital Advisory AG",
+      "code": "HEL-HAM",
+      "defaultHourlyBillingRate": 180,
+      "defaultHourlyCostRate": 90,
+      "defaultCurrency": "EUR",
+      "stateLocation": "DE-HH",
+      "locationCity": "Hamburg",
+      "allowMobileWorkplaces": true,
+      "logoColor": "amber",
+      "createdAt": "2025-03-01T08:00:00.000Z"
+    }
+  ],
+  "activeOrgId": "org-insight-arcs-prod",
+  "users": [
+    {
+      "id": "u-1",
+      "orgId": "org-insight-arcs-prod",
+      "name": "Dr. Andreas Behrens",
+      "email": "andreas.behrens@insightarcs.de",
+      "role": "SUPERADMIN",
+      "employmentType": "INTERNAL",
+      "jobRoleId": "role-prod-lead",
+      "individualBillingRate": 220,
+      "individualCostRate": 110,
+      "weeklyTargetHours": 40,
+      "dailyTargetHours": 8,
+      "workDays": [
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "holidayCalendar": "DE-BE",
+      "language": "de",
+      "status": "ACTIVE",
+      "memberships": [
+        {
+          "orgId": "org-insight-arcs-prod",
+          "orgName": "Insight Arcs GmbH (Hauptmandant)",
+          "role": "SUPERADMIN",
+          "employmentType": "INTERNAL",
+          "jobRoleId": "role-prod-lead",
+          "individualBillingRate": 220,
+          "individualCostRate": 110,
+          "isDefault": true
+        },
+        {
+          "orgId": "org-insight-arcs-01",
+          "orgName": "Insight Arcs (Testmandant)",
+          "role": "SUPERADMIN",
+          "employmentType": "INTERNAL",
+          "jobRoleId": "role-lead",
+          "individualBillingRate": 220,
+          "individualCostRate": 110,
+          "isDefault": false
+        },
+        {
+          "orgId": "org-novatech-solutions-02",
+          "orgName": "NovaTech Solutions GmbH",
+          "role": "SUPERADMIN",
+          "employmentType": "INTERNAL",
+          "individualBillingRate": 240,
+          "individualCostRate": 120
+        },
+        {
+          "orgId": "org-helios-consulting-03",
+          "orgName": "Helios Digital Advisory AG",
+          "role": "SUPERADMIN",
+          "employmentType": "INTERNAL",
+          "individualBillingRate": 260,
+          "individualCostRate": 130
+        }
+      ],
+      "createdAt": "2025-01-01T09:00:00.000Z"
+    },
+    {
+      "id": "u-2",
+      "orgId": "org-insight-arcs-01",
+      "name": "Laura Klein",
+      "email": "laura.klein@insightarcs.de",
+      "role": "ADMIN",
+      "employmentType": "INTERNAL",
+      "jobRoleId": "role-sr",
+      "weeklyTargetHours": 40,
+      "dailyTargetHours": 8,
+      "workDays": [
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "holidayCalendar": "DE-BE",
+      "language": "de",
+      "status": "ACTIVE",
+      "memberships": [
+        {
+          "orgId": "org-insight-arcs-01",
+          "orgName": "Insight Arcs (Testmandant)",
+          "role": "ADMIN",
+          "employmentType": "INTERNAL",
+          "jobRoleId": "role-sr",
+          "isDefault": true
+        },
+        {
+          "orgId": "org-novatech-solutions-02",
+          "orgName": "NovaTech Solutions GmbH",
+          "role": "PROJECT_MANAGER",
+          "employmentType": "INTERNAL",
+          "jobRoleId": "role-nova-pm",
+          "individualBillingRate": 180,
+          "individualCostRate": 90
+        }
+      ],
+      "createdAt": "2025-01-01T09:00:00.000Z"
+    },
+    {
+      "id": "u-3",
+      "orgId": "org-insight-arcs-01",
+      "name": "Markus Weber",
+      "email": "markus.weber@insightarcs.de",
+      "role": "PROJECT_MANAGER",
+      "employmentType": "INTERNAL",
+      "jobRoleId": "role-lead",
+      "weeklyTargetHours": 40,
+      "dailyTargetHours": 8,
+      "workDays": [
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "holidayCalendar": "DE-BE",
+      "language": "en",
+      "status": "ACTIVE",
+      "memberships": [
+        {
+          "orgId": "org-insight-arcs-01",
+          "orgName": "Insight Arcs (Testmandant)",
+          "role": "PROJECT_MANAGER",
+          "employmentType": "INTERNAL",
+          "jobRoleId": "role-lead",
+          "isDefault": true
+        },
+        {
+          "orgId": "org-novatech-solutions-02",
+          "orgName": "NovaTech Solutions GmbH",
+          "role": "PROJECT_MANAGER",
+          "employmentType": "INTERNAL",
+          "jobRoleId": "role-nova-pm",
+          "individualBillingRate": 180,
+          "individualCostRate": 90
+        }
+      ],
+      "createdAt": "2025-01-01T09:00:00.000Z"
+    },
+    {
+      "id": "u-4",
+      "orgId": "org-insight-arcs-01",
+      "name": "Sophie Becker",
+      "email": "sophie.becker@insightarcs.de",
+      "role": "EMPLOYEE",
+      "employmentType": "INTERNAL",
+      "jobRoleId": "role-sr",
+      "weeklyTargetHours": 40,
+      "dailyTargetHours": 8,
+      "workDays": [
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "holidayCalendar": "DE-BE",
+      "language": "de",
+      "status": "ACTIVE",
+      "memberships": [
+        {
+          "orgId": "org-insight-arcs-01",
+          "orgName": "Insight Arcs (Testmandant)",
+          "role": "EMPLOYEE",
+          "employmentType": "INTERNAL",
+          "jobRoleId": "role-sr",
+          "isDefault": true
+        }
+      ],
+      "createdAt": "2025-01-01T09:00:00.000Z"
+    },
+    {
+      "id": "u-5",
+      "orgId": "org-insight-arcs-01",
+      "name": "Tobias Fischer",
+      "email": "tobias.fischer@insightarcs.de",
+      "role": "EMPLOYEE",
+      "employmentType": "INTERNAL",
+      "jobRoleId": "role-mid",
+      "weeklyTargetHours": 40,
+      "dailyTargetHours": 8,
+      "workDays": [
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "holidayCalendar": "DE-BE",
+      "language": "de",
+      "status": "ACTIVE",
+      "memberships": [
+        {
+          "orgId": "org-insight-arcs-01",
+          "orgName": "Insight Arcs (Testmandant)",
+          "role": "EMPLOYEE",
+          "employmentType": "INTERNAL",
+          "jobRoleId": "role-mid",
+          "isDefault": true
+        },
+        {
+          "orgId": "org-novatech-solutions-02",
+          "orgName": "NovaTech Solutions GmbH",
+          "role": "EMPLOYEE",
+          "employmentType": "INTERNAL",
+          "jobRoleId": "role-nova-dev",
+          "individualBillingRate": 160,
+          "individualCostRate": 80
+        },
+        {
+          "orgId": "org-helios-consulting-03",
+          "orgName": "Helios Digital Advisory AG",
+          "role": "EMPLOYEE",
+          "employmentType": "EXTERNAL",
+          "individualBillingRate": 190,
+          "individualCostRate": 95
+        }
+      ],
+      "createdAt": "2025-01-01T09:00:00.000Z"
+    },
+    {
+      "id": "u-6",
+      "orgId": "org-insight-arcs-01",
+      "name": "Julia Hoffmann",
+      "email": "julia.hoffmann@insightarcs.de",
+      "role": "EMPLOYEE",
+      "employmentType": "INTERNAL",
+      "jobRoleId": "role-sr",
+      "weeklyTargetHours": 32,
+      "dailyTargetHours": 6.4,
+      "workDays": [
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "holidayCalendar": "DE-BE",
+      "language": "en",
+      "status": "ACTIVE",
+      "memberships": [
+        {
+          "orgId": "org-insight-arcs-01",
+          "orgName": "Insight Arcs (Testmandant)",
+          "role": "EMPLOYEE",
+          "employmentType": "INTERNAL",
+          "jobRoleId": "role-sr",
+          "isDefault": true
+        }
+      ],
+      "createdAt": "2025-01-01T09:00:00.000Z"
+    },
+    {
+      "id": "u-7",
+      "orgId": "org-insight-arcs-01",
+      "name": "Dennis Wagner",
+      "email": "dennis.wagner@insightarcs.de",
+      "role": "EMPLOYEE",
+      "employmentType": "INTERNAL",
+      "jobRoleId": "role-mid",
+      "weeklyTargetHours": 40,
+      "dailyTargetHours": 8,
+      "workDays": [
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "holidayCalendar": "DE-BE",
+      "language": "de",
+      "status": "ACTIVE",
+      "memberships": [
+        {
+          "orgId": "org-insight-arcs-01",
+          "orgName": "Insight Arcs (Testmandant)",
+          "role": "EMPLOYEE",
+          "employmentType": "INTERNAL",
+          "jobRoleId": "role-mid",
+          "isDefault": true
+        }
+      ],
+      "createdAt": "2025-01-01T09:00:00.000Z"
+    },
+    {
+      "id": "u-8",
+      "orgId": "org-insight-arcs-01",
+      "name": "Elena Meyer",
+      "email": "elena.meyer@insightarcs.de",
+      "role": "EMPLOYEE",
+      "employmentType": "INTERNAL",
+      "jobRoleId": "role-mid",
+      "weeklyTargetHours": 40,
+      "dailyTargetHours": 8,
+      "workDays": [
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "holidayCalendar": "DE-BE",
+      "language": "de",
+      "status": "ACTIVE",
+      "memberships": [
+        {
+          "orgId": "org-insight-arcs-01",
+          "orgName": "Insight Arcs (Testmandant)",
+          "role": "EMPLOYEE",
+          "employmentType": "INTERNAL",
+          "jobRoleId": "role-mid",
+          "isDefault": true
+        },
+        {
+          "orgId": "org-novatech-solutions-02",
+          "orgName": "NovaTech Solutions GmbH",
+          "role": "EMPLOYEE",
+          "employmentType": "INTERNAL",
+          "jobRoleId": "role-nova-dev",
+          "individualBillingRate": 160,
+          "individualCostRate": 80
+        },
+        {
+          "orgId": "org-helios-consulting-03",
+          "orgName": "Helios Digital Advisory AG",
+          "role": "EMPLOYEE",
+          "employmentType": "EXTERNAL",
+          "individualBillingRate": 190,
+          "individualCostRate": 95
+        }
+      ],
+      "createdAt": "2025-01-01T09:00:00.000Z"
+    },
+    {
+      "id": "u-9",
+      "orgId": "org-insight-arcs-01",
+      "name": "Jan Richter",
+      "email": "jan.richter@insightarcs.de",
+      "role": "EMPLOYEE",
+      "employmentType": "INTERNAL",
+      "jobRoleId": "role-mid",
+      "weeklyTargetHours": 40,
+      "dailyTargetHours": 8,
+      "workDays": [
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "holidayCalendar": "DE-BE",
+      "language": "en",
+      "status": "ACTIVE",
+      "memberships": [
+        {
+          "orgId": "org-insight-arcs-01",
+          "orgName": "Insight Arcs (Testmandant)",
+          "role": "EMPLOYEE",
+          "employmentType": "INTERNAL",
+          "jobRoleId": "role-mid",
+          "isDefault": true
+        }
+      ],
+      "createdAt": "2025-01-01T09:00:00.000Z"
+    },
+    {
+      "id": "u-10",
+      "orgId": "org-insight-arcs-01",
+      "name": "Sarah Koch",
+      "email": "sarah.koch@insightarcs.de",
+      "role": "EMPLOYEE",
+      "employmentType": "INTERNAL",
+      "jobRoleId": "role-mid",
+      "weeklyTargetHours": 40,
+      "dailyTargetHours": 8,
+      "workDays": [
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "holidayCalendar": "DE-BE",
+      "language": "de",
+      "status": "ACTIVE",
+      "memberships": [
+        {
+          "orgId": "org-insight-arcs-01",
+          "orgName": "Insight Arcs (Testmandant)",
+          "role": "EMPLOYEE",
+          "employmentType": "INTERNAL",
+          "jobRoleId": "role-mid",
+          "isDefault": true
+        }
+      ],
+      "createdAt": "2025-01-01T09:00:00.000Z"
+    },
+    {
+      "id": "u-11",
+      "orgId": "org-insight-arcs-01",
+      "name": "Felix Bauer",
+      "email": "felix.bauer@freelance-tech.de",
+      "role": "EMPLOYEE",
+      "employmentType": "EXTERNAL",
+      "companyName": "Bauer Cloud Consulting",
+      "externalType": "FREELANCER",
+      "contactPerson": "Felix Bauer",
+      "contactPhone": "+49 171 1234567",
+      "contactEmail": "felix.bauer@freelance-tech.de",
+      "billingEmail": "rechnung@bauer-cloud.de",
+      "street": "Kastanienallee 14",
+      "zip": "10435",
+      "city": "Berlin",
+      "country": "Deutschland",
+      "taxId": "DE345678901",
+      "jobRoleId": "role-sr",
+      "weeklyTargetHours": 40,
+      "dailyTargetHours": 8,
+      "workDays": [
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "holidayCalendar": "DE-BE",
+      "language": "de",
+      "status": "ACTIVE",
+      "memberships": [
+        {
+          "orgId": "org-insight-arcs-01",
+          "orgName": "Insight Arcs (Testmandant)",
+          "role": "EMPLOYEE",
+          "employmentType": "EXTERNAL",
+          "jobRoleId": "role-sr",
+          "isDefault": true
+        }
+      ],
+      "createdAt": "2025-01-01T09:00:00.000Z"
+    },
+    {
+      "id": "u-12",
+      "orgId": "org-insight-arcs-01",
+      "name": "Miriam Wolf",
+      "email": "miriam.wolf@insightarcs.de",
+      "role": "EMPLOYEE",
+      "employmentType": "INTERNAL",
+      "jobRoleId": "role-mid",
+      "weeklyTargetHours": 30,
+      "dailyTargetHours": 6,
+      "workDays": [
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "holidayCalendar": "DE-BE",
+      "language": "en",
+      "status": "ACTIVE",
+      "memberships": [
+        {
+          "orgId": "org-insight-arcs-01",
+          "orgName": "Insight Arcs (Testmandant)",
+          "role": "EMPLOYEE",
+          "employmentType": "INTERNAL",
+          "jobRoleId": "role-mid",
+          "isDefault": true
+        }
+      ],
+      "createdAt": "2025-01-01T09:00:00.000Z"
+    },
+    {
+      "id": "u-13",
+      "orgId": "org-insight-arcs-01",
+      "name": "Patrick Schwarz",
+      "email": "patrick.schwarz@insightarcs.de",
+      "role": "EMPLOYEE",
+      "employmentType": "INTERNAL",
+      "jobRoleId": "role-jr",
+      "weeklyTargetHours": 40,
+      "dailyTargetHours": 8,
+      "workDays": [
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "holidayCalendar": "DE-BE",
+      "language": "de",
+      "status": "ACTIVE",
+      "memberships": [
+        {
+          "orgId": "org-insight-arcs-01",
+          "orgName": "Insight Arcs (Testmandant)",
+          "role": "EMPLOYEE",
+          "employmentType": "INTERNAL",
+          "jobRoleId": "role-jr",
+          "isDefault": true
+        }
+      ],
+      "createdAt": "2025-01-01T09:00:00.000Z"
+    },
+    {
+      "id": "u-14",
+      "orgId": "org-insight-arcs-01",
+      "name": "Hanna Zimmermann",
+      "email": "hanna.zimmermann@insightarcs.de",
+      "role": "EMPLOYEE",
+      "employmentType": "INTERNAL",
+      "jobRoleId": "role-jr",
+      "weeklyTargetHours": 40,
+      "dailyTargetHours": 8,
+      "workDays": [
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "holidayCalendar": "DE-BE",
+      "language": "de",
+      "status": "ACTIVE",
+      "memberships": [
+        {
+          "orgId": "org-insight-arcs-01",
+          "orgName": "Insight Arcs (Testmandant)",
+          "role": "EMPLOYEE",
+          "employmentType": "INTERNAL",
+          "jobRoleId": "role-jr",
+          "isDefault": true
+        }
+      ],
+      "createdAt": "2025-01-01T09:00:00.000Z"
+    },
+    {
+      "id": "u-15",
+      "orgId": "org-insight-arcs-01",
+      "name": "Christian Braun",
+      "email": "c.braun@braun-security.com",
+      "role": "EMPLOYEE",
+      "employmentType": "EXTERNAL",
+      "companyName": "Braun IT-Security Partners GbR",
+      "partnerId": "partner-2",
+      "partnerName": "Braun IT-Security Partners GbR",
+      "externalType": "PARTNER_EMPLOYEE",
+      "contactPerson": "Christian Braun",
+      "contactPhone": "+49 89 77889900",
+      "contactEmail": "c.braun@braun-security.com",
+      "billingEmail": "invoicing@braun-security.com",
+      "street": "Maximilianstraße 45",
+      "zip": "80539",
+      "city": "München",
+      "country": "Deutschland",
+      "taxId": "DE312456789",
+      "jobRoleId": "role-sr",
+      "weeklyTargetHours": 40,
+      "dailyTargetHours": 8,
+      "workDays": [
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "holidayCalendar": "DE-BE",
+      "language": "en",
+      "status": "ACTIVE",
+      "memberships": [
+        {
+          "orgId": "org-insight-arcs-01",
+          "orgName": "Insight Arcs (Testmandant)",
+          "role": "EMPLOYEE",
+          "employmentType": "EXTERNAL",
+          "jobRoleId": "role-sr",
+          "isDefault": true
+        }
+      ],
+      "createdAt": "2025-01-01T09:00:00.000Z"
+    },
+    {
+      "id": "u-16",
+      "orgId": "org-insight-arcs-01",
+      "name": "Lisa Krüger",
+      "email": "lisa.krueger@insightarcs.de",
+      "role": "EMPLOYEE",
+      "employmentType": "INTERNAL",
+      "jobRoleId": "role-mid",
+      "weeklyTargetHours": 40,
+      "dailyTargetHours": 8,
+      "workDays": [
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "holidayCalendar": "DE-BE",
+      "language": "de",
+      "status": "ACTIVE",
+      "memberships": [
+        {
+          "orgId": "org-insight-arcs-01",
+          "orgName": "Insight Arcs (Testmandant)",
+          "role": "EMPLOYEE",
+          "employmentType": "INTERNAL",
+          "jobRoleId": "role-mid",
+          "isDefault": true
+        }
+      ],
+      "createdAt": "2025-01-01T09:00:00.000Z"
+    },
+    {
+      "id": "u-17",
+      "orgId": "org-insight-arcs-01",
+      "name": "David Schmitt",
+      "email": "d.schmitt@devcontractors.eu",
+      "role": "EMPLOYEE",
+      "employmentType": "EXTERNAL",
+      "companyName": "DevContractors EU GmbH",
+      "partnerId": "partner-1",
+      "partnerName": "DevContractors EU GmbH",
+      "externalType": "PARTNER_EMPLOYEE",
+      "contactPerson": "David Schmitt",
+      "contactPhone": "+49 30 55443322",
+      "contactEmail": "d.schmitt@devcontractors.eu",
+      "billingEmail": "rechnung@devcontractors.eu",
+      "street": "Friedrichstraße 120",
+      "zip": "10117",
+      "city": "Berlin",
+      "country": "Deutschland",
+      "taxId": "DE289348123",
+      "jobRoleId": "role-mid",
+      "weeklyTargetHours": 40,
+      "dailyTargetHours": 8,
+      "workDays": [
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "holidayCalendar": "DE-BE",
+      "language": "de",
+      "status": "ACTIVE",
+      "memberships": [
+        {
+          "orgId": "org-insight-arcs-01",
+          "orgName": "Insight Arcs (Testmandant)",
+          "role": "EMPLOYEE",
+          "employmentType": "EXTERNAL",
+          "jobRoleId": "role-mid",
+          "isDefault": true
+        }
+      ],
+      "createdAt": "2025-01-01T09:00:00.000Z"
+    },
+    {
+      "id": "u-18",
+      "orgId": "org-insight-arcs-01",
+      "name": "Anja Frank",
+      "email": "anja.frank@insightarcs.de",
+      "role": "EMPLOYEE",
+      "employmentType": "INTERNAL",
+      "jobRoleId": "role-mid",
+      "weeklyTargetHours": 20,
+      "dailyTargetHours": 4,
+      "workDays": [
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "holidayCalendar": "DE-BE",
+      "language": "en",
+      "status": "ACTIVE",
+      "memberships": [
+        {
+          "orgId": "org-insight-arcs-01",
+          "orgName": "Insight Arcs (Testmandant)",
+          "role": "EMPLOYEE",
+          "employmentType": "INTERNAL",
+          "jobRoleId": "role-mid",
+          "isDefault": true
+        }
+      ],
+      "createdAt": "2025-01-01T09:00:00.000Z"
+    },
+    {
+      "id": "u-19",
+      "orgId": "org-insight-arcs-01",
+      "name": "Stefan Lange",
+      "email": "stefan.lange@insightarcs.de",
+      "role": "EMPLOYEE",
+      "employmentType": "INTERNAL",
+      "jobRoleId": "role-mid",
+      "weeklyTargetHours": 40,
+      "dailyTargetHours": 8,
+      "workDays": [
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "holidayCalendar": "DE-BE",
+      "language": "de",
+      "status": "ACTIVE",
+      "memberships": [
+        {
+          "orgId": "org-insight-arcs-01",
+          "orgName": "Insight Arcs (Testmandant)",
+          "role": "EMPLOYEE",
+          "employmentType": "INTERNAL",
+          "jobRoleId": "role-mid",
+          "isDefault": true
+        }
+      ],
+      "createdAt": "2025-01-01T09:00:00.000Z"
+    },
+    {
+      "id": "u-20",
+      "orgId": "org-insight-arcs-01",
+      "name": "Vanessa Hartmann",
+      "email": "v.hartmann@external-expert.de",
+      "role": "EMPLOYEE",
+      "employmentType": "EXTERNAL",
+      "companyName": "Hartmann Consulting & Support",
+      "externalType": "FREELANCER",
+      "contactPerson": "Vanessa Hartmann",
+      "contactPhone": "+49 172 9876543",
+      "contactEmail": "v.hartmann@external-expert.de",
+      "billingEmail": "buchhaltung@hartmann-consulting.de",
+      "street": "Sonnenallee 88",
+      "zip": "12045",
+      "city": "Berlin",
+      "country": "Deutschland",
+      "taxId": "DE398712345",
+      "jobRoleId": "role-jr",
+      "weeklyTargetHours": 40,
+      "dailyTargetHours": 8,
+      "workDays": [
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "holidayCalendar": "DE-BE",
+      "language": "de",
+      "status": "ACTIVE",
+      "memberships": [
+        {
+          "orgId": "org-insight-arcs-01",
+          "orgName": "Insight Arcs (Testmandant)",
+          "role": "EMPLOYEE",
+          "employmentType": "EXTERNAL",
+          "jobRoleId": "role-jr",
+          "isDefault": true
+        }
+      ],
+      "createdAt": "2025-01-01T09:00:00.000Z"
+    },
+    {
+      "id": "u-21",
+      "orgId": "org-insight-arcs-01",
+      "name": "Michael Keller",
+      "email": "m.keller@keller-pm-services.de",
+      "role": "PROJECT_MANAGER",
+      "employmentType": "EXTERNAL",
+      "companyName": "Keller PM Advisory Services",
+      "partnerId": "partner-3",
+      "partnerName": "Keller PM Advisory Services",
+      "externalType": "PARTNER_EMPLOYEE",
+      "contactPerson": "Michael Keller",
+      "contactPhone": "+49 40 33221100",
+      "contactEmail": "m.keller@keller-pm-services.de",
+      "billingEmail": "accounting@keller-pm-services.de",
+      "street": "Neuer Wall 18",
+      "zip": "20354",
+      "city": "Hamburg",
+      "country": "Deutschland",
+      "taxId": "DE298765432",
+      "jobRoleId": "role-sr",
+      "weeklyTargetHours": 40,
+      "dailyTargetHours": 8,
+      "workDays": [
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "holidayCalendar": "DE-BE",
+      "language": "en",
+      "status": "ACTIVE",
+      "memberships": [
+        {
+          "orgId": "org-insight-arcs-01",
+          "orgName": "Insight Arcs (Testmandant)",
+          "role": "PROJECT_MANAGER",
+          "employmentType": "EXTERNAL",
+          "jobRoleId": "role-sr",
+          "isDefault": true
+        }
+      ],
+      "createdAt": "2025-01-01T09:00:00.000Z"
+    }
+  ],
+  "jobRoles": [
+    {
+      "id": "role-prod-jr",
+      "orgId": "org-insight-arcs-prod",
+      "name": "Junior Consultant / Developer",
+      "standardBillingRate": 95,
+      "standardCostRate": 45,
+      "status": "ACTIVE"
+    },
+    {
+      "id": "role-prod-mid",
+      "orgId": "org-insight-arcs-prod",
+      "name": "Consultant / Engineer",
+      "standardBillingRate": 130,
+      "standardCostRate": 65,
+      "status": "ACTIVE"
+    },
+    {
+      "id": "role-prod-sr",
+      "orgId": "org-insight-arcs-prod",
+      "name": "Senior Consultant / Specialist",
+      "standardBillingRate": 165,
+      "standardCostRate": 85,
+      "status": "ACTIVE"
+    },
+    {
+      "id": "role-prod-lead",
+      "orgId": "org-insight-arcs-prod",
+      "name": "Lead Architect / Principal",
+      "standardBillingRate": 200,
+      "standardCostRate": 105,
+      "status": "ACTIVE"
+    },
+    {
+      "id": "role-jr",
+      "orgId": "org-insight-arcs-01",
+      "name": "Junior Consultant / Developer",
+      "standardBillingRate": 95,
+      "standardCostRate": 45,
+      "status": "ACTIVE"
+    },
+    {
+      "id": "role-mid",
+      "orgId": "org-insight-arcs-01",
+      "name": "Consultant / Engineer",
+      "standardBillingRate": 130,
+      "standardCostRate": 65,
+      "status": "ACTIVE"
+    },
+    {
+      "id": "role-sr",
+      "orgId": "org-insight-arcs-01",
+      "name": "Senior Consultant / Specialist",
+      "standardBillingRate": 165,
+      "standardCostRate": 85,
+      "status": "ACTIVE"
+    },
+    {
+      "id": "role-lead",
+      "orgId": "org-insight-arcs-01",
+      "name": "Lead Architect / Principal",
+      "standardBillingRate": 200,
+      "standardCostRate": 105,
+      "status": "ACTIVE"
+    },
+    {
+      "id": "role-nova-dev",
+      "orgId": "org-novatech-solutions-02",
+      "name": "Senior Cloud Engineer",
+      "standardBillingRate": 155,
+      "standardCostRate": 75,
+      "status": "ACTIVE"
+    },
+    {
+      "id": "role-nova-pm",
+      "orgId": "org-novatech-solutions-02",
+      "name": "Agile Delivery Lead",
+      "standardBillingRate": 170,
+      "standardCostRate": 85,
+      "status": "ACTIVE"
+    },
+    {
+      "id": "role-hel-adv",
+      "orgId": "org-helios-consulting-03",
+      "name": "Strategy Advisor",
+      "standardBillingRate": 210,
+      "standardCostRate": 100,
+      "status": "ACTIVE"
+    }
+  ],
+  "clients": [
+    {
+      "id": "c-1",
+      "orgId": "org-insight-arcs-01",
+      "name": "MedTech Solutions AG",
+      "clientNumber": "KND-1001",
+      "contactPerson": "Dr. Michael Hansen",
+      "email": "hansen@medtech-sol.de",
+      "status": "ACTIVE",
+      "createdAt": "2025-01-10T10:00:00Z"
+    },
+    {
+      "id": "c-2",
+      "orgId": "org-insight-arcs-01",
+      "name": "FinSecure Bank SE",
+      "clientNumber": "KND-1002",
+      "contactPerson": "Claudia von Berg",
+      "email": "c.berg@finsecure.de",
+      "status": "ACTIVE",
+      "createdAt": "2025-01-12T11:00:00Z"
+    },
+    {
+      "id": "c-3",
+      "orgId": "org-insight-arcs-01",
+      "name": "LogiChain Mobility GmbH",
+      "clientNumber": "KND-1003",
+      "contactPerson": "Ralf Richter",
+      "email": "r.richter@logichain.com",
+      "status": "ACTIVE",
+      "createdAt": "2025-01-15T09:30:00Z"
+    },
+    {
+      "id": "c-4",
+      "orgId": "org-insight-arcs-01",
+      "name": "GreenEnergy Systems AG",
+      "clientNumber": "KND-1004",
+      "contactPerson": "Sarah Vogt",
+      "email": "vogt@greenenergy.de",
+      "status": "ACTIVE",
+      "createdAt": "2025-02-01T08:00:00Z"
+    },
+    {
+      "id": "c-5",
+      "orgId": "org-insight-arcs-01",
+      "name": "Insight Arcs (Intern)",
+      "clientNumber": "INT-0001",
+      "contactPerson": "Internal Operations",
+      "email": "ops@insightarcs.de",
+      "status": "ACTIVE",
+      "createdAt": "2025-01-01T08:00:00Z"
+    },
+    {
+      "id": "c-nov-1",
+      "orgId": "org-novatech-solutions-02",
+      "name": "Bavaria Automotive Group",
+      "clientNumber": "NOV-KND-01",
+      "contactPerson": "Maximilian Huber",
+      "email": "m.huber@bavaria-auto.de",
+      "status": "ACTIVE",
+      "createdAt": "2025-02-05T09:00:00Z"
+    },
+    {
+      "id": "c-nov-2",
+      "orgId": "org-novatech-solutions-02",
+      "name": "Munich Quantum Labs",
+      "clientNumber": "NOV-KND-02",
+      "contactPerson": "Prof. Dr. Clara Eder",
+      "email": "eder@quantum-muc.de",
+      "status": "ACTIVE",
+      "createdAt": "2025-02-10T10:00:00Z"
+    },
+    {
+      "id": "c-hel-1",
+      "orgId": "org-helios-consulting-03",
+      "name": "Hanseatic Port Logistics AG",
+      "clientNumber": "HEL-KND-01",
+      "contactPerson": "Thorsten Jensen",
+      "email": "jensen@hanse-port.de",
+      "status": "ACTIVE",
+      "createdAt": "2025-03-05T09:00:00Z"
+    }
+  ],
+  "partners": [
+    {
+      "id": "partner-1",
+      "orgId": "org-insight-arcs-01",
+      "name": "DevContractors EU GmbH",
+      "partnerNumber": "PART-001",
+      "contactPerson": "David Schmitt",
+      "contactPhone": "+49 30 55443322",
+      "contactEmail": "d.schmitt@devcontractors.eu",
+      "billingEmail": "rechnung@devcontractors.eu",
+      "street": "Friedrichstraße 120",
+      "zip": "10117",
+      "city": "Berlin",
+      "country": "Deutschland",
+      "phone": "+49 30 55443300",
+      "website": "https://devcontractors.eu",
+      "taxId": "DE289348123",
+      "defaultHourlyRate": 95,
+      "notes": "Full-Stack Entwicklung und Cloud Infrastruktur Partner.",
+      "status": "ACTIVE",
+      "createdAt": "2025-01-05T08:00:00Z"
+    },
+    {
+      "id": "partner-2",
+      "orgId": "org-insight-arcs-01",
+      "name": "Braun IT-Security Partners GbR",
+      "partnerNumber": "PART-002",
+      "contactPerson": "Christian Braun",
+      "contactPhone": "+49 89 77889900",
+      "contactEmail": "c.braun@braun-security.com",
+      "billingEmail": "invoicing@braun-security.com",
+      "street": "Maximilianstraße 45",
+      "zip": "80539",
+      "city": "München",
+      "country": "Deutschland",
+      "phone": "+49 89 77889901",
+      "website": "https://braun-security.com",
+      "taxId": "DE312456789",
+      "defaultHourlyRate": 110,
+      "notes": "Spezialisten für IT-Sicherheitsaudits, Penetrationstests und DSGVO-Audits.",
+      "status": "ACTIVE",
+      "createdAt": "2025-01-08T09:00:00Z"
+    },
+    {
+      "id": "partner-3",
+      "orgId": "org-insight-arcs-01",
+      "name": "Keller PM Advisory Services",
+      "partnerNumber": "PART-003",
+      "contactPerson": "Michael Keller",
+      "contactPhone": "+49 40 33221100",
+      "contactEmail": "m.keller@keller-pm-services.de",
+      "billingEmail": "accounting@keller-pm-services.de",
+      "street": "Neuer Wall 18",
+      "zip": "20354",
+      "city": "Hamburg",
+      "country": "Deutschland",
+      "phone": "+49 40 33221101",
+      "website": "https://keller-pm-services.de",
+      "taxId": "DE298765432",
+      "defaultHourlyRate": 125,
+      "notes": "Agile Projektbegleitung, Scrum Master und Program-Management.",
+      "status": "ACTIVE",
+      "createdAt": "2025-01-10T10:00:00Z"
+    },
+    {
+      "id": "partner-nov-1",
+      "orgId": "org-novatech-solutions-02",
+      "name": "Alpine Code Crafters GmbH",
+      "partnerNumber": "NOV-PART-01",
+      "contactPerson": "Florian Huber",
+      "contactPhone": "+49 89 12345678",
+      "contactEmail": "florian@alpinecode.de",
+      "billingEmail": "billing@alpinecode.de",
+      "street": "Leopoldstraße 88",
+      "zip": "80802",
+      "city": "München",
+      "country": "Deutschland",
+      "taxId": "DE388291029",
+      "defaultHourlyRate": 105,
+      "status": "ACTIVE",
+      "createdAt": "2025-02-05T09:00:00Z"
+    }
+  ],
+  "projects": [
+    {
+      "id": "p-1",
+      "orgId": "org-insight-arcs-01",
+      "clientId": "c-1",
+      "clientName": "MedTech Solutions AG",
+      "name": "AI-Clinical-Workflow Assistant",
+      "projectNumber": "PRJ-2025-01",
+      "projectType": "CUSTOMER_PROJECT",
+      "isBillableDefault": true,
+      "projectManagerId": "u-2",
+      "projectManagerName": "Laura Klein",
+      "managerUserIds": [
+        "u-2"
+      ],
+      "billingModel": "TIME_AND_MATERIAL",
+      "budgetHours": 250,
+      "status": "ACTIVE",
+      "requireApproval": true,
+      "requiredFields": {
+        "description": true,
+        "task": true,
+        "breaks": false
+      },
+      "restrictToAssignedMembers": true,
+      "assignedUserIds": [
+        "u-1",
+        "u-2",
+        "u-4",
+        "u-5",
+        "u-6"
+      ],
+      "allowPmViewCosts": true,
+      "memberRates": [
+        {
+          "id": "pmr-1",
+          "projectId": "p-1",
+          "userId": "u-1",
+          "hourlyBillingRate": 230,
+          "hourlyCostRate": 110
+        },
+        {
+          "id": "pmr-2",
+          "projectId": "p-1",
+          "userId": "u-2",
+          "hourlyBillingRate": 175,
+          "hourlyCostRate": 85
+        }
+      ],
+      "createdAt": "2025-01-15T09:00:00Z"
+    },
+    {
+      "id": "p-2",
+      "orgId": "org-insight-arcs-01",
+      "clientId": "c-2",
+      "clientName": "FinSecure Bank SE",
+      "name": "Banking Core Cloud Migration",
+      "projectNumber": "PRJ-2025-02",
+      "projectType": "CUSTOMER_PROJECT",
+      "isBillableDefault": true,
+      "projectManagerId": "u-3",
+      "projectManagerName": "Markus Weber",
+      "managerUserIds": [
+        "u-3"
+      ],
+      "billingModel": "FIXED_PRICE",
+      "totalFixedPrice": 85000,
+      "budgetHours": 500,
+      "status": "ACTIVE",
+      "requireApproval": true,
+      "requiredFields": {
+        "description": true,
+        "task": true,
+        "breaks": true
+      },
+      "restrictToAssignedMembers": true,
+      "assignedUserIds": [
+        "u-1",
+        "u-3",
+        "u-7",
+        "u-8",
+        "u-9",
+        "u-10"
+      ],
+      "allowPmViewCosts": false,
+      "memberRates": [],
+      "fixedPriceAllocations": [
+        {
+          "id": "fpa-1",
+          "projectId": "p-2",
+          "title": "Phase 1: Architektur & PoC",
+          "amount": 25000,
+          "targetDate": "2025-03-31",
+          "status": "PAID"
+        },
+        {
+          "id": "fpa-2",
+          "projectId": "p-2",
+          "title": "Phase 2: Core Microservices",
+          "amount": 35000,
+          "targetDate": "2025-07-31",
+          "status": "INVOICED"
+        },
+        {
+          "id": "fpa-3",
+          "projectId": "p-2",
+          "title": "Phase 3: Rollout & Cutover",
+          "amount": 25000,
+          "targetDate": "2025-11-30",
+          "status": "PLANNED"
+        }
+      ],
+      "createdAt": "2025-01-20T10:00:00Z"
+    },
+    {
+      "id": "p-3",
+      "orgId": "org-insight-arcs-01",
+      "clientId": "c-3",
+      "clientName": "LogiChain Mobility GmbH",
+      "name": "Fleet Telematics Cloud Hub",
+      "projectNumber": "PRJ-2025-03",
+      "projectType": "CUSTOMER_PROJECT",
+      "isBillableDefault": true,
+      "projectManagerId": "u-2",
+      "projectManagerName": "Laura Klein",
+      "managerUserIds": [
+        "u-2"
+      ],
+      "billingModel": "TIME_AND_MATERIAL",
+      "budgetHours": 320,
+      "status": "ACTIVE",
+      "requireApproval": false,
+      "requiredFields": {
+        "description": true,
+        "task": false,
+        "breaks": false
+      },
+      "restrictToAssignedMembers": true,
+      "assignedUserIds": [
+        "u-1",
+        "u-2",
+        "u-4",
+        "u-11",
+        "u-12",
+        "u-13"
+      ],
+      "allowPmViewCosts": true,
+      "memberRates": [],
+      "createdAt": "2025-02-01T14:00:00Z"
+    },
+    {
+      "id": "p-4",
+      "orgId": "org-insight-arcs-01",
+      "clientId": "c-4",
+      "clientName": "GreenEnergy Systems AG",
+      "name": "Solar Yield Forecast Engine",
+      "projectNumber": "PRJ-2025-04",
+      "projectType": "CUSTOMER_PROJECT",
+      "isBillableDefault": true,
+      "projectManagerId": "u-21",
+      "projectManagerName": "Michael Keller",
+      "managerUserIds": [
+        "u-21"
+      ],
+      "billingModel": "TIME_AND_MATERIAL",
+      "budgetHours": 200,
+      "status": "ACTIVE",
+      "requireApproval": true,
+      "requiredFields": {
+        "description": true,
+        "task": true,
+        "breaks": false
+      },
+      "restrictToAssignedMembers": true,
+      "assignedUserIds": [
+        "u-1",
+        "u-21",
+        "u-5",
+        "u-13",
+        "u-14",
+        "u-15"
+      ],
+      "allowPmViewCosts": true,
+      "memberRates": [],
+      "createdAt": "2025-03-01T08:00:00Z"
+    },
+    {
+      "id": "p-5",
+      "orgId": "org-insight-arcs-01",
+      "clientId": "c-5",
+      "clientName": "Insight Arcs (Intern)",
+      "name": "Allgemeine Verwaltung & Weiterbildung",
+      "projectNumber": "INT-ADM-01",
+      "projectType": "INTERNAL_PROJECT",
+      "isBillableDefault": false,
+      "allowInternalRebilling": true,
+      "projectManagerId": "u-1",
+      "projectManagerName": "Dr. Andreas Behrens",
+      "managerUserIds": [
+        "u-1"
+      ],
+      "billingModel": "TIME_AND_MATERIAL",
+      "status": "ACTIVE",
+      "requireApproval": false,
+      "requiredFields": {
+        "description": false,
+        "task": false,
+        "breaks": false
+      },
+      "restrictToAssignedMembers": false,
+      "assignedUserIds": [],
+      "allowPmViewCosts": true,
+      "memberRates": [],
+      "createdAt": "2025-01-01T08:00:00Z"
+    },
+    {
+      "id": "p-nov-1",
+      "orgId": "org-novatech-solutions-02",
+      "clientId": "c-nov-1",
+      "clientName": "Bavaria Automotive Group",
+      "name": "Autonomous Driving Sensor Data Ingestion",
+      "projectNumber": "NOV-2025-01",
+      "projectType": "CUSTOMER_PROJECT",
+      "isBillableDefault": true,
+      "projectManagerId": "u-2",
+      "projectManagerName": "Laura Klein",
+      "managerUserIds": [
+        "u-2"
+      ],
+      "billingModel": "TIME_AND_MATERIAL",
+      "budgetHours": 400,
+      "status": "ACTIVE",
+      "requireApproval": true,
+      "requiredFields": {
+        "description": true,
+        "task": true,
+        "breaks": false
+      },
+      "restrictToAssignedMembers": true,
+      "assignedUserIds": [
+        "u-1",
+        "u-2",
+        "u-5"
+      ],
+      "memberRates": [
+        {
+          "id": "pmr-nov-1",
+          "projectId": "p-nov-1",
+          "userId": "u-1",
+          "hourlyBillingRate": 240,
+          "hourlyCostRate": 120
+        }
+      ],
+      "createdAt": "2025-02-15T08:00:00Z"
+    },
+    {
+      "id": "p-hel-1",
+      "orgId": "org-helios-consulting-03",
+      "clientId": "c-hel-1",
+      "clientName": "Hanseatic Port Logistics AG",
+      "name": "Digital Port Twin Strategy & Roadmap",
+      "projectNumber": "HEL-2025-01",
+      "projectType": "CUSTOMER_PROJECT",
+      "isBillableDefault": true,
+      "projectManagerId": "u-3",
+      "projectManagerName": "Markus Weber",
+      "managerUserIds": [
+        "u-3"
+      ],
+      "billingModel": "FIXED_PRICE",
+      "totalFixedPrice": 120000,
+      "budgetHours": 600,
+      "status": "ACTIVE",
+      "requireApproval": true,
+      "requiredFields": {
+        "description": true,
+        "task": true,
+        "breaks": false
+      },
+      "restrictToAssignedMembers": true,
+      "assignedUserIds": [
+        "u-1",
+        "u-3",
+        "u-8"
+      ],
+      "memberRates": [],
+      "createdAt": "2025-03-10T08:00:00Z"
+    }
+  ],
+  "tasks": [
+    {
+      "id": "t-1",
+      "projectId": "p-1",
+      "name": "Architektur & Schnittstellen-Design",
+      "isBillableDefault": true,
+      "budgetHours": 60,
+      "status": "ACTIVE"
+    },
+    {
+      "id": "t-2",
+      "projectId": "p-1",
+      "name": "LLM Prompt-Engineering & Test",
+      "isBillableDefault": true,
+      "budgetHours": 100,
+      "status": "ACTIVE"
+    },
+    {
+      "id": "t-3",
+      "projectId": "p-1",
+      "name": "Backend Integration & Security Audit",
+      "isBillableDefault": true,
+      "budgetHours": 90,
+      "status": "ACTIVE"
+    },
+    {
+      "id": "t-4",
+      "projectId": "p-2",
+      "name": "Legacy Code Analyse",
+      "isBillableDefault": true,
+      "budgetHours": 80,
+      "status": "ACTIVE"
+    },
+    {
+      "id": "t-5",
+      "projectId": "p-2",
+      "name": "Cloud Native Refactoring",
+      "isBillableDefault": true,
+      "budgetHours": 280,
+      "status": "ACTIVE"
+    },
+    {
+      "id": "t-6",
+      "projectId": "p-2",
+      "name": "E2E Testing & Performance-Validierung",
+      "isBillableDefault": true,
+      "budgetHours": 140,
+      "status": "ACTIVE"
+    },
+    {
+      "id": "t-7",
+      "projectId": "p-3",
+      "name": "Kafka Data Streaming Pipeline",
+      "isBillableDefault": true,
+      "budgetHours": 160,
+      "status": "ACTIVE"
+    },
+    {
+      "id": "t-8",
+      "projectId": "p-3",
+      "name": "Frontend Telematics Dashboard",
+      "isBillableDefault": true,
+      "budgetHours": 160,
+      "status": "ACTIVE"
+    },
+    {
+      "id": "t-9",
+      "projectId": "p-4",
+      "name": "Wetterdaten-Konnektor & Ingestion",
+      "isBillableDefault": true,
+      "budgetHours": 70,
+      "status": "ACTIVE"
+    },
+    {
+      "id": "t-10",
+      "projectId": "p-4",
+      "name": "ML-Modelltraining & Validierung",
+      "isBillableDefault": true,
+      "budgetHours": 130,
+      "status": "ACTIVE"
+    },
+    {
+      "id": "t-11",
+      "projectId": "p-5",
+      "name": "Interne Teambesprechung & Standup",
+      "isBillableDefault": false,
+      "status": "ACTIVE"
+    },
+    {
+      "id": "t-12",
+      "projectId": "p-5",
+      "name": "Zertifizierung & Schulung",
+      "isBillableDefault": false,
+      "status": "ACTIVE"
+    },
+    {
+      "id": "t-nov-1",
+      "projectId": "p-nov-1",
+      "name": "Sensor Telemetrie Architektur",
+      "isBillableDefault": true,
+      "budgetHours": 80,
+      "status": "ACTIVE"
+    },
+    {
+      "id": "t-nov-2",
+      "projectId": "p-nov-1",
+      "name": "Edge Gateway Protokolle",
+      "isBillableDefault": true,
+      "budgetHours": 120,
+      "status": "ACTIVE"
+    },
+    {
+      "id": "t-hel-1",
+      "projectId": "p-hel-1",
+      "name": "Strategie-Workshop & Stakeholder-Interviews",
+      "isBillableDefault": true,
+      "budgetHours": 150,
+      "status": "ACTIVE"
+    }
+  ],
+  "timeEntries": [
+    {
+      "id": "te-101",
+      "orgId": "org-insight-arcs-01",
+      "userId": "u-1",
+      "userName": "Dr. Andreas Behrens",
+      "projectId": "p-1",
+      "projectName": "AI-Clinical-Workflow Assistant",
+      "clientId": "c-1",
+      "clientName": "MedTech Solutions AG",
+      "taskId": "t-1",
+      "taskName": "Architektur & Schnittstellen-Design",
+      "date": "2026-08-11",
+      "startTime": "09:00",
+      "endTime": "12:30",
+      "durationMinutes": 210,
+      "durationHoursDecimal": 3.5,
+      "breakMinutes": 0,
+      "description": "FHIR API Datenfluss und Verschlüsselungsarchitektur definiert",
+      "isBillable": true,
+      "hourlyBillingRate": 230,
+      "calculatedAmount": 805,
+      "hourlyCostRate": 110,
+      "calculatedCost": 385,
+      "currency": "EUR",
+      "approvalStatus": "APPROVED",
+      "approvedBy": "u-1",
+      "approvedAt": "2026-08-11T17:00:00Z",
+      "isFavorite": true,
+      "createdAt": "2026-08-11T12:30:00Z",
+      "updatedAt": "2026-08-11T17:00:00Z"
+    },
+    {
+      "id": "te-102",
+      "orgId": "org-insight-arcs-01",
+      "userId": "u-2",
+      "userName": "Laura Klein",
+      "projectId": "p-1",
+      "projectName": "AI-Clinical-Workflow Assistant",
+      "clientId": "c-1",
+      "clientName": "MedTech Solutions AG",
+      "taskId": "t-2",
+      "taskName": "LLM Prompt-Engineering & Test",
+      "date": "2026-08-12",
+      "startTime": "08:30",
+      "endTime": "13:30",
+      "durationMinutes": 300,
+      "durationHoursDecimal": 5,
+      "breakMinutes": 30,
+      "description": "Evaluation von medizinischen Klassifikations-Prompts und Grounding",
+      "isBillable": true,
+      "hourlyBillingRate": 175,
+      "calculatedAmount": 875,
+      "hourlyCostRate": 85,
+      "calculatedCost": 425,
+      "currency": "EUR",
+      "approvalStatus": "APPROVED",
+      "approvedBy": "u-1",
+      "approvedAt": "2026-08-12T18:00:00Z",
+      "isFavorite": true,
+      "createdAt": "2026-08-12T13:30:00Z",
+      "updatedAt": "2026-08-12T18:00:00Z"
+    },
+    {
+      "id": "te-103",
+      "orgId": "org-insight-arcs-01",
+      "userId": "u-3",
+      "userName": "Markus Weber",
+      "projectId": "p-2",
+      "projectName": "Banking Core Cloud Migration",
+      "clientId": "c-2",
+      "clientName": "FinSecure Bank SE",
+      "taskId": "t-5",
+      "taskName": "Cloud Native Refactoring",
+      "date": "2026-08-13",
+      "startTime": "09:00",
+      "endTime": "17:00",
+      "durationMinutes": 450,
+      "durationHoursDecimal": 7.5,
+      "breakMinutes": 30,
+      "description": "Account Ledger Service auf Kubernetes migriert und Lasttests aufgesetzt",
+      "isBillable": true,
+      "hourlyBillingRate": 200,
+      "calculatedAmount": 1500,
+      "hourlyCostRate": 105,
+      "calculatedCost": 787.5,
+      "currency": "EUR",
+      "approvalStatus": "SUBMITTED",
+      "isFavorite": false,
+      "createdAt": "2026-08-13T17:00:00Z",
+      "updatedAt": "2026-08-13T17:00:00Z"
+    },
+    {
+      "id": "te-104",
+      "orgId": "org-insight-arcs-01",
+      "userId": "u-5",
+      "userName": "Tobias Fischer",
+      "projectId": "p-3",
+      "projectName": "Fleet Telematics Cloud Hub",
+      "clientId": "c-3",
+      "clientName": "LogiChain Mobility GmbH",
+      "taskId": "t-7",
+      "taskName": "Kafka Data Streaming Pipeline",
+      "date": "2026-08-14",
+      "startTime": "08:00",
+      "endTime": "12:00",
+      "durationMinutes": 240,
+      "durationHoursDecimal": 4,
+      "breakMinutes": 0,
+      "description": "GPS Ingestion Consumer Fehlerbehandlung und Dead Letter Queue",
+      "isBillable": true,
+      "hourlyBillingRate": 130,
+      "calculatedAmount": 520,
+      "hourlyCostRate": 65,
+      "calculatedCost": 260,
+      "currency": "EUR",
+      "approvalStatus": "DRAFT",
+      "isFavorite": true,
+      "createdAt": "2026-08-14T12:00:00Z",
+      "updatedAt": "2026-08-14T12:00:00Z"
+    },
+    {
+      "id": "te-105",
+      "orgId": "org-insight-arcs-01",
+      "userId": "u-1",
+      "userName": "Dr. Andreas Behrens",
+      "projectId": "p-5",
+      "projectName": "Allgemeine Verwaltung & Weiterbildung",
+      "clientId": "c-5",
+      "clientName": "Insight Arcs (Intern)",
+      "taskId": "t-11",
+      "taskName": "Interne Teambesprechung & Standup",
+      "date": "2026-08-14",
+      "startTime": "13:00",
+      "endTime": "14:30",
+      "durationMinutes": 90,
+      "durationHoursDecimal": 1.5,
+      "breakMinutes": 0,
+      "description": "Wöchentliches All-Hands Meeting und Projektstatusberichte",
+      "isBillable": false,
+      "hourlyBillingRate": 0,
+      "calculatedAmount": 0,
+      "hourlyCostRate": 110,
+      "calculatedCost": 165,
+      "currency": "EUR",
+      "approvalStatus": "APPROVED",
+      "createdAt": "2026-08-14T14:30:00Z",
+      "updatedAt": "2026-08-14T14:30:00Z"
+    }
+  ],
+  "workingTimeEntries": [
+    {
+      "id": "wte-1",
+      "orgId": "org-insight-arcs-01",
+      "userId": "u-1",
+      "userName": "Dr. Andreas Behrens",
+      "date": "2026-08-11",
+      "startTime": "08:45",
+      "endTime": "17:30",
+      "breakMinutes": 45,
+      "totalGrossMinutes": 525,
+      "totalNetMinutes": 480,
+      "totalNetHoursDecimal": 8,
+      "note": "Büro München",
+      "createdAt": "2026-08-11T17:30:00Z",
+      "updatedAt": "2026-08-11T17:30:00Z"
+    },
+    {
+      "id": "wte-2",
+      "orgId": "org-insight-arcs-01",
+      "userId": "u-1",
+      "userName": "Dr. Andreas Behrens",
+      "date": "2026-08-12",
+      "startTime": "08:30",
+      "endTime": "17:30",
+      "breakMinutes": 60,
+      "totalGrossMinutes": 540,
+      "totalNetMinutes": 480,
+      "totalNetHoursDecimal": 8,
+      "note": "Home Office",
+      "createdAt": "2026-08-12T17:30:00Z",
+      "updatedAt": "2026-08-12T17:30:00Z"
+    },
+    {
+      "id": "wte-3",
+      "orgId": "org-insight-arcs-01",
+      "userId": "u-1",
+      "userName": "Dr. Andreas Behrens",
+      "date": "2026-08-14",
+      "startTime": "08:15",
+      "endTime": "16:45",
+      "breakMinutes": 30,
+      "totalGrossMinutes": 510,
+      "totalNetMinutes": 480,
+      "totalNetHoursDecimal": 8,
+      "note": "Büro München",
+      "createdAt": "2026-08-14T16:45:00Z",
+      "updatedAt": "2026-08-14T16:45:00Z"
+    },
+    {
+      "id": "wte-4",
+      "orgId": "org-insight-arcs-01",
+      "userId": "u-2",
+      "userName": "Laura Klein",
+      "date": "2026-08-12",
+      "startTime": "08:15",
+      "endTime": "17:00",
+      "breakMinutes": 45,
+      "totalGrossMinutes": 525,
+      "totalNetMinutes": 480,
+      "totalNetHoursDecimal": 8,
+      "createdAt": "2026-08-12T17:00:00Z",
+      "updatedAt": "2026-08-12T17:00:00Z"
+    }
+  ],
+  "auditLogs": [
+    {
+      "id": "aud-1",
+      "orgId": "org-insight-arcs-01",
+      "entityType": "TIME_ENTRY",
+      "entityId": "te-101",
+      "action": "APPROVE",
+      "userId": "u-1",
+      "userName": "Dr. Andreas Behrens",
+      "timestamp": "2026-08-11T17:00:00Z",
+      "changes": [
+        {
+          "field": "approvalStatus",
+          "oldValue": "SUBMITTED",
+          "newValue": "APPROVED"
+        }
+      ],
+      "reason": "Monatsfreigabe"
+    }
+  ],
+  "forecasts": [
+    {
+      "id": "fc-p1-jul-u1",
+      "orgId": "org-insight-arcs-01",
+      "projectId": "p-1",
+      "projectName": "AI-Clinical-Workflow Assistant",
+      "userId": "u-1",
+      "userName": "Dr. Andreas Behrens",
+      "month": "2026-07",
+      "plannedHours": 45,
+      "appliedBillingRate": 230,
+      "appliedCostRate": 110,
+      "plannedRevenue": 10350,
+      "plannedCost": 4950,
+      "plannedMargin": 5400,
+      "version": 1,
+      "createdBy": "u-1",
+      "createdAt": "2026-07-01T08:00:00Z"
+    },
+    {
+      "id": "fc-p1-jul-u2",
+      "orgId": "org-insight-arcs-01",
+      "projectId": "p-1",
+      "projectName": "AI-Clinical-Workflow Assistant",
+      "userId": "u-2",
+      "userName": "Laura Klein",
+      "month": "2026-07",
+      "plannedHours": 55,
+      "appliedBillingRate": 175,
+      "appliedCostRate": 85,
+      "plannedRevenue": 9625,
+      "plannedCost": 4675,
+      "plannedMargin": 4950,
+      "version": 1,
+      "createdBy": "u-1",
+      "createdAt": "2026-07-01T08:00:00Z"
+    },
+    {
+      "id": "fc-1",
+      "orgId": "org-insight-arcs-01",
+      "projectId": "p-1",
+      "projectName": "AI-Clinical-Workflow Assistant",
+      "userId": "u-1",
+      "userName": "Dr. Andreas Behrens",
+      "month": "2026-08",
+      "plannedHours": 40,
+      "appliedBillingRate": 230,
+      "appliedCostRate": 110,
+      "plannedRevenue": 9200,
+      "plannedCost": 4400,
+      "plannedMargin": 4800,
+      "version": 1,
+      "createdBy": "u-1",
+      "createdAt": "2026-08-01T08:00:00Z"
+    },
+    {
+      "id": "fc-2",
+      "orgId": "org-insight-arcs-01",
+      "projectId": "p-1",
+      "projectName": "AI-Clinical-Workflow Assistant",
+      "userId": "u-2",
+      "userName": "Laura Klein",
+      "month": "2026-08",
+      "plannedHours": 60,
+      "appliedBillingRate": 175,
+      "appliedCostRate": 85,
+      "plannedRevenue": 10500,
+      "plannedCost": 5100,
+      "plannedMargin": 5400,
+      "version": 1,
+      "createdBy": "u-1",
+      "createdAt": "2026-08-01T08:00:00Z"
+    },
+    {
+      "id": "fc-p1-aug-u4",
+      "orgId": "org-insight-arcs-01",
+      "projectId": "p-1",
+      "projectName": "AI-Clinical-Workflow Assistant",
+      "userId": "u-4",
+      "userName": "Sophie Becker",
+      "month": "2026-08",
+      "plannedHours": 35,
+      "appliedBillingRate": 165,
+      "appliedCostRate": 85,
+      "plannedRevenue": 5775,
+      "plannedCost": 2975,
+      "plannedMargin": 2800,
+      "version": 1,
+      "createdBy": "u-1",
+      "createdAt": "2026-08-01T08:00:00Z"
+    },
+    {
+      "id": "fc-p1-sep-u1",
+      "orgId": "org-insight-arcs-01",
+      "projectId": "p-1",
+      "projectName": "AI-Clinical-Workflow Assistant",
+      "userId": "u-1",
+      "userName": "Dr. Andreas Behrens",
+      "month": "2026-09",
+      "plannedHours": 40,
+      "appliedBillingRate": 230,
+      "appliedCostRate": 110,
+      "plannedRevenue": 9200,
+      "plannedCost": 4400,
+      "plannedMargin": 4800,
+      "version": 1,
+      "createdBy": "u-1",
+      "createdAt": "2026-08-01T08:00:00Z"
+    },
+    {
+      "id": "fc-p1-sep-u2",
+      "orgId": "org-insight-arcs-01",
+      "projectId": "p-1",
+      "projectName": "AI-Clinical-Workflow Assistant",
+      "userId": "u-2",
+      "userName": "Laura Klein",
+      "month": "2026-09",
+      "plannedHours": 60,
+      "appliedBillingRate": 175,
+      "appliedCostRate": 85,
+      "plannedRevenue": 10500,
+      "plannedCost": 5100,
+      "plannedMargin": 5400,
+      "version": 1,
+      "createdBy": "u-1",
+      "createdAt": "2026-08-01T08:00:00Z"
+    },
+    {
+      "id": "fc-p1-oct-u1",
+      "orgId": "org-insight-arcs-01",
+      "projectId": "p-1",
+      "projectName": "AI-Clinical-Workflow Assistant",
+      "userId": "u-1",
+      "userName": "Dr. Andreas Behrens",
+      "month": "2026-10",
+      "plannedHours": 45,
+      "appliedBillingRate": 230,
+      "appliedCostRate": 110,
+      "plannedRevenue": 10350,
+      "plannedCost": 4950,
+      "plannedMargin": 5400,
+      "version": 1,
+      "createdBy": "u-1",
+      "createdAt": "2026-08-01T08:00:00Z"
+    },
+    {
+      "id": "fc-p2-jul-u3",
+      "orgId": "org-insight-arcs-01",
+      "projectId": "p-2",
+      "projectName": "Banking Core Cloud Migration",
+      "userId": "u-3",
+      "userName": "Markus Weber",
+      "month": "2026-07",
+      "plannedHours": 75,
+      "appliedBillingRate": 200,
+      "appliedCostRate": 105,
+      "plannedRevenue": 15000,
+      "plannedCost": 7875,
+      "plannedMargin": 7125,
+      "version": 1,
+      "createdBy": "u-1",
+      "createdAt": "2026-07-01T08:00:00Z"
+    },
+    {
+      "id": "fc-3",
+      "orgId": "org-insight-arcs-01",
+      "projectId": "p-2",
+      "projectName": "Banking Core Cloud Migration",
+      "userId": "u-3",
+      "userName": "Markus Weber",
+      "month": "2026-08",
+      "plannedHours": 80,
+      "appliedBillingRate": 200,
+      "appliedCostRate": 105,
+      "plannedRevenue": 16000,
+      "plannedCost": 8400,
+      "plannedMargin": 7600,
+      "version": 1,
+      "createdBy": "u-1",
+      "createdAt": "2026-08-01T08:00:00Z"
+    },
+    {
+      "id": "fc-p2-aug-u7",
+      "orgId": "org-insight-arcs-01",
+      "projectId": "p-2",
+      "projectName": "Banking Core Cloud Migration",
+      "userId": "u-7",
+      "userName": "Dennis Wagner",
+      "month": "2026-08",
+      "plannedHours": 60,
+      "appliedBillingRate": 130,
+      "appliedCostRate": 65,
+      "plannedRevenue": 7800,
+      "plannedCost": 3900,
+      "plannedMargin": 3900,
+      "version": 1,
+      "createdBy": "u-1",
+      "createdAt": "2026-08-01T08:00:00Z"
+    },
+    {
+      "id": "fc-p2-sep-u3",
+      "orgId": "org-insight-arcs-01",
+      "projectId": "p-2",
+      "projectName": "Banking Core Cloud Migration",
+      "userId": "u-3",
+      "userName": "Markus Weber",
+      "month": "2026-09",
+      "plannedHours": 80,
+      "appliedBillingRate": 200,
+      "appliedCostRate": 105,
+      "plannedRevenue": 16000,
+      "plannedCost": 8400,
+      "plannedMargin": 7600,
+      "version": 1,
+      "createdBy": "u-1",
+      "createdAt": "2026-08-01T08:00:00Z"
+    },
+    {
+      "id": "fc-p2-oct-u3",
+      "orgId": "org-insight-arcs-01",
+      "projectId": "p-2",
+      "projectName": "Banking Core Cloud Migration",
+      "userId": "u-3",
+      "userName": "Markus Weber",
+      "month": "2026-10",
+      "plannedHours": 70,
+      "appliedBillingRate": 200,
+      "appliedCostRate": 105,
+      "plannedRevenue": 14000,
+      "plannedCost": 7350,
+      "plannedMargin": 6650,
+      "version": 1,
+      "createdBy": "u-1",
+      "createdAt": "2026-08-01T08:00:00Z"
+    },
+    {
+      "id": "fc-p3-jul-u5",
+      "orgId": "org-insight-arcs-01",
+      "projectId": "p-3",
+      "projectName": "Fleet Telematics Cloud Hub",
+      "userId": "u-5",
+      "userName": "Tobias Fischer",
+      "month": "2026-07",
+      "plannedHours": 45,
+      "appliedBillingRate": 130,
+      "appliedCostRate": 65,
+      "plannedRevenue": 5850,
+      "plannedCost": 2925,
+      "plannedMargin": 2925,
+      "version": 1,
+      "createdBy": "u-1",
+      "createdAt": "2026-07-01T08:00:00Z"
+    },
+    {
+      "id": "fc-4",
+      "orgId": "org-insight-arcs-01",
+      "projectId": "p-3",
+      "projectName": "Fleet Telematics Cloud Hub",
+      "userId": "u-5",
+      "userName": "Tobias Fischer",
+      "month": "2026-08",
+      "plannedHours": 50,
+      "appliedBillingRate": 130,
+      "appliedCostRate": 65,
+      "plannedRevenue": 6500,
+      "plannedCost": 3250,
+      "plannedMargin": 3250,
+      "version": 1,
+      "createdBy": "u-1",
+      "createdAt": "2026-08-01T08:00:00Z"
+    },
+    {
+      "id": "fc-p3-sep-u5",
+      "orgId": "org-insight-arcs-01",
+      "projectId": "p-3",
+      "projectName": "Fleet Telematics Cloud Hub",
+      "userId": "u-5",
+      "userName": "Tobias Fischer",
+      "month": "2026-09",
+      "plannedHours": 50,
+      "appliedBillingRate": 130,
+      "appliedCostRate": 65,
+      "plannedRevenue": 6500,
+      "plannedCost": 3250,
+      "plannedMargin": 3250,
+      "version": 1,
+      "createdBy": "u-1",
+      "createdAt": "2026-08-01T08:00:00Z"
+    },
+    {
+      "id": "fc-p3-oct-u5",
+      "orgId": "org-insight-arcs-01",
+      "projectId": "p-3",
+      "projectName": "Fleet Telematics Cloud Hub",
+      "userId": "u-5",
+      "userName": "Tobias Fischer",
+      "month": "2026-10",
+      "plannedHours": 50,
+      "appliedBillingRate": 130,
+      "appliedCostRate": 65,
+      "plannedRevenue": 6500,
+      "plannedCost": 3250,
+      "plannedMargin": 3250,
+      "version": 1,
+      "createdBy": "u-1",
+      "createdAt": "2026-08-01T08:00:00Z"
+    },
+    {
+      "id": "fc-p4-aug-u8",
+      "orgId": "org-insight-arcs-01",
+      "projectId": "p-4",
+      "projectName": "Solar Yield Forecast Engine",
+      "userId": "u-8",
+      "userName": "Elena Meyer",
+      "month": "2026-08",
+      "plannedHours": 40,
+      "appliedBillingRate": 130,
+      "appliedCostRate": 65,
+      "plannedRevenue": 5200,
+      "plannedCost": 2600,
+      "plannedMargin": 2600,
+      "version": 1,
+      "createdBy": "u-1",
+      "createdAt": "2026-08-01T08:00:00Z"
+    },
+    {
+      "id": "fc-p4-aug-u13",
+      "orgId": "org-insight-arcs-01",
+      "projectId": "p-4",
+      "projectName": "Solar Yield Forecast Engine",
+      "userId": "u-13",
+      "userName": "Patrick Schwarz",
+      "month": "2026-08",
+      "plannedHours": 30,
+      "appliedBillingRate": 95,
+      "appliedCostRate": 45,
+      "plannedRevenue": 2850,
+      "plannedCost": 1350,
+      "plannedMargin": 1500,
+      "version": 1,
+      "createdBy": "u-1",
+      "createdAt": "2026-08-01T08:00:00Z"
+    },
+    {
+      "id": "fc-p4-sep-u8",
+      "orgId": "org-insight-arcs-01",
+      "projectId": "p-4",
+      "projectName": "Solar Yield Forecast Engine",
+      "userId": "u-8",
+      "userName": "Elena Meyer",
+      "month": "2026-09",
+      "plannedHours": 45,
+      "appliedBillingRate": 130,
+      "appliedCostRate": 65,
+      "plannedRevenue": 5850,
+      "plannedCost": 2925,
+      "plannedMargin": 2925,
+      "version": 1,
+      "createdBy": "u-1",
+      "createdAt": "2026-08-01T08:00:00Z"
+    },
+    {
+      "id": "fc-p4-oct-u8",
+      "orgId": "org-insight-arcs-01",
+      "projectId": "p-4",
+      "projectName": "Solar Yield Forecast Engine",
+      "userId": "u-8",
+      "userName": "Elena Meyer",
+      "month": "2026-10",
+      "plannedHours": 40,
+      "appliedBillingRate": 130,
+      "appliedCostRate": 65,
+      "plannedRevenue": 5200,
+      "plannedCost": 2600,
+      "plannedMargin": 2600,
+      "version": 1,
+      "createdBy": "u-1",
+      "createdAt": "2026-08-01T08:00:00Z"
+    }
+  ],
+  "apiKeys": [
+    {
+      "id": "apk-1",
+      "orgId": "org-insight-arcs-01",
+      "name": "Power Automate - Excel Sync",
+      "key": "ia_live_9b83f4a01c8942b0a1d48293e8749102",
+      "status": "ACTIVE",
+      "createdAt": "2025-02-01T10:00:00Z",
+      "lastUsedAt": "2026-08-14T08:00:00Z",
+      "permissions": [
+        "read:time-entries",
+        "read:working-time",
+        "read:forecasts"
+      ]
+    }
+  ],
+  "thresholdPercent": 20,
+  "savedAt": "2026-08-19T04:49:59.264Z"
+}
