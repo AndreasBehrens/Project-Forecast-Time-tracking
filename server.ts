@@ -12,7 +12,6 @@ import {
   CreateForecastSchema,
   PeriodLockSchema
 } from './server/validationSchemas.js';
-import { checkFirestoreHealth, syncStorageToFirestore } from './server/firestoreSync.js';
 
 async function startServer() {
   const app = express();
@@ -144,64 +143,12 @@ async function startServer() {
     res.json({
       status: 'ok',
       service: 'Insight Arcs Zeiterfassung & Arbeitszeit API',
-      euHostingLocation: 'europe-west3 (Frankfurt, Germany)',
-      database: 'Firebase Firestore (Cloud Storage)',
+      euHostingLocation: 'Germany (netcup RZ Nürnberg)',
+      database: 'Local JSON Storage (persistent)',
       auditRetention: '10 years GoBD & ArbZG compliant',
       securityEngine: 'JWT HMAC-SHA256 & SHA-256 Audit Blockchain',
       timestamp: new Date().toISOString()
     });
-  });
-
-  // Cloud Database (Firestore) Status & Migration Endpoints
-  app.get('/api/database/status', async (req, res) => {
-    const status = await checkFirestoreHealth();
-    res.json({
-      ...status,
-      localEntities: {
-        organizations: storage.getOrganizations().length,
-        users: storage.getUsers(true).length,
-        projects: storage.getProjects().length,
-        tasks: storage.getTasks().length,
-        timeEntries: storage.getTimeEntries({ allOrgs: true }).total,
-        workingTimes: storage.getWorkingTimeEntries().length,
-        auditLogs: storage.getAuditLogs().length,
-        forecasts: storage.getForecasts().length,
-        periodLocks: storage.getPeriodLocks().length
-      }
-    });
-  });
-
-  app.post('/api/database/migrate-to-firestore', async (req, res) => {
-    try {
-      const data = {
-        organizations: storage.getOrganizations(),
-        users: storage.getUsers(true),
-        projects: storage.getProjects(),
-        tasks: storage.getTasks(),
-        timeEntries: storage.getTimeEntries({ allOrgs: true }).data,
-        workingTimeEntries: storage.getWorkingTimeEntries(),
-        auditLogs: storage.getAuditLogs(),
-        forecasts: storage.getForecasts(),
-        periodLocks: storage.getPeriodLocks(),
-        jobRoles: storage.getJobRoles(),
-        clients: storage.getClients(),
-        partners: storage.getPartners()
-      };
-
-      const result = await syncStorageToFirestore(data);
-      if (!result.success) {
-        return res.status(500).json({ success: false, error: result.error });
-      }
-
-      res.json({
-        success: true,
-        message: 'Datenbank-Migration zu Google Cloud Firestore erfolgreich abgeschlossen.',
-        syncedCounts: result.syncedCounts,
-        syncedAt: new Date().toISOString()
-      });
-    } catch (err: any) {
-      res.status(500).json({ success: false, error: err.message });
-    }
   });
 
   // Auth / Session Login, Logout, Switching & Organization Management
@@ -1094,34 +1041,6 @@ async function startServer() {
 
   app.listen(PORT, '0.0.0.0', () => {
     console.log(`Insight Arcs Zeiterfassung Server running on http://0.0.0.0:${PORT}`);
-    
-    // Asynchronously perform initial background sync to Firestore
-    setTimeout(async () => {
-      try {
-        console.log('[Firestore] Initiating initial cloud database sync...');
-        const result = await syncStorageToFirestore({
-          organizations: storage.getOrganizations(),
-          users: storage.getUsers(true),
-          projects: storage.getProjects(),
-          tasks: storage.getTasks(),
-          timeEntries: storage.getTimeEntries({ allOrgs: true }).data,
-          workingTimeEntries: storage.getWorkingTimeEntries(),
-          auditLogs: storage.getAuditLogs(),
-          forecasts: storage.getForecasts(),
-          periodLocks: storage.getPeriodLocks(),
-          jobRoles: storage.getJobRoles(),
-          clients: storage.getClients(),
-          partners: storage.getPartners()
-        });
-        if (result.success) {
-          console.log('[Firestore] Initial cloud database sync complete:', result.syncedCounts);
-        } else {
-          console.warn('[Firestore] Initial cloud database sync warning:', result.error);
-        }
-      } catch (err) {
-        console.warn('[Firestore] Background cloud sync skipped:', err);
-      }
-    }, 1500);
   });
 }
 
