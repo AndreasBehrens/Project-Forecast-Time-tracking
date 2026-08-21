@@ -16,6 +16,7 @@ import { apiNotFoundHandler, errorHandler } from './http/errorHandler.js';
 import { asyncHandler } from './http/asyncHandler.js';
 import { validateBody } from './http/validate.js';
 import { BadRequestError, NotFoundError } from './http/errors.js';
+import { createSessionContext } from './http/session.js';
 
 export interface CreateAppOptions {
   /**
@@ -64,89 +65,12 @@ export async function createApp(options: CreateAppOptions = {}): Promise<express
   app.use(express.json({ limit: '10mb' }));
   app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-  // Mock session: Current simulated logged in user (defaults to Admin Dr. Andreas Behrens)
-  let currentUserId: string = 'u-1';
-
-  const getActorId = (req: Request): string => {
-    // 1. Check JWT Bearer Token
-    const authHeader = req.headers['authorization'];
-    if (authHeader && authHeader.startsWith('Bearer ')) {
-      const token = authHeader.slice(7).trim();
-      const verified = verifyJwtToken(token);
-      if (verified.valid && verified.payload) {
-        return verified.payload.userId;
-      }
-    }
-
-    // 2. Fallback to header or session
-    const headerUserId = req.headers['x-user-id'] as string;
-    return headerUserId || currentUserId || 'u-1';
-  };
-
-  // --- API KEY AUTH MIDDLEWARE FOR EXTERNAL API (Section 12.3) ---
-  const requireApiKey = (req: Request, res: Response, next: NextFunction) => {
-    const apiKey = (req.headers['x-api-key'] as string) || (req.headers['authorization']?.replace('Bearer ', ''));
-    if (!apiKey) {
-      return res.status(401).json({
-        error: 'Unauthorized: API Key missing',
-        message: 'Please provide a valid x-api-key header or Bearer token'
-      });
-    }
-
-    if (!storage.validateApiKey(apiKey)) {
-      return res.status(403).json({
-        error: 'Forbidden: Invalid or revoked API Key',
-        message: 'The provided API key is invalid or has been revoked.'
-      });
-    }
-
-    next();
-  };
-
-  // --- ADMIN-ROUTENSCHUTZ (Section: Security Hardening) ---
-  // Schuetzt alle Routen mit dem Praefix /admin bzw. /api/admin.
-  // Konsistent zur bestehenden Auth-Logik: primaer JWT-Bearer-Token
-  // (verifyJwtToken), alternativ die vorhandene Session ueber den
-  // x-user-id-Header. Bei fehlendem/ungueltigem Token: HTTP 401.
-  const requireAdminAuth = (req: Request, res: Response, next: NextFunction) => {
-    // a) Bearer-Token im Authorization-Header pruefen
-    const authHeader = req.headers['authorization'];
-    if (authHeader && authHeader.startsWith('Bearer ')) {
-      const token = authHeader.slice(7).trim();
-      // verifyJwtToken kann bei manipulierten Tokens werfen -> absichern.
-      let verified: ReturnType<typeof verifyJwtToken>;
-      try {
-        verified = verifyJwtToken(token);
-      } catch {
-        return res.status(401).json({ error: 'Unauthorized' });
-      }
-      if (verified.valid && verified.payload) {
-        // Nur ADMIN/SUPERADMIN duerfen Admin-Routen nutzen.
-        const role = verified.payload.role;
-        if (role === 'ADMIN' || role === 'SUPERADMIN') {
-          return next();
-        }
-        return res.status(403).json({ error: 'Forbidden' });
-      }
-      // Token vorhanden, aber ungueltig/abgelaufen
-      return res.status(401).json({ error: 'Unauthorized' });
-    }
-
-    // b) Fallback: bestehende Session-/Cookie-basierte Authentifizierung.
-    // Nur ein EXPLIZIT gesetzter x-user-id-Header wird akzeptiert – der interne
-    // Mock-Default (currentUserId) darf den Schutz nicht aushebeln.
-    const sessionUserId = req.headers['x-user-id'] as string | undefined;
-    if (sessionUserId) {
-      const user = storage.getUsers().find((u) => u.id === sessionUserId);
-      if (user && (user.role === 'ADMIN' || user.role === 'SUPERADMIN')) {
-        return next();
-      }
-      return res.status(403).json({ error: 'Forbidden' });
-    }
-
-    // Kein Bearer-Token und keine Session -> nicht autorisiert.
-    return res.status(401).json({ error: 'Unauthorized' });
-  };
+  // Session-/Auth-Schicht (ausgelagert nach ./http/session.ts).
+  // Kapselt die simulierte Session (currentUserId) sowie die Helfer
+  // getActorId, requireApiKey und requireAdminAuth in einer klar
+  // abgegrenzten Einheit (Trennung der Belange).
+  const session = createSessionContext('u-1');
+  const { getActorId, requireApiKey, requireAdminAuth } = session;
 
   // Admin-Routenschutz vor allen /admin- und /api/admin-Routen aktivieren.
   app.use('/admin', requireAdminAuth);
@@ -210,7 +134,7 @@ export async function createApp(options: CreateAppOptions = {}): Promise<express
       });
     }
 
-    currentUserId = user.id;
+    session.setCurrentUserId(user.id);
 
     // Switch org if specified, or pick user's active org
     if (orgId) {
@@ -245,7 +169,7 @@ export async function createApp(options: CreateAppOptions = {}): Promise<express
   });
 
   app.post('/api/auth/logout', (req, res) => {
-    currentUserId = '';
+    session.clearCurrentUser();
     res.json({ success: true, message: 'Erfolgreich abgemeldet' });
   });
 
@@ -261,7 +185,7 @@ export async function createApp(options: CreateAppOptions = {}): Promise<express
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
     }
-    currentUserId = userId;
+    session.setCurrentUserId(userId);
     // Check if user has membership in current activeOrgId, if not switch to user's default/first org
     const userMemberships = user.memberships || [];
     const hasCurrentOrg = user.orgId === storage.getActiveOrgId() || userMemberships.some(m => m.orgId === storage.getActiveOrgId());
