@@ -18,7 +18,7 @@ import {
 } from 'lucide-react';
 import { CompanyLocationModal } from './CompanyLocationModal';
 import { CloudDatabaseModal } from './CloudDatabaseModal';
-import { Cloud } from 'lucide-react';
+import { Database } from 'lucide-react';
 
 export const Header: React.FC = () => {
   const {
@@ -151,15 +151,15 @@ export const Header: React.FC = () => {
               </div>
             </div>
 
-            {/* Google Cloud Firestore DB Badge */}
+            {/* PostgreSQL Database Badge */}
             <button
               id="btn-header-cloud-db"
               onClick={() => setShowCloudDbModal(true)}
-              className="hidden md:flex items-center gap-1.5 text-xs text-indigo-700 bg-indigo-50/90 hover:bg-indigo-100/90 border border-indigo-200/80 px-2.5 py-1.5 rounded-lg transition-colors font-medium"
-              title="Google Cloud Firestore Status & Synchronisation"
+              className="hidden md:flex items-center gap-1.5 text-xs text-blue-700 bg-blue-50/90 hover:bg-blue-100/90 border border-blue-200/80 px-2.5 py-1.5 rounded-lg transition-colors font-medium"
+              title="PostgreSQL-Datenbank Status"
             >
-              <Cloud className="w-3.5 h-3.5 text-indigo-600" />
-              <span className="font-semibold">Cloud DB</span>
+              <Database className="w-3.5 h-3.5 text-blue-600" />
+              <span className="font-semibold">PostgreSQL</span>
               <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
             </button>
 

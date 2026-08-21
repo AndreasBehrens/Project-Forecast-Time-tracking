@@ -18,9 +18,7 @@ interface CloudDatabaseModalProps {
 
 export const CloudDatabaseModal: React.FC<CloudDatabaseModalProps> = ({ onClose }) => {
   const [loading, setLoading] = useState(true);
-  const [syncing, setSyncing] = useState(false);
   const [status, setStatus] = useState<any>(null);
-  const [syncMessage, setSyncMessage] = useState<string | null>(null);
 
   const fetchStatus = async () => {
     try {
@@ -39,25 +37,6 @@ export const CloudDatabaseModal: React.FC<CloudDatabaseModalProps> = ({ onClose 
     fetchStatus();
   }, []);
 
-  const handleMigrate = async () => {
-    setSyncing(true);
-    setSyncMessage(null);
-    try {
-      const res = await fetch('/api/database/migrate-to-firestore', { method: 'POST' });
-      const data = await res.json();
-      if (data.success) {
-        setSyncMessage('Google Cloud Firestore Synchronisation erfolgreich abgeschlossen.');
-        await fetchStatus();
-      } else {
-        setSyncMessage(`Fehler: ${data.error}`);
-      }
-    } catch (err: any) {
-      setSyncMessage(`Netzwerkfehler: ${err.message}`);
-    } finally {
-      setSyncing(false);
-    }
-  };
-
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
       <div className="bg-white w-full max-w-lg rounded-2xl shadow-2xl border border-slate-200 overflow-hidden animate-in fade-in zoom-in-95 duration-150">
@@ -65,18 +44,18 @@ export const CloudDatabaseModal: React.FC<CloudDatabaseModalProps> = ({ onClose 
         {/* Header */}
         <div className="bg-slate-900 text-white px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-indigo-500/20 border border-indigo-400/30 flex items-center justify-center text-indigo-400">
-              <Cloud className="w-6 h-6" />
+            <div className="w-10 h-10 rounded-xl bg-blue-500/20 border border-blue-400/30 flex items-center justify-center text-blue-400">
+              <Database className="w-6 h-6" />
             </div>
             <div>
               <h3 className="text-base font-bold text-white flex items-center gap-2">
-                Google Cloud Firestore Status
+                PostgreSQL-Datenbank Status
                 <span className="bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 text-[10px] font-mono px-2 py-0.5 rounded-full font-bold">
                   AKTIV & VERBUNDEN
                 </span>
               </h3>
               <p className="text-xs text-slate-400">
-                Serverlose Clouddatenbank mit Multi-Tenancy-Sicherheit
+                Persistente relationale Datenbank mit ACID-Garantien
               </p>
             </div>
           </div>
@@ -91,10 +70,10 @@ export const CloudDatabaseModal: React.FC<CloudDatabaseModalProps> = ({ onClose 
         {/* Content */}
         <div className="p-6 space-y-4 text-xs text-slate-700">
           
-          {syncMessage && (
-            <div className="p-3.5 bg-emerald-50 border border-emerald-200 text-emerald-900 rounded-xl flex items-start gap-2.5">
-              <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
-              <span>{syncMessage}</span>
+          {loading && (
+            <div className="p-3.5 bg-blue-50 border border-blue-200 text-blue-900 rounded-xl flex items-start gap-2.5">
+              <RefreshCw className="w-4 h-4 text-blue-600 shrink-0 mt-0.5 animate-spin" />
+              <span>Lade Datenbankstatus...</span>
             </div>
           )}
 
@@ -102,16 +81,16 @@ export const CloudDatabaseModal: React.FC<CloudDatabaseModalProps> = ({ onClose 
           <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-2.5">
             <div className="flex items-center justify-between text-xs pb-2 border-b border-slate-200">
               <span className="font-semibold text-slate-500">Datenbanktyp:</span>
-              <strong className="text-slate-900 font-mono">Google Cloud Firestore</strong>
+              <strong className="text-slate-900 font-mono">PostgreSQL 16</strong>
             </div>
             <div className="flex items-center justify-between text-xs pb-2 border-b border-slate-200">
-              <span className="font-semibold text-slate-500">Cloud Projekt-ID:</span>
-              <strong className="text-indigo-700 font-mono">{status?.projectId || 'gen-lang-client-0465421882'}</strong>
+              <span className="font-semibold text-slate-500">Datenbank-Name:</span>
+              <strong className="text-blue-700 font-mono">{status?.database || 'timetracking_prod'}</strong>
             </div>
             <div className="flex items-center justify-between text-xs pb-2 border-b border-slate-200">
-              <span className="font-semibold text-slate-500">Firestore Database-ID:</span>
-              <strong className="text-slate-800 font-mono text-[11px] truncate max-w-[240px]">
-                {status?.databaseId || 'ai-studio-projectforecastt...'}
+              <span className="font-semibold text-slate-500">Server:</span>
+              <strong className="text-slate-800 font-mono text-[11px]">
+                {status?.host || 'localhost:5432'}
               </strong>
             </div>
             <div className="flex items-center justify-between text-xs">
@@ -123,60 +102,62 @@ export const CloudDatabaseModal: React.FC<CloudDatabaseModalProps> = ({ onClose 
             </div>
           </div>
 
-          {/* Synced Collection Metrics */}
-          {status?.localEntities && (
+          {/* Database Metrics */}
+          {status?.entities && (
             <div>
               <h4 className="font-bold text-slate-900 text-xs mb-2 flex items-center gap-1.5">
                 <Layers className="w-4 h-4 text-slate-600" />
-                Synchronisierte Clouddaten-Entitäten
+                Persistierte Datenbank-Entitäten
               </h4>
               <div className="grid grid-cols-3 gap-2 text-center">
                 <div className="p-2.5 bg-slate-50 border border-slate-200 rounded-xl">
                   <span className="text-[10px] text-slate-400 font-medium block">Zeiteinträge</span>
-                  <strong className="text-sm text-slate-900">{status.localEntities.timeEntries}</strong>
+                  <strong className="text-sm text-slate-900">{status.entities.timeEntries || 0}</strong>
                 </div>
                 <div className="p-2.5 bg-slate-50 border border-slate-200 rounded-xl">
                   <span className="text-[10px] text-slate-400 font-medium block">Arbeitszeiten</span>
-                  <strong className="text-sm text-slate-900">{status.localEntities.workingTimes}</strong>
+                  <strong className="text-sm text-slate-900">{status.entities.workingTimes || 0}</strong>
                 </div>
                 <div className="p-2.5 bg-slate-50 border border-slate-200 rounded-xl">
                   <span className="text-[10px] text-slate-400 font-medium block">Audit-Logs</span>
-                  <strong className="text-sm text-slate-900">{status.localEntities.auditLogs}</strong>
+                  <strong className="text-sm text-slate-900">{status.entities.auditLogs || 0}</strong>
                 </div>
                 <div className="p-2.5 bg-slate-50 border border-slate-200 rounded-xl">
                   <span className="text-[10px] text-slate-400 font-medium block">Projekte</span>
-                  <strong className="text-sm text-slate-900">{status.localEntities.projects}</strong>
+                  <strong className="text-sm text-slate-900">{status.entities.projects || 0}</strong>
                 </div>
                 <div className="p-2.5 bg-slate-50 border border-slate-200 rounded-xl">
                   <span className="text-[10px] text-slate-400 font-medium block">Mandanten</span>
-                  <strong className="text-sm text-slate-900">{status.localEntities.organizations}</strong>
+                  <strong className="text-sm text-slate-900">{status.entities.organizations || 0}</strong>
                 </div>
                 <div className="p-2.5 bg-slate-50 border border-slate-200 rounded-xl">
                   <span className="text-[10px] text-slate-400 font-medium block">Periodensperren</span>
-                  <strong className="text-sm text-slate-900">{status.localEntities.periodLocks}</strong>
+                  <strong className="text-sm text-slate-900">{status.entities.periodLocks || 0}</strong>
                 </div>
               </div>
             </div>
           )}
 
-          {/* Action Trigger */}
-          <div className="pt-2">
-            <button
-              id="btn-sync-cloud-db"
-              onClick={handleMigrate}
-              disabled={syncing}
-              className="w-full py-2.5 px-4 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-300 text-white font-semibold rounded-xl text-xs flex items-center justify-center gap-2 shadow-sm transition-colors"
-            >
-              <RefreshCw className={`w-4 h-4 ${syncing ? 'animate-spin' : ''}`} />
-              {syncing ? 'Synchronisiere Cloud Firestore...' : 'Jetzt vollständig in Cloud Firestore spiegeln'}
-            </button>
+          {/* Info Box */}
+          <div className="p-3.5 bg-blue-50 border border-blue-200 text-blue-900 rounded-xl flex items-start gap-2.5">
+            <Server className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
+            <div className="text-[11px]">
+              <strong className="block font-semibold mb-0.5">PostgreSQL-Persistierung aktiv</strong>
+              <span className="text-blue-800">
+                Alle Daten werden automatisch in der PostgreSQL-Datenbank gespeichert. 
+                ACID-Garantien und revisionssichere Audit-Logs gemäß GoBD.
+              </span>
+            </div>
           </div>
 
         </div>
 
         {/* Footer */}
         <div className="bg-slate-50 px-6 py-3 border-t border-slate-200 flex items-center justify-between text-[11px] text-slate-500">
-          <span>Automatische Hintergrund-Synchronisation aktiv</span>
+          <span className="flex items-center gap-1.5">
+            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+            Persistierung aktiv
+          </span>
           <button
             onClick={onClose}
             className="px-3 py-1.5 bg-slate-200 hover:bg-slate-300 text-slate-800 font-medium rounded-lg text-xs transition-colors"

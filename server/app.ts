@@ -93,6 +93,28 @@ export async function createApp(options: CreateAppOptions = {}): Promise<express
     });
   });
 
+  // Database status endpoint for UI modal
+  app.get('/api/database/status', (req, res) => {
+    const dbUrl = process.env.DATABASE_URL || '';
+    const dbHost = dbUrl.includes('@') ? dbUrl.split('@')[1]?.split('/')[0] || 'localhost:5432' : 'localhost:5432';
+    
+    res.json({
+      database: 'timetracking_prod',
+      host: dbHost,
+      type: 'PostgreSQL',
+      version: '16',
+      entities: {
+        organizations: storage.getOrganizations().length,
+        users: storage.getUsers(true).length,
+        projects: storage.getProjects().length,
+        timeEntries: storage.getTimeEntries({ allOrgs: true }).total,
+        workingTimes: storage.getWorkingTimeEntries({}, 'system').length,
+        auditLogs: storage.getAuditLogs().length,
+        periodLocks: storage.getPeriodLocks().length
+      }
+    });
+  });
+
   // Auth / Session Login, Logout, Switching & Organization Management
   app.get('/api/auth/me', (req, res) => {
     const targetId = getActorId(req);
