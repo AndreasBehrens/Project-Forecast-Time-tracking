@@ -6,3 +6,6 @@ coverage/
 *.log
 .env*
 !.env.example
+
+# Lokaler App-Datenspeicher (soll nicht getrackt werden)
+data/app_storage.json
