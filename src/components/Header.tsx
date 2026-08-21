@@ -2,23 +2,15 @@ import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
 import {
   Clock,
-  ShieldCheck,
-  Globe,
-  UserCheck,
   ChevronDown,
   Building2,
   Play,
   Pause,
   Square,
   MapPin,
-  Layers,
-  LogOut,
-  User as UserIcon,
-  Sparkles
+  LogOut
 } from 'lucide-react';
 import { CompanyLocationModal } from './CompanyLocationModal';
-import { CloudDatabaseModal } from './CloudDatabaseModal';
-import { Database } from 'lucide-react';
 
 export const Header: React.FC = () => {
   const {
@@ -41,7 +33,6 @@ export const Header: React.FC = () => {
 
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [showLocationModal, setShowLocationModal] = useState(false);
-  const [showCloudDbModal, setShowCloudDbModal] = useState(false);
 
   const formatTimer = (totalSeconds: number) => {
     const hours = Math.floor(totalSeconds / 3600);
@@ -151,34 +142,15 @@ export const Header: React.FC = () => {
               </div>
             </div>
 
-            {/* PostgreSQL Database Badge */}
-            <button
-              id="btn-header-cloud-db"
-              onClick={() => setShowCloudDbModal(true)}
-              className="hidden md:flex items-center gap-1.5 text-xs text-blue-700 bg-blue-50/90 hover:bg-blue-100/90 border border-blue-200/80 px-2.5 py-1.5 rounded-lg transition-colors font-medium"
-              title="PostgreSQL-Datenbank Status"
-            >
-              <Database className="w-3.5 h-3.5 text-blue-600" />
-              <span className="font-semibold">PostgreSQL</span>
-              <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
-            </button>
-
-            {/* EU Badge */}
-            <div className="hidden xl:flex items-center gap-1.5 text-xs text-slate-600 bg-slate-50 border border-slate-200/80 px-2.5 py-1.5 rounded-md">
-              <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
-              <span>{t.euGdprBadge}</span>
-            </div>
-
-            {/* Location & Holiday Badge */}
+            {/* Location & Holiday Badge (kompakt: Stadt + Icon, Details im Tooltip) */}
             <button
               id="btn-header-location"
               onClick={() => setShowLocationModal(true)}
               className="hidden lg:flex items-center gap-1.5 text-xs text-slate-700 hover:text-slate-900 bg-slate-50 hover:bg-slate-100 border border-slate-200/80 px-2.5 py-1.5 rounded-md transition-colors"
-              title={t.locationAndHolidays}
+              title={`${t.locationAndHolidays} – ${organization?.locationCity || 'Berlin'} (${organization?.stateLocation || 'DE-BE'})`}
             >
               <MapPin className="w-3.5 h-3.5 text-emerald-600" />
               <span className="font-semibold">{organization?.locationCity || 'Berlin'}</span>
-              <span className="text-[10px] text-slate-400">({organization?.stateLocation || 'DE-BE'})</span>
             </button>
 
             {/* Language Switcher */}
@@ -337,12 +309,6 @@ export const Header: React.FC = () => {
         isOpen={showLocationModal}
         onClose={() => setShowLocationModal(false)}
       />
-
-      {showCloudDbModal && (
-        <CloudDatabaseModal
-          onClose={() => setShowCloudDbModal(false)}
-        />
-      )}
     </header>
   );
 };

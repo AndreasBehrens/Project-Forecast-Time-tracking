@@ -41,6 +41,7 @@ import {
 export const ProjectsClientsView: React.FC = () => {
   const {
     t,
+    language,
     projects,
     clients,
     partners,
@@ -301,7 +302,7 @@ export const ProjectsClientsView: React.FC = () => {
       }
       setProjectToDelete(null);
     } else {
-      setDeleteProjError(result.error || 'Fehler beim Löschen des Projekts.');
+      setDeleteProjError(result.error || t.pcvErrDeleteProject);
     }
   };
 
@@ -461,7 +462,7 @@ export const ProjectsClientsView: React.FC = () => {
     if (result.success) {
       setClientToDelete(null);
     } else {
-      setDeleteClientError(result.error || 'Fehler beim Löschen des Kunden.');
+      setDeleteClientError(result.error || t.pcvErrDeleteClient);
     }
   };
 
@@ -518,7 +519,7 @@ export const ProjectsClientsView: React.FC = () => {
     if (result.success) {
       setTaskToDelete(null);
     } else {
-      setDeleteTaskError(result.error || 'Fehler beim Löschen der Aufgabe.');
+      setDeleteTaskError(result.error || t.pcvErrDeleteTask);
     }
   };
 
@@ -649,7 +650,7 @@ export const ProjectsClientsView: React.FC = () => {
             className="bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-700 text-xs font-semibold px-3.5 py-2 rounded-xl flex items-center gap-1.5 transition-colors"
           >
             <Building className="w-4 h-4 text-slate-500" />
-            <span>Kunde anlegen</span>
+            <span>{t.pcvNewClient}</span>
           </button>
           <button
             id="btn-add-project"
@@ -657,7 +658,7 @@ export const ProjectsClientsView: React.FC = () => {
             className="bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold px-4 py-2 rounded-xl flex items-center gap-1.5 shadow-xs transition-colors"
           >
             <Plus className="w-4 h-4" />
-            <span>Projekt anlegen</span>
+            <span>{t.pcvNewProject}</span>
           </button>
         </div>
       </div>
@@ -701,7 +702,7 @@ export const ProjectsClientsView: React.FC = () => {
             {/* Status Filter Pill Bar */}
             <div className="flex items-center gap-1 overflow-x-auto pb-1 text-[11px]">
               {[
-                { key: 'ALL', label: 'Alle Status' },
+                { key: 'ALL', label: t.pcvAllStatus },
                 { key: 'ACTIVE', label: 'Aktiv' },
                 { key: 'ON_HOLD', label: 'Pausiert' },
                 { key: 'COMPLETED', label: 'Abgeschlossen' },
@@ -729,7 +730,7 @@ export const ProjectsClientsView: React.FC = () => {
                 type="text"
                 value={projectSearch}
                 onChange={e => setProjectSearch(e.target.value)}
-                placeholder="Projekt, Kunde oder PRJ-Nummer suchen..."
+                placeholder={t.pcvSearchProjects}
                 className="w-full pl-8 pr-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs placeholder:text-slate-400 focus:outline-hidden focus:ring-1 focus:ring-slate-900"
               />
             </div>
@@ -790,12 +791,12 @@ export const ProjectsClientsView: React.FC = () => {
                             ? 'bg-purple-100 text-purple-800'
                             : 'bg-emerald-100 text-emerald-800'
                         }`}>
-                          {project.billingModel === 'FIXED_PRICE' ? 'Festpreis' : 'T&M'}
+                          {project.billingModel === 'FIXED_PRICE' ? t.pcvFixedPriceLabel : 'T&M'}
                         </span>
                         {/* Quick action: Edit & Delete buttons */}
                         <button
                           id={`btn-edit-proj-list-${project.id}`}
-                          title="Projekt bearbeiten"
+                          title={t.editProject}
                           onClick={(e) => handleOpenEditProject(project, e)}
                           className="p-1 text-slate-400 hover:text-slate-800 hover:bg-slate-100 rounded-md transition-colors"
                         >
@@ -803,7 +804,7 @@ export const ProjectsClientsView: React.FC = () => {
                         </button>
                         <button
                           id={`btn-del-proj-list-${project.id}`}
-                          title={hasEntries ? `Projekt hat ${entries.length} Zeiteinträge (GoBD-Schutz)` : 'Projekt löschen'}
+                          title={hasEntries ? `Projekt hat ${entries.length} Zeiteinträge (GoBD-Schutz)` : t.pcvDeleteProject}
                           onClick={(e) => handleOpenDeleteProject(project, e)}
                           className={`p-1 rounded-md transition-colors ${
                             hasEntries
@@ -818,12 +819,12 @@ export const ProjectsClientsView: React.FC = () => {
 
                     <div className="flex items-center justify-between mt-3 pt-3 border-t border-slate-100 text-xs text-slate-500">
                       <div>
-                        Ist: <strong className="text-slate-800">{hours.toFixed(1)}h</strong>
+                        {language === 'de' ? 'Ist' : 'Actual'}: <strong className="text-slate-800">{hours.toFixed(1)}h</strong>
                         {project.budgetHours && ` / ${project.budgetHours}h`}
                         {hasEntries ? (
-                          <span className="ml-2 text-[10px] text-slate-400">({entries.length} Einträge)</span>
+                          <span className="ml-2 text-[10px] text-slate-400">({entries.length} {language === 'de' ? 'Einträge' : 'entries'})</span>
                         ) : (
-                          <span className="ml-2 text-[10px] text-emerald-600 font-semibold">(0 Einträge • Löschbar)</span>
+                          <span className="ml-2 text-[10px] text-emerald-600 font-semibold">({language === 'de' ? '0 Einträge • Löschbar' : '0 entries • deletable'})</span>
                         )}
                       </div>
                       <div className="flex items-center gap-2 text-[11px]">
@@ -835,7 +836,7 @@ export const ProjectsClientsView: React.FC = () => {
                         ) : (
                           <span className="inline-flex items-center gap-1 font-medium text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded">
                             <Globe className="w-3 h-3 text-slate-400" />
-                            <span>Alle MA</span>
+                            <span>{t.pcvAllEmployees}</span>
                           </span>
                         )}
                       </div>
@@ -863,7 +864,7 @@ export const ProjectsClientsView: React.FC = () => {
                       <span className="text-xs text-slate-400 font-medium">{selectedProject.clientName}</span>
                       {selectedProject.projectType === 'INTERNAL_PROJECT' ? (
                         <span className="text-[10px] font-bold bg-purple-100 text-purple-900 px-2 py-0.5 rounded-md border border-purple-200">
-                          🏢 Internes Projekt (Mandant) • {selectedProject.isBillableDefault ? 'Billable Standard' : 'Non-Billable Standard'}
+                          🏢 Internes Projekt (Mandant) • {selectedProject.isBillableDefault ? t.pcvBillableDefault : t.pcvNonBillableDefault}
                         </span>
                       ) : (
                         <span className="text-[10px] font-medium bg-slate-100 text-slate-700 px-2 py-0.5 rounded-md border border-slate-200">
@@ -883,12 +884,12 @@ export const ProjectsClientsView: React.FC = () => {
                             ? 'bg-blue-50 text-blue-800 border-blue-300'
                             : 'bg-emerald-50 text-emerald-800 border-emerald-300'
                         }`}
-                        title="Projektstatus ändern (Aktiv / Pausiert / Abgeschlossen / Archiviert)"
+                        title={t.pcvChangeStatusTitle}
                       >
-                        <option value="ACTIVE">● Aktiv</option>
-                        <option value="ON_HOLD">● Pausiert</option>
-                        <option value="COMPLETED">● Abgeschlossen</option>
-                        <option value="ARCHIVED">● Archiviert</option>
+                        <option value="ACTIVE">● {t.active}</option>
+                        <option value="ON_HOLD">● {t.pcvStatusOnHold}</option>
+                        <option value="COMPLETED">● {t.pcvStatusCompleted}</option>
+                        <option value="ARCHIVED">● {t.pcvStatusArchived}</option>
                       </select>
                     </div>
                     <h3 className="text-xl font-black text-slate-900 mt-0.5 flex items-center gap-2">
@@ -909,7 +910,7 @@ export const ProjectsClientsView: React.FC = () => {
                         className="px-3 py-1.5 rounded-xl border border-slate-200 hover:bg-slate-50 text-xs font-semibold text-slate-700 flex items-center gap-1.5 transition-colors"
                       >
                         <Edit2 className="w-3.5 h-3.5 text-slate-500" />
-                        <span>Projekt bearbeiten</span>
+                        <span>{t.editProject}</span>
                       </button>
 
                       <button
@@ -922,14 +923,14 @@ export const ProjectsClientsView: React.FC = () => {
                         }`}
                       >
                         <Trash2 className="w-3.5 h-3.5" />
-                        <span>{projectEntries.length > 0 ? 'Löschen (Gesperrt)' : 'Projekt löschen'}</span>
+                        <span>{projectEntries.length > 0 ? t.pcvDeleteLocked : t.pcvDeleteProject}</span>
                       </button>
                     </div>
 
                     <div className="text-right">
-                      <div className="text-[11px] text-slate-400 uppercase font-semibold">Abrechnungsmodell</div>
+                      <div className="text-[11px] text-slate-400 uppercase font-semibold">{t.billingModel}</div>
                       <div className="text-sm font-bold text-slate-900">
-                        {selectedProject.billingModel === 'FIXED_PRICE' ? 'Festpreis' : 'Time & Material'}
+                        {selectedProject.billingModel === 'FIXED_PRICE' ? t.pcvFixedPriceLabel : t.pcvTimeAndMaterialShort}
                       </div>
                       {selectedProject.totalFixedPrice && (
                         <div className="text-base font-extrabold text-purple-700">
@@ -946,27 +947,27 @@ export const ProjectsClientsView: React.FC = () => {
                     <div className="font-bold text-slate-800 flex items-center justify-between">
                       <div className="flex items-center gap-1.5">
                         <FileCheck className="w-4 h-4 text-emerald-600" />
-                        Pflichtfelder bei Erfassung
+                        {t.pcvRequiredFieldsOnEntry}
                       </div>
                       <button
                         onClick={() => handleOpenEditProject(selectedProject)}
                         className="text-[11px] text-emerald-700 font-semibold hover:underline"
                       >
-                        Ändern
+                        {t.pcvChange}
                       </button>
                     </div>
                     <div className="space-y-1.5 text-slate-600">
                       <div className="flex items-center gap-2">
                         <span className={`w-2 h-2 rounded-full ${selectedProject.requiredFields?.description ? 'bg-emerald-500' : 'bg-slate-300'}`} />
-                        <span>Beschreibung: <strong>{selectedProject.requiredFields?.description ? 'Pflicht' : 'Optional'}</strong></span>
+                        <span>{t.description}: <strong>{selectedProject.requiredFields?.description ? t.pcvRequired : t.pcvOptional}</strong></span>
                       </div>
                       <div className="flex items-center gap-2">
                         <span className={`w-2 h-2 rounded-full ${selectedProject.requiredFields?.task ? 'bg-emerald-500' : 'bg-slate-300'}`} />
-                        <span>Aufgabe: <strong>{selectedProject.requiredFields?.task ? 'Pflicht' : 'Optional'}</strong></span>
+                        <span>{t.task}: <strong>{selectedProject.requiredFields?.task ? t.pcvRequired : t.pcvOptional}</strong></span>
                       </div>
                       <div className="flex items-center gap-2">
                         <span className={`w-2 h-2 rounded-full ${selectedProject.requiredFields?.breaks ? 'bg-emerald-500' : 'bg-slate-300'}`} />
-                        <span>Pausen: <strong>{selectedProject.requiredFields?.breaks ? 'Pflicht' : 'Optional'}</strong></span>
+                        <span>{t.pcvBreaks}: <strong>{selectedProject.requiredFields?.breaks ? t.pcvRequired : t.pcvOptional}</strong></span>
                       </div>
                     </div>
                   </div>
@@ -981,13 +982,13 @@ export const ProjectsClientsView: React.FC = () => {
                         onClick={() => handleOpenEditProject(selectedProject)}
                         className="text-[11px] text-emerald-700 font-semibold hover:underline"
                       >
-                        Ändern
+                        {t.pcvChange}
                       </button>
                     </div>
                     <p className="text-slate-600 leading-relaxed">
                       {selectedProject.requireApproval
-                        ? 'Freigabe ist für dieses Projekt verpflichtend. Einträge erhalten zunächst den Status "Eingereicht".'
-                        : 'Direkte Freigabe aktiv. Zeiteinträge werden automatisch als freigegeben verbucht.'}
+                        ? t.pcvApprovalMandatoryHint
+                        : t.pcvApprovalDirectHint}
                     </p>
                   </div>
                 </div>
@@ -1020,12 +1021,12 @@ export const ProjectsClientsView: React.FC = () => {
                         {selectedProject.restrictToAssignedMembers ? (
                           <>
                             <Lock className="w-3.5 h-3.5 text-blue-600" />
-                            <span>Beschränkung Aktiv</span>
+                            <span>{t.pcvRestrictionActive}</span>
                           </>
                         ) : (
                           <>
                             <Globe className="w-3.5 h-3.5 text-slate-400" />
-                            <span>Auf Team beschränken</span>
+                            <span>{t.pcvRestrictToTeam}</span>
                           </>
                         )}
                       </button>
@@ -1044,7 +1045,7 @@ export const ProjectsClientsView: React.FC = () => {
                               type="text"
                               value={memberSearchQuery}
                               onChange={e => setMemberSearchQuery(e.target.value)}
-                              placeholder="Mitarbeiter filtern..."
+                              placeholder={t.pcvFilterEmployees}
                               className="w-full pl-7 pr-2 py-1 bg-white border border-slate-200 rounded-md text-[11px]"
                             />
                           </div>
@@ -1054,9 +1055,9 @@ export const ProjectsClientsView: React.FC = () => {
                             onChange={e => setMemberRoleFilter(e.target.value)}
                             className="bg-white border border-slate-200 rounded-md text-[11px] py-1 px-2 text-slate-700 font-medium"
                           >
-                            <option value="ALL">Alle Rollen</option>
-                            <option value="INTERNAL_ONLY">Nur Festangestellte</option>
-                            <option value="EXTERNAL_ONLY">Nur Freelancer (Extern)</option>
+                            <option value="ALL">{t.pcvRoleAll}</option>
+                            <option value="INTERNAL_ONLY">{t.pcvRoleInternalOnly}</option>
+                            <option value="EXTERNAL_ONLY">{t.pcvRoleExternalOnly}</option>
                             {jobRoles.map(r => (
                               <option key={r.id} value={r.id}>{r.name}</option>
                             ))}
@@ -1226,9 +1227,13 @@ export const ProjectsClientsView: React.FC = () => {
                       <div className="p-3 bg-blue-50/70 border border-blue-200/80 rounded-xl flex items-start gap-2.5 text-xs text-blue-900 shadow-2xs">
                         <Info className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
                         <div className="space-y-0.5">
-                          <span className="font-bold">Mitarbeiter-Ausschluss & Revisionssicherheit:</span>
+                          <span className="font-bold">{t.pcvExclusionAudit}</span>
                           <p className="text-blue-800 text-[11px] leading-relaxed">
-                            Das Ausschließen eines Mitarbeiters sperrt <strong>ausschließlich zukünftige Zeiterfassungen</strong> für dieses Projekt. Sämtliche historischen Buchungen, Soll/Ist-Vergleiche und Forecast-Versionen bleiben GoBD-konform und vollständig unverändert erhalten.
+                            {language === 'de' ? (
+                              <>Das Ausschließen eines Mitarbeiters sperrt <strong>ausschließlich zukünftige Zeiterfassungen</strong> für dieses Projekt. Sämtliche historischen Buchungen, Soll/Ist-Vergleiche und Forecast-Versionen bleiben GoBD-konform und vollständig unverändert erhalten.</>
+                            ) : (
+                              <>Excluding an employee locks <strong>only future time entries</strong> for this project. All historical bookings, target/actual comparisons and forecast versions remain GoBD-compliant and fully preserved.</>
+                            )}
                           </p>
                         </div>
                       </div>
@@ -1236,32 +1241,32 @@ export const ProjectsClientsView: React.FC = () => {
                       {/* Summary KPI Cards */}
                       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
                         <div className="p-3 bg-slate-50 rounded-xl border border-slate-200/80">
-                          <span className="text-[10px] uppercase font-bold text-slate-400 block tracking-wider">Erfasste Stunden</span>
+                          <span className="text-[10px] uppercase font-bold text-slate-400 block tracking-wider">{t.pcvRecordedHours}</span>
                           <span className="text-sm font-black text-slate-900 mt-0.5 block font-mono">
                             {totalLoggedHours.toFixed(1)}h
                           </span>
                           <span className="text-[10px] text-slate-500">{projectEntries.length} Buchungen</span>
                         </div>
                         <div className="p-3 bg-emerald-50/50 rounded-xl border border-emerald-200/70">
-                          <span className="text-[10px] uppercase font-bold text-emerald-600 block tracking-wider">Gesamtumsatz</span>
+                          <span className="text-[10px] uppercase font-bold text-emerald-600 block tracking-wider">{t.pcvTotalRevenue}</span>
                           <span className="text-sm font-black text-emerald-950 mt-0.5 block font-mono">
                             € {totalBilledAmount.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                           </span>
-                          <span className="text-[10px] text-emerald-700">Kundenvolumen</span>
+                          <span className="text-[10px] text-emerald-700">{t.pcvClientVolume}</span>
                         </div>
                         <div className="p-3 bg-rose-50/50 rounded-xl border border-rose-200/70">
-                          <span className="text-[10px] uppercase font-bold text-rose-600 block tracking-wider">Personalkosten</span>
+                          <span className="text-[10px] uppercase font-bold text-rose-600 block tracking-wider">{t.pcvStaffCosts}</span>
                           <span className="text-sm font-black text-rose-950 mt-0.5 block font-mono">
                             {canViewProjectCosts && totalProjectCosts !== null
                               ? `€ ${totalProjectCosts.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
                               : '🔒 Verborgen'}
                           </span>
                           <span className="text-[10px] text-rose-700">
-                            {canViewProjectCosts ? 'Interner Aufwand' : 'Keine Berechtigung'}
+                            {canViewProjectCosts ? t.pcvInternalEffort : t.pcvNoPermission}
                           </span>
                         </div>
                         <div className="p-3 bg-indigo-50/50 rounded-xl border border-indigo-200/70">
-                          <span className="text-[10px] uppercase font-bold text-indigo-600 block tracking-wider">Deckungsbeitrag</span>
+                          <span className="text-[10px] uppercase font-bold text-indigo-600 block tracking-wider">{t.pcvContributionMargin}</span>
                           <span className="text-sm font-black text-indigo-950 mt-0.5 block font-mono">
                             {canViewProjectCosts && totalProjectMargin !== null
                               ? `€ ${totalProjectMargin.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
@@ -1270,7 +1275,7 @@ export const ProjectsClientsView: React.FC = () => {
                           <span className="text-[10px] text-indigo-700 font-semibold">
                             {canViewProjectCosts && totalProjectMarginPercent !== null
                               ? `${totalProjectMarginPercent.toFixed(1)}% Marge`
-                              : 'PM-Kostenschutz aktiv'}
+                              : t.pcvPmCostProtectionActive}
                           </span>
                         </div>
                       </div>
@@ -1280,16 +1285,16 @@ export const ProjectsClientsView: React.FC = () => {
                         <table className="w-full text-left text-xs border-collapse">
                           <thead>
                             <tr className="bg-slate-50 border-b border-slate-200 text-slate-600 text-[10px] uppercase font-bold tracking-wider">
-                              <th className="py-2.5 px-3">Mitarbeiter</th>
-                              <th className="py-2.5 px-2">Typ</th>
-                              <th className="py-2.5 px-2">Buchungsstatus</th>
-                              <th className="py-2.5 px-2 text-right">Stunden</th>
-                              <th className="py-2.5 px-2 text-right">Kundensatz</th>
-                              <th className="py-2.5 px-2 text-right">Kostensatz</th>
-                              <th className="py-2.5 px-2 text-right">Umsatz</th>
-                              <th className="py-2.5 px-2 text-right">Kosten</th>
-                              <th className="py-2.5 px-2 text-right">Marge</th>
-                              <th className="py-2.5 px-3 text-right">Aktion</th>
+                              <th className="py-2.5 px-3">{t.pcvColEmployee}</th>
+                              <th className="py-2.5 px-2">{t.pcvColType}</th>
+                              <th className="py-2.5 px-2">{t.pcvColBookingStatus}</th>
+                              <th className="py-2.5 px-2 text-right">{t.pcvColHours}</th>
+                              <th className="py-2.5 px-2 text-right">{t.pcvColClientRate}</th>
+                              <th className="py-2.5 px-2 text-right">{t.pcvColCostRate}</th>
+                              <th className="py-2.5 px-2 text-right">{t.pcvColRevenue}</th>
+                              <th className="py-2.5 px-2 text-right">{t.pcvColCosts}</th>
+                              <th className="py-2.5 px-2 text-right">{t.pcvColMargin}</th>
+                              <th className="py-2.5 px-3 text-right">{t.pcvColAction}</th>
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-slate-100">
@@ -1319,10 +1324,10 @@ export const ProjectsClientsView: React.FC = () => {
                                   ) : (
                                     <span
                                       className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-50 text-amber-800 border border-amber-200"
-                                      title="Für zukünftige Buchungen gesperrt. Bisherige Buchungen und Forecasts bleiben vollständig erhalten."
+                                      title={t.pcvExcludedTooltip}
                                     >
                                       <Lock className="w-3 h-3 text-amber-600" />
-                                      {m.userHours > 0 ? 'Gesperrt (Historie erhalten)' : 'Gesperrt'}
+                                      {m.userHours > 0 ? t.pcvLockedHistoryKept : 'Gesperrt'}
                                     </span>
                                   )}
                                 </td>
@@ -1336,7 +1341,7 @@ export const ProjectsClientsView: React.FC = () => {
                                   {canViewProjectCosts ? (
                                     <span className="text-slate-700">€ {m.costRate.toFixed(2)}/h</span>
                                   ) : (
-                                    <span className="text-slate-400 italic text-[10px]">🔒 Maskiert</span>
+                                    <span className="text-slate-400 italic text-[10px]">🔒 {t.pcvMasked}</span>
                                   )}
                                 </td>
                                 <td className="py-2.5 px-2 text-right font-mono font-bold text-emerald-700">
@@ -1348,7 +1353,7 @@ export const ProjectsClientsView: React.FC = () => {
                                       € {m.userCost.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                     </span>
                                   ) : (
-                                    <span className="text-slate-400 italic text-[10px]">🔒 Maskiert</span>
+                                    <span className="text-slate-400 italic text-[10px]">🔒 {t.pcvMasked}</span>
                                   )}
                                 </td>
                                 <td className="py-2.5 px-2 text-right font-mono">
@@ -1364,7 +1369,7 @@ export const ProjectsClientsView: React.FC = () => {
                                       )}
                                     </div>
                                   ) : (
-                                    <span className="text-slate-400 italic text-[10px]">🔒 Maskiert</span>
+                                    <span className="text-slate-400 italic text-[10px]">🔒 {t.pcvMasked}</span>
                                   )}
                                 </td>
                                 <td className="py-2.5 px-3 text-right">
@@ -1381,22 +1386,22 @@ export const ProjectsClientsView: React.FC = () => {
                                         revenue: m.userRevenue,
                                         bookingsCount: m.userEntriesCount
                                       })}
-                                      title="Mitarbeiter aus dem laufenden Projekt ausschließen (sperrt zukünftige Buchungen, historische Daten bleiben erhalten)"
+                                      title={t.pcvExcludeTooltip}
                                       className="px-2 py-1 bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 rounded-lg text-[11px] font-semibold inline-flex items-center gap-1 transition-colors shadow-2xs"
                                     >
                                       <UserMinus className="w-3 h-3 text-amber-700" />
-                                      <span>Ausschließen</span>
+                                      <span>{t.pcvExclude}</span>
                                     </button>
                                   ) : (
                                     <button
                                       type="button"
                                       id={`btn-reassign-member-${m.uid}`}
                                       onClick={() => handleReassignMember(m.uid)}
-                                      title="Mitarbeiter wieder zuweisen und für zukünftige Buchungen freischalten"
+                                      title={t.pcvReassignTooltip}
                                       className="px-2 py-1 bg-blue-50 hover:bg-blue-100 text-blue-900 border border-blue-200 rounded-lg text-[11px] font-semibold inline-flex items-center gap-1 transition-colors shadow-2xs"
                                     >
                                       <UserPlus className="w-3 h-3 text-blue-700" />
-                                      <span>Freigeben</span>
+                                      <span>{t.pcvRelease}</span>
                                     </button>
                                   )}
                                 </td>
@@ -1433,7 +1438,7 @@ export const ProjectsClientsView: React.FC = () => {
                       <input
                         id="input-new-task-name"
                         type="text"
-                        placeholder="Neue Aufgabe / Tätigkeit anlegen (z.B. Backend API, Design System)..."
+                        placeholder={t.pcvNewTaskPlaceholder}
                         value={newTaskName}
                         onChange={e => setNewTaskName(e.target.value)}
                         className="flex-1 bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs focus:ring-1 focus:ring-slate-900"
@@ -1445,7 +1450,7 @@ export const ProjectsClientsView: React.FC = () => {
                         className="bg-slate-900 hover:bg-slate-800 disabled:opacity-50 text-white text-xs font-semibold px-4 py-2 rounded-xl transition-colors flex items-center gap-1.5"
                       >
                         <Plus className="w-3.5 h-3.5" />
-                        <span>Hinzufügen</span>
+                        <span>{t.pcvAdd}</span>
                       </button>
                     </div>
                     <div className="flex items-center justify-between text-[11px] pt-1">
@@ -1460,11 +1465,11 @@ export const ProjectsClientsView: React.FC = () => {
                           Standardmäßig abrechenbar
                         </label>
                         <div className="flex items-center gap-1.5 text-slate-600">
-                          <span>Budget (Stunden):</span>
+                          <span>{t.pcvBudgetHoursColon}</span>
                           <input
                             type="number"
                             step="0.5"
-                            placeholder="z.B. 20"
+                            placeholder={t.pcvEgHours}
                             value={newTaskBudgetHours}
                             onChange={e => setNewTaskBudgetHours(e.target.value)}
                             className="w-20 bg-white border border-slate-200 rounded-lg px-2 py-0.5 text-xs text-slate-800"
@@ -1506,7 +1511,7 @@ export const ProjectsClientsView: React.FC = () => {
                                   ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
                                   : 'bg-slate-100 text-slate-600 border-slate-200'
                               }`}>
-                                {t.isBillableDefault ? 'Abrechenbar' : 'Nicht abrechenbar'}
+                                {t.isBillableDefault ? 'Abrechenbar' : t.nonBillable}
                               </span>
                               {t.budgetHours !== undefined && t.budgetHours > 0 && (
                                 <span className="bg-blue-50 text-blue-700 px-1.5 py-0.2 rounded border border-blue-200 font-mono">
@@ -1523,7 +1528,7 @@ export const ProjectsClientsView: React.FC = () => {
                             <button
                               id={`btn-edit-task-${t.id}`}
                               onClick={(e) => handleOpenEditTask(t, e)}
-                              title="Aufgabe bearbeiten"
+                              title={t.pcvEditTaskTitle}
                               className="p-1.5 text-slate-400 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition-colors"
                             >
                               <Edit2 className="w-3.5 h-3.5" />
@@ -1531,7 +1536,7 @@ export const ProjectsClientsView: React.FC = () => {
                             <button
                               id={`btn-delete-task-${t.id}`}
                               onClick={(e) => handleOpenDeleteTask(t, e)}
-                              title="Aufgabe löschen"
+                              title={t.pcvDeleteTaskTitle}
                               className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                             >
                               <Trash2 className="w-3.5 h-3.5" />
@@ -1569,7 +1574,7 @@ export const ProjectsClientsView: React.FC = () => {
                 type="text"
                 value={clientSearch}
                 onChange={e => setClientSearch(e.target.value)}
-                placeholder="Kunden nach Name, Kundennr., Kontakt oder E-Mail durchsuchen..."
+                placeholder={t.pcvSearchClients}
                 className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs placeholder:text-slate-400 focus:outline-hidden focus:ring-1 focus:ring-slate-900"
               />
             </div>
@@ -1584,13 +1589,13 @@ export const ProjectsClientsView: React.FC = () => {
               <table className="w-full text-left text-xs">
                 <thead className="bg-slate-50 text-slate-500 border-b border-slate-200 font-semibold">
                   <tr>
-                    <th className="px-4 py-3">Kundennummer</th>
-                    <th className="px-4 py-3">Kundenname / Firma</th>
-                    <th className="px-4 py-3">Ansprechpartner</th>
-                    <th className="px-4 py-3">E-Mail</th>
-                    <th className="px-4 py-3">Zugeordnete Projekte</th>
-                    <th className="px-4 py-3">Status</th>
-                    <th className="px-4 py-3 text-right">Aktionen</th>
+                    <th className="px-4 py-3">{t.pcvColClientNumber}</th>
+                    <th className="px-4 py-3">{t.pcvColClientName}</th>
+                    <th className="px-4 py-3">{t.pcvColContact}</th>
+                    <th className="px-4 py-3">{t.pcvColEmail}</th>
+                    <th className="px-4 py-3">{t.pcvColAssignedProjects}</th>
+                    <th className="px-4 py-3">{t.pcvColStatus}</th>
+                    <th className="px-4 py-3 text-right">{t.pcvColActions}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
@@ -1639,12 +1644,12 @@ export const ProjectsClientsView: React.FC = () => {
                               className="px-2.5 py-1 text-slate-700 hover:bg-slate-100 border border-slate-200 rounded-lg text-xs font-semibold flex items-center gap-1 transition-colors"
                             >
                               <Edit2 className="w-3 h-3 text-slate-500" />
-                              <span>Bearbeiten</span>
+                              <span>{t.edit}</span>
                             </button>
                             <button
                               id={`btn-del-client-${client.id}`}
                               onClick={() => handleOpenDeleteClient(client)}
-                              title={canDeleteClient ? 'Kunde löschen' : 'Kunde kann nicht gelöscht werden, da noch Projekte zugeordnet sind.'}
+                              title={canDeleteClient ? t.pcvDeleteClient : t.pcvClientDeleteBlockedTooltip}
                               className={`px-2.5 py-1 rounded-lg text-xs font-semibold flex items-center gap-1 border transition-colors ${
                                 canDeleteClient
                                   ? 'border-red-200 bg-red-50 text-red-700 hover:bg-red-100'
@@ -1652,7 +1657,7 @@ export const ProjectsClientsView: React.FC = () => {
                               }`}
                             >
                               <Trash2 className="w-3 h-3" />
-                              <span>Löschen</span>
+                              <span>{t.delete}</span>
                             </button>
                           </div>
                         </td>
@@ -1692,21 +1697,21 @@ export const ProjectsClientsView: React.FC = () => {
 
             <form onSubmit={handleCreateProject} className="space-y-3 text-xs">
               <div>
-                <label className="font-semibold text-slate-700 block mb-1">Projektname *</label>
+                <label className="font-semibold text-slate-700 block mb-1">{t.pcvProjectNameLabel}</label>
                 <input
                   id="input-create-proj-name"
                   type="text"
                   required
                   value={projName}
                   onChange={e => setProjName(e.target.value)}
-                  placeholder="z.B. AI Clinical Workflow"
+                  placeholder={t.pcvEgProjectName}
                   className="w-full border border-slate-200 rounded-xl px-3 py-2 text-xs"
                 />
               </div>
 
               {/* Projekttyp: Kundenprojekt vs. Internes Projekt */}
               <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-2">
-                <label className="font-bold text-slate-900 block">Projekttyp *</label>
+                <label className="font-bold text-slate-900 block">{t.pcvProjectTypeLabel}</label>
                 <div className="grid grid-cols-2 gap-2">
                   <button
                     type="button"
@@ -1720,8 +1725,8 @@ export const ProjectsClientsView: React.FC = () => {
                         : 'bg-white/60 border-slate-200 text-slate-600 hover:bg-white'
                     }`}
                   >
-                    <div className="font-bold text-slate-900 text-xs">Kundenprojekt</div>
-                    <div className="text-[10px] text-slate-500 mt-0.5">Externer Kunde, standardmäßig billable (abrechenbar)</div>
+                    <div className="font-bold text-slate-900 text-xs">{t.pcvClientProject}</div>
+                    <div className="text-[10px] text-slate-500 mt-0.5">{t.pcvClientProjectHint}</div>
                   </button>
                   <button
                     type="button"
@@ -1737,8 +1742,8 @@ export const ProjectsClientsView: React.FC = () => {
                         : 'bg-white/60 border-slate-200 text-slate-600 hover:bg-white'
                     }`}
                   >
-                    <div className="font-bold text-purple-900 text-xs">Internes Projekt</div>
-                    <div className="text-[10px] text-purple-700 mt-0.5">Mandant = Auftraggeber, standardmäßig non-billable</div>
+                    <div className="font-bold text-purple-900 text-xs">{t.pcvInternalProject}</div>
+                    <div className="text-[10px] text-purple-700 mt-0.5">{t.pcvInternalProjectHint}</div>
                   </button>
                 </div>
 
@@ -1751,7 +1756,7 @@ export const ProjectsClientsView: React.FC = () => {
                         onChange={e => setProjAllowInternalRebilling(e.target.checked)}
                         className="rounded text-purple-700"
                       />
-                      <span>Interne Weiterverrechnung erlauben (Ausnahmen für Kostenweiterbelastung)</span>
+                      <span>{t.pcvAllowInternalRecharge}</span>
                     </label>
                     <label className="flex items-center gap-2 cursor-pointer font-medium text-slate-700">
                       <input
@@ -1760,7 +1765,7 @@ export const ProjectsClientsView: React.FC = () => {
                         onChange={e => setProjIsBillableDefault(e.target.checked)}
                         className="rounded text-slate-900"
                       />
-                      <span>Standardmäßig abrechenbar (Ausnahmefall)</span>
+                      <span>{t.pcvDefaultBillableException}</span>
                     </label>
                   </div>
                 )}
@@ -1783,30 +1788,30 @@ export const ProjectsClientsView: React.FC = () => {
                   </select>
                 </div>
                 <div>
-                  <label className="font-semibold text-slate-700 block mb-1">Status</label>
+                  <label className="font-semibold text-slate-700 block mb-1">{t.pcvColStatus}</label>
                   <select
                     id="select-create-proj-status"
                     value={projStatus}
                     onChange={e => setProjStatus(e.target.value as any)}
                     className="w-full border border-slate-200 rounded-xl px-3 py-2 text-xs font-medium"
                   >
-                    <option value="ACTIVE">Aktiv (Buchbar)</option>
-                    <option value="ON_HOLD">Pausiert</option>
-                    <option value="COMPLETED">Abgeschlossen</option>
-                    <option value="ARCHIVED">Archiviert</option>
+                    <option value="ACTIVE">{t.pcvStatusActiveBookable}</option>
+                    <option value="ON_HOLD">{t.pcvStatusOnHold}</option>
+                    <option value="COMPLETED">{t.pcvStatusCompleted}</option>
+                    <option value="ARCHIVED">{t.pcvStatusArchived}</option>
                   </select>
                 </div>
               </div>
 
               <div>
-                <label className="font-semibold text-slate-700 block mb-1">Projektleiter (PM)</label>
+                <label className="font-semibold text-slate-700 block mb-1">{t.pcvProjectManagerPM}</label>
                 <select
                   id="select-create-proj-pm"
                   value={projProjectManagerId}
                   onChange={e => setProjProjectManagerId(e.target.value)}
                   className="w-full border border-slate-200 rounded-xl px-3 py-2 text-xs"
                 >
-                  <option value="">-- Kein fester PM --</option>
+                  <option value="">{t.pcvNoFixedPm}</option>
                   {users.map(u => (
                     <option key={u.id} value={u.id}>
                       {u.name} ({u.role === 'PROJECT_MANAGER' ? 'Projektleitung' : u.role === 'ADMIN' ? 'Admin' : 'Mitarbeiter'})
@@ -1824,8 +1829,8 @@ export const ProjectsClientsView: React.FC = () => {
                     onChange={e => setProjBillingModel(e.target.value as any)}
                     className="w-full border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold"
                   >
-                    <option value="TIME_AND_MATERIAL">Time & Material</option>
-                    <option value="FIXED_PRICE">Festpreisprojekt</option>
+                    <option value="TIME_AND_MATERIAL">{t.pcvTimeAndMaterialShort}</option>
+                    <option value="FIXED_PRICE">{t.pcvFixedPriceShort}</option>
                   </select>
                 </div>
                 <div>
@@ -1843,7 +1848,7 @@ export const ProjectsClientsView: React.FC = () => {
               </div>
 
               <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-2">
-                <div className="font-semibold text-slate-800">Projektspezifische Konfiguration</div>
+                <div className="font-semibold text-slate-800">{t.pcvProjectConfig}</div>
                 <label className="flex items-center gap-2 cursor-pointer">
                   <input
                     type="checkbox"
@@ -1851,7 +1856,7 @@ export const ProjectsClientsView: React.FC = () => {
                     onChange={e => setProjRequireApproval(e.target.checked)}
                     className="rounded text-slate-900"
                   />
-                  <span>Freigabepflicht für Zeiteinträge aktivieren</span>
+                  <span>{t.pcvEnableApproval}</span>
                 </label>
                 
                 {/* PM Cost Visibility Setting */}
@@ -1864,8 +1869,8 @@ export const ProjectsClientsView: React.FC = () => {
                     className="rounded text-indigo-600"
                   />
                   <div className="text-xs">
-                    <span className="font-medium text-slate-900">Projektleitern Einsicht in Mitarbeiterkosten gewähren</span>
-                    <p className="text-[10px] text-slate-500">Wenn deaktiviert, sehen Projektleiter nur erfasste Stunden und Umsätze, interne Kostensätze bleiben maskiert.</p>
+                    <span className="font-medium text-slate-900">{t.pcvGrantPmCostInsight}</span>
+                    <p className="text-[10px] text-slate-500">{t.pcvGrantPmCostInsightHint}</p>
                   </div>
                 </label>
 
@@ -1877,7 +1882,7 @@ export const ProjectsClientsView: React.FC = () => {
                       onChange={e => setProjReqDesc(e.target.checked)}
                       className="rounded text-slate-900"
                     />
-                    <span>Beschreibung Pflicht</span>
+                    <span>{t.pcvDescriptionRequired}</span>
                   </label>
                   <label className="flex items-center gap-1.5">
                     <input
@@ -1886,7 +1891,7 @@ export const ProjectsClientsView: React.FC = () => {
                       onChange={e => setProjReqTask(e.target.checked)}
                       className="rounded text-slate-900"
                     />
-                    <span>Aufgabe Pflicht</span>
+                    <span>{t.pcvTaskRequired}</span>
                   </label>
                   <label className="flex items-center gap-1.5">
                     <input
@@ -1895,7 +1900,7 @@ export const ProjectsClientsView: React.FC = () => {
                       onChange={e => setProjReqBreaks(e.target.checked)}
                       className="rounded text-slate-900"
                     />
-                    <span>Pausen Pflicht</span>
+                    <span>{t.pcvBreaksRequired}</span>
                   </label>
                 </div>
               </div>
@@ -1918,12 +1923,12 @@ export const ProjectsClientsView: React.FC = () => {
                     }}
                     className="rounded text-slate-900"
                   />
-                  <span>Buchung nur auf zugewiesenes Team beschränken</span>
+                  <span>{t.pcvRestrictToAssignedTeam}</span>
                 </label>
 
                 {projRestrictMembers && (
                   <div className="space-y-1.5 pt-1">
-                    <div className="text-[11px] text-slate-500">Wählen Sie berechtigte Mitarbeiter:</div>
+                    <div className="text-[11px] text-slate-500">{t.pcvSelectEligibleEmployees}</div>
                     <div className="grid grid-cols-2 gap-1.5 max-h-32 overflow-y-auto pr-1">
                       {users.map(u => {
                         const checked = projAssignedUsers.includes(u.id);
@@ -1991,7 +1996,7 @@ export const ProjectsClientsView: React.FC = () => {
 
             <form onSubmit={handleSaveEditProject} className="space-y-3 text-xs">
               <div>
-                <label className="font-semibold text-slate-700 block mb-1">Projektname *</label>
+                <label className="font-semibold text-slate-700 block mb-1">{t.pcvProjectNameLabel}</label>
                 <input
                   id="input-edit-proj-name"
                   type="text"
@@ -2004,7 +2009,7 @@ export const ProjectsClientsView: React.FC = () => {
 
               {/* Projekttyp: Kundenprojekt vs. Internes Projekt */}
               <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-2">
-                <label className="font-bold text-slate-900 block">Projekttyp *</label>
+                <label className="font-bold text-slate-900 block">{t.pcvProjectTypeLabel}</label>
                 <div className="grid grid-cols-2 gap-2">
                   <button
                     type="button"
@@ -2018,8 +2023,8 @@ export const ProjectsClientsView: React.FC = () => {
                         : 'bg-white/60 border-slate-200 text-slate-600 hover:bg-white'
                     }`}
                   >
-                    <div className="font-bold text-slate-900 text-xs">Kundenprojekt</div>
-                    <div className="text-[10px] text-slate-500 mt-0.5">Externer Kunde, standardmäßig billable (abrechenbar)</div>
+                    <div className="font-bold text-slate-900 text-xs">{t.pcvClientProject}</div>
+                    <div className="text-[10px] text-slate-500 mt-0.5">{t.pcvClientProjectHint}</div>
                   </button>
                   <button
                     type="button"
@@ -2035,8 +2040,8 @@ export const ProjectsClientsView: React.FC = () => {
                         : 'bg-white/60 border-slate-200 text-slate-600 hover:bg-white'
                     }`}
                   >
-                    <div className="font-bold text-purple-900 text-xs">Internes Projekt</div>
-                    <div className="text-[10px] text-purple-700 mt-0.5">Mandant = Auftraggeber, standardmäßig non-billable</div>
+                    <div className="font-bold text-purple-900 text-xs">{t.pcvInternalProject}</div>
+                    <div className="text-[10px] text-purple-700 mt-0.5">{t.pcvInternalProjectHint}</div>
                   </button>
                 </div>
 
@@ -2049,7 +2054,7 @@ export const ProjectsClientsView: React.FC = () => {
                         onChange={e => setEditProjAllowInternalRebilling(e.target.checked)}
                         className="rounded text-purple-700"
                       />
-                      <span>Interne Weiterverrechnung erlauben (Ausnahmen für Kostenweiterbelastung)</span>
+                      <span>{t.pcvAllowInternalRecharge}</span>
                     </label>
                     <label className="flex items-center gap-2 cursor-pointer font-medium text-slate-700">
                       <input
@@ -2058,7 +2063,7 @@ export const ProjectsClientsView: React.FC = () => {
                         onChange={e => setEditProjIsBillableDefault(e.target.checked)}
                         className="rounded text-slate-900"
                       />
-                      <span>Standardmäßig abrechenbar (Ausnahmefall)</span>
+                      <span>{t.pcvDefaultBillableException}</span>
                     </label>
                   </div>
                 )}
@@ -2081,30 +2086,30 @@ export const ProjectsClientsView: React.FC = () => {
                   </select>
                 </div>
                 <div>
-                  <label className="font-semibold text-slate-700 block mb-1">Status *</label>
+                  <label className="font-semibold text-slate-700 block mb-1">{t.pcvStatusLabelReq}</label>
                   <select
                     id="select-edit-proj-status"
                     value={editProjStatus}
                     onChange={e => setEditProjStatus(e.target.value as any)}
                     className="w-full border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold"
                   >
-                    <option value="ACTIVE">Aktiv (Buchbar)</option>
-                    <option value="ON_HOLD">Pausiert (Gestoppt)</option>
-                    <option value="COMPLETED">Abgeschlossen (Projekt beendet)</option>
-                    <option value="ARCHIVED">Archiviert (Buchungssperre)</option>
+                    <option value="ACTIVE">{t.pcvStatusActiveBookable}</option>
+                    <option value="ON_HOLD">{t.pcvStatusOnHoldStopped}</option>
+                    <option value="COMPLETED">{t.pcvStatusCompletedFull}</option>
+                    <option value="ARCHIVED">{t.pcvStatusArchivedLocked}</option>
                   </select>
                 </div>
               </div>
 
               <div>
-                <label className="font-semibold text-slate-700 block mb-1">Projektleiter (PM)</label>
+                <label className="font-semibold text-slate-700 block mb-1">{t.pcvProjectManagerPM}</label>
                 <select
                   id="select-edit-proj-pm"
                   value={editProjProjectManagerId}
                   onChange={e => setEditProjProjectManagerId(e.target.value)}
                   className="w-full border border-slate-200 rounded-xl px-3 py-2 text-xs font-medium"
                 >
-                  <option value="">-- Kein fester PM --</option>
+                  <option value="">{t.pcvNoFixedPm}</option>
                   {users.map(u => (
                     <option key={u.id} value={u.id}>
                       {u.name} ({u.role === 'PROJECT_MANAGER' ? 'Projektleitung' : u.role === 'ADMIN' ? 'Admin' : 'Mitarbeiter'})
@@ -2121,8 +2126,8 @@ export const ProjectsClientsView: React.FC = () => {
                     onChange={e => setEditProjBillingModel(e.target.value as any)}
                     className="w-full border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold"
                   >
-                    <option value="TIME_AND_MATERIAL">Time & Material</option>
-                    <option value="FIXED_PRICE">Festpreisprojekt</option>
+                    <option value="TIME_AND_MATERIAL">{t.pcvTimeAndMaterialShort}</option>
+                    <option value="FIXED_PRICE">{t.pcvFixedPriceShort}</option>
                   </select>
                 </div>
                 <div>
@@ -2139,7 +2144,7 @@ export const ProjectsClientsView: React.FC = () => {
               </div>
 
               <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-2">
-                <div className="font-semibold text-slate-800">Projektspezifische Konfiguration</div>
+                <div className="font-semibold text-slate-800">{t.pcvProjectConfig}</div>
                 <label className="flex items-center gap-2 cursor-pointer">
                   <input
                     type="checkbox"
@@ -2147,7 +2152,7 @@ export const ProjectsClientsView: React.FC = () => {
                     onChange={e => setEditProjRequireApproval(e.target.checked)}
                     className="rounded text-slate-900"
                   />
-                  <span>Freigabepflicht für Zeiteinträge aktivieren</span>
+                  <span>{t.pcvEnableApproval}</span>
                 </label>
 
                 {/* PM Cost Visibility Setting */}
@@ -2160,8 +2165,8 @@ export const ProjectsClientsView: React.FC = () => {
                     className="rounded text-indigo-600"
                   />
                   <div className="text-xs">
-                    <span className="font-medium text-slate-900">Projektleitern Einsicht in Mitarbeiterkosten gewähren</span>
-                    <p className="text-[10px] text-slate-500">Wenn deaktiviert, sehen Projektleiter nur erfasste Stunden und Umsätze, interne Kostensätze bleiben maskiert.</p>
+                    <span className="font-medium text-slate-900">{t.pcvGrantPmCostInsight}</span>
+                    <p className="text-[10px] text-slate-500">{t.pcvGrantPmCostInsightHint}</p>
                   </div>
                 </label>
 
@@ -2173,7 +2178,7 @@ export const ProjectsClientsView: React.FC = () => {
                       onChange={e => setEditProjReqDesc(e.target.checked)}
                       className="rounded text-slate-900"
                     />
-                    <span>Beschreibung Pflicht</span>
+                    <span>{t.pcvDescriptionRequired}</span>
                   </label>
                   <label className="flex items-center gap-1.5">
                     <input
@@ -2182,7 +2187,7 @@ export const ProjectsClientsView: React.FC = () => {
                       onChange={e => setEditProjReqTask(e.target.checked)}
                       className="rounded text-slate-900"
                     />
-                    <span>Aufgabe Pflicht</span>
+                    <span>{t.pcvTaskRequired}</span>
                   </label>
                   <label className="flex items-center gap-1.5">
                     <input
@@ -2191,7 +2196,7 @@ export const ProjectsClientsView: React.FC = () => {
                       onChange={e => setEditProjReqBreaks(e.target.checked)}
                       className="rounded text-slate-900"
                     />
-                    <span>Pausen Pflicht</span>
+                    <span>{t.pcvBreaksRequired}</span>
                   </label>
                 </div>
               </div>
@@ -2209,12 +2214,12 @@ export const ProjectsClientsView: React.FC = () => {
                     onChange={e => setEditProjRestrictMembers(e.target.checked)}
                     className="rounded text-slate-900"
                   />
-                  <span>Buchung nur auf zugewiesenes Team beschränken</span>
+                  <span>{t.pcvRestrictToAssignedTeam}</span>
                 </label>
 
                 {editProjRestrictMembers && (
                   <div className="space-y-1.5 pt-1">
-                    <div className="text-[11px] text-slate-500">Wählen Sie berechtigte Mitarbeiter:</div>
+                    <div className="text-[11px] text-slate-500">{t.pcvSelectEligibleEmployees}</div>
                     <div className="grid grid-cols-2 gap-1.5 max-h-36 overflow-y-auto pr-1">
                       {users.map(u => {
                         const checked = editProjAssignedUsers.includes(u.id);
@@ -2284,7 +2289,7 @@ export const ProjectsClientsView: React.FC = () => {
                     </div>
                     <div>
                       <h3 className="text-base font-bold text-slate-900">
-                        {hasEntries ? 'Projekt nicht löschbar (GoBD-Schutz)' : 'Projekt wirklich löschen?'}
+                        {hasEntries ? t.pcvProjectNotDeletableGobd : t.pcvProjectDeleteConfirm}
                       </h3>
                       <div className="text-xs text-slate-500 font-mono">{projectToDelete.name} ({projectToDelete.projectNumber})</div>
                     </div>
@@ -2295,16 +2300,23 @@ export const ProjectsClientsView: React.FC = () => {
                       <div className="p-3 bg-amber-50 rounded-xl border border-amber-200 space-y-1.5 text-amber-900">
                         <div className="font-bold flex items-center gap-1.5">
                           <ShieldCheck className="w-4 h-4 text-amber-700" />
-                          <span>Revisionssicherheit nach GoBD</span>
+                          <span>{t.pcvAuditGobd}</span>
                         </div>
                         <p className="leading-relaxed">
-                          Auf dieses Projekt wurden bereits <strong>{entries.length} Zeiteinträge</strong> ({entries.reduce((s, e) => s + e.durationHoursDecimal, 0).toFixed(1)} Stunden) gebucht.
-                          Um die steuerliche und gesetzliche Nachvollziehbarkeit zu gewährleisten, darf dieses Projekt nicht physisch gelöscht werden.
+                          {language === 'de' ? (
+                            <>Auf dieses Projekt wurden bereits <strong>{entries.length} Zeiteinträge</strong> ({entries.reduce((s, e) => s + e.durationHoursDecimal, 0).toFixed(1)} Stunden) gebucht. Um die steuerliche und gesetzliche Nachvollziehbarkeit zu gewährleisten, darf dieses Projekt nicht physisch gelöscht werden.</>
+                          ) : (
+                            <>This project already has <strong>{entries.length} time entries</strong> ({entries.reduce((s, e) => s + e.durationHoursDecimal, 0).toFixed(1)} hours) booked. To ensure fiscal and legal traceability, this project must not be physically deleted.</>
+                          )}
                         </p>
                       </div>
 
                       <p className="text-slate-700">
-                        <strong>Empfohlene Lösung:</strong> Setzen Sie das Projekt auf <strong>"Archiviert"</strong>. Dadurch können Mitarbeiter keine neuen Zeiten mehr buchen, während alle bisherigen Einträge und Auswertungen erhalten bleiben.
+                        {language === 'de' ? (
+                          <><strong>Empfohlene Lösung:</strong> Setzen Sie das Projekt auf <strong>"Archiviert"</strong>. Dadurch können Mitarbeiter keine neuen Zeiten mehr buchen, während alle bisherigen Einträge und Auswertungen erhalten bleiben.</>
+                        ) : (
+                          <><strong>Recommended solution:</strong> Set the project to <strong>"Archived"</strong>. This prevents employees from booking new time, while all existing entries and reports are preserved.</>
+                        )}
                       </p>
 
                       {deleteProjError && (
@@ -2319,7 +2331,7 @@ export const ProjectsClientsView: React.FC = () => {
                           onClick={() => setProjectToDelete(null)}
                           className="px-3 py-1.5 rounded-lg border border-slate-200 text-xs font-medium text-slate-700 hover:bg-slate-50"
                         >
-                          Schließen
+                          {t.close}
                         </button>
                         <button
                           type="button"
@@ -2327,17 +2339,23 @@ export const ProjectsClientsView: React.FC = () => {
                           className="px-4 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-xs font-semibold flex items-center gap-1.5 shadow-xs"
                         >
                           <Archive className="w-3.5 h-3.5" />
-                          <span>Projekt jetzt archivieren</span>
+                          <span>{t.pcvArchiveProjectNow}</span>
                         </button>
                       </div>
                     </div>
                   ) : (
                     <div className="space-y-3 text-xs text-slate-600">
                       <p>
-                        Auf das Projekt <strong>"{projectToDelete.name}"</strong> wurden <strong>noch keine Zeiteinträge erfasst</strong>.
+                        {language === 'de' ? (
+                          <>Auf das Projekt <strong>"{projectToDelete.name}"</strong> wurden <strong>noch keine Zeiteinträge erfasst</strong>.</>
+                        ) : (
+                          <>No time entries have been recorded for the project <strong>"{projectToDelete.name}"</strong> yet.</>
+                        )}
                       </p>
                       <p className="text-red-700 font-medium">
-                        Das Projekt und alle zugehörigen Aufgaben werden unwiderruflich aus der Datenbank entfernt.
+                        {language === 'de'
+                          ? 'Das Projekt und alle zugehörigen Aufgaben werden unwiderruflich aus der Datenbank entfernt.'
+                          : 'The project and all associated tasks will be permanently removed from the database.'}
                       </p>
 
                       {deleteProjError && (
@@ -2361,7 +2379,7 @@ export const ProjectsClientsView: React.FC = () => {
                           className="px-4 py-1.5 rounded-lg bg-red-600 hover:bg-red-700 text-white text-xs font-semibold flex items-center gap-1.5 shadow-xs disabled:opacity-50"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
-                          <span>{isDeletingProject ? 'Wird gelöscht...' : 'Unwiderruflich löschen'}</span>
+                          <span>{isDeletingProject ? t.pcvDeleting : t.pcvDeleteIrreversibly}</span>
                         </button>
                       </div>
                     </div>
@@ -2381,24 +2399,24 @@ export const ProjectsClientsView: React.FC = () => {
           <div className="bg-white rounded-2xl max-w-md w-full p-6 space-y-4 shadow-xl border border-slate-200">
             <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
               <Building className="w-4 h-4 text-emerald-600" />
-              <span>Neuen Auftraggeber / Kunden anlegen</span>
+              <span>{t.pcvNewClientTitle}</span>
             </h3>
 
             <form onSubmit={handleCreateClient} className="space-y-3 text-xs">
               <div>
-                <label className="font-semibold text-slate-700 block mb-1">Kundenname / Firma *</label>
+                <label className="font-semibold text-slate-700 block mb-1">{t.pcvClientNameLabel}</label>
                 <input
                   type="text"
                   required
                   value={clientName}
                   onChange={e => setClientName(e.target.value)}
-                  placeholder="z.B. BioTech Labs SE"
+                  placeholder={t.pcvEgCompany}
                   className="w-full border border-slate-200 rounded-xl px-3 py-2 text-xs"
                 />
               </div>
 
               <div>
-                <label className="font-semibold text-slate-700 block mb-1">Kundennummer (Optional)</label>
+                <label className="font-semibold text-slate-700 block mb-1">{t.pcvClientNumberOptional}</label>
                 <input
                   type="text"
                   value={clientNumber}
@@ -2409,23 +2427,23 @@ export const ProjectsClientsView: React.FC = () => {
               </div>
 
               <div>
-                <label className="font-semibold text-slate-700 block mb-1">Ansprechpartner</label>
+                <label className="font-semibold text-slate-700 block mb-1">{t.pcvColContact}</label>
                 <input
                   type="text"
                   value={clientContact}
                   onChange={e => setClientContact(e.target.value)}
-                  placeholder="z.B. Dr. Stefan Meier"
+                  placeholder={t.pcvEgContact}
                   className="w-full border border-slate-200 rounded-xl px-3 py-2 text-xs"
                 />
               </div>
 
               <div>
-                <label className="font-semibold text-slate-700 block mb-1">E-Mail</label>
+                <label className="font-semibold text-slate-700 block mb-1">{t.pcvColEmail}</label>
                 <input
                   type="email"
                   value={clientEmail}
                   onChange={e => setClientEmail(e.target.value)}
-                  placeholder="kontakt@biotech-labs.de"
+                  placeholder={t.pcvEgEmail}
                   className="w-full border border-slate-200 rounded-xl px-3 py-2 text-xs"
                 />
               </div>
@@ -2463,7 +2481,7 @@ export const ProjectsClientsView: React.FC = () => {
 
             <form onSubmit={handleSaveEditClient} className="space-y-3 text-xs">
               <div>
-                <label className="font-semibold text-slate-700 block mb-1">Kundenname / Firma *</label>
+                <label className="font-semibold text-slate-700 block mb-1">{t.pcvClientNameLabel}</label>
                 <input
                   type="text"
                   required
@@ -2475,7 +2493,7 @@ export const ProjectsClientsView: React.FC = () => {
 
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <label className="font-semibold text-slate-700 block mb-1">Kundennummer</label>
+                  <label className="font-semibold text-slate-700 block mb-1">{t.pcvColClientNumber}</label>
                   <input
                     type="text"
                     value={editClientNumber}
@@ -2484,20 +2502,20 @@ export const ProjectsClientsView: React.FC = () => {
                   />
                 </div>
                 <div>
-                  <label className="font-semibold text-slate-700 block mb-1">Status</label>
+                  <label className="font-semibold text-slate-700 block mb-1">{t.pcvColStatus}</label>
                   <select
                     value={editClientStatus}
                     onChange={e => setEditClientStatus(e.target.value as any)}
                     className="w-full border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold"
                   >
-                    <option value="ACTIVE">Aktiv</option>
-                    <option value="INACTIVE">Inaktiv</option>
+                    <option value="ACTIVE">{t.active}</option>
+                    <option value="INACTIVE">{t.inactive}</option>
                   </select>
                 </div>
               </div>
 
               <div>
-                <label className="font-semibold text-slate-700 block mb-1">Ansprechpartner</label>
+                <label className="font-semibold text-slate-700 block mb-1">{t.pcvColContact}</label>
                 <input
                   type="text"
                   value={editClientContact}
@@ -2507,7 +2525,7 @@ export const ProjectsClientsView: React.FC = () => {
               </div>
 
               <div>
-                <label className="font-semibold text-slate-700 block mb-1">E-Mail</label>
+                <label className="font-semibold text-slate-700 block mb-1">{t.pcvColEmail}</label>
                 <input
                   type="email"
                   value={editClientEmail}
@@ -2554,7 +2572,7 @@ export const ProjectsClientsView: React.FC = () => {
                     </div>
                     <div>
                       <h3 className="text-base font-bold text-slate-900">
-                        {hasProjects ? 'Kunde kann nicht gelöscht werden' : 'Kunde wirklich löschen?'}
+                        {hasProjects ? t.pcvClientNotDeletable : t.pcvClientDeleteConfirm}
                       </h3>
                       <div className="text-xs text-slate-500">{clientToDelete.name} ({clientToDelete.clientNumber})</div>
                     </div>
@@ -2563,7 +2581,11 @@ export const ProjectsClientsView: React.FC = () => {
                   {hasProjects ? (
                     <div className="space-y-3 text-xs text-slate-600">
                       <div className="p-3 bg-amber-50 rounded-xl border border-amber-200 text-amber-900">
-                        Dem Kunden <strong>"{clientToDelete.name}"</strong> sind aktuell noch <strong>{assignedProjects.length} Projekt(e)</strong> zugeordnet:
+                        {language === 'de' ? (
+                          <>Dem Kunden <strong>"{clientToDelete.name}"</strong> sind aktuell noch <strong>{assignedProjects.length} Projekt(e)</strong> zugeordnet:</>
+                        ) : (
+                          <>The client <strong>"{clientToDelete.name}"</strong> still has <strong>{assignedProjects.length} project(s)</strong> assigned:</>
+                        )}
                         <ul className="list-disc list-inside mt-1.5 font-medium space-y-0.5">
                           {assignedProjects.map(p => (
                             <li key={p.id}>{p.name} ({p.projectNumber})</li>
@@ -2571,7 +2593,9 @@ export const ProjectsClientsView: React.FC = () => {
                         </ul>
                       </div>
                       <p>
-                        Bitte weisen Sie diese Projekte einem anderen Kunden zu oder löschen Sie zuerst die Projekte, bevor Sie den Kunden löschen können.
+                        {language === 'de'
+                          ? 'Bitte weisen Sie diese Projekte einem anderen Kunden zu oder löschen Sie zuerst die Projekte, bevor Sie den Kunden löschen können.'
+                          : 'Please reassign these projects to another client or delete the projects first before you can delete the client.'}
                       </p>
 
                       {deleteClientError && (
@@ -2586,17 +2610,23 @@ export const ProjectsClientsView: React.FC = () => {
                           onClick={() => setClientToDelete(null)}
                           className="px-3 py-1.5 rounded-lg border border-slate-200 text-xs font-medium text-slate-700 hover:bg-slate-50"
                         >
-                          Verstanden / Schließen
+                          {language === 'de' ? 'Verstanden / Schließen' : 'Understood / Close'}
                         </button>
                       </div>
                     </div>
                   ) : (
                     <div className="space-y-3 text-xs text-slate-600">
                       <p>
-                        Möchten Sie den Kunden <strong>"{clientToDelete.name}"</strong> wirklich unwiderruflich löschen?
+                        {language === 'de' ? (
+                          <>Möchten Sie den Kunden <strong>"{clientToDelete.name}"</strong> wirklich unwiderruflich löschen?</>
+                        ) : (
+                          <>Do you really want to permanently delete the client <strong>"{clientToDelete.name}"</strong>?</>
+                        )}
                       </p>
                       <p className="text-slate-500">
-                        Dem Kunden sind keine Projekte zugeordnet. Der Datensatz wird vollständig entfernt.
+                        {language === 'de'
+                          ? 'Dem Kunden sind keine Projekte zugeordnet. Der Datensatz wird vollständig entfernt.'
+                          : 'No projects are assigned to this client. The record will be completely removed.'}
                       </p>
 
                       {deleteClientError && (
@@ -2620,7 +2650,7 @@ export const ProjectsClientsView: React.FC = () => {
                           className="px-4 py-1.5 rounded-lg bg-red-600 hover:bg-red-700 text-white text-xs font-semibold flex items-center gap-1.5 shadow-xs disabled:opacity-50"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
-                          <span>{isDeletingClient ? 'Wird gelöscht...' : 'Kunde löschen'}</span>
+                          <span>{isDeletingClient ? t.pcvDeleting : t.pcvDeleteClient}</span>
                         </button>
                       </div>
                     </div>
@@ -2639,12 +2669,12 @@ export const ProjectsClientsView: React.FC = () => {
           <div className="bg-white rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl border border-slate-200">
             <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
               <Edit2 className="w-4 h-4 text-emerald-600" />
-              <span>Aufgabe / Tätigkeit bearbeiten</span>
+              <span>{t.pcvEditTaskTitleLong}</span>
             </h3>
 
             <form onSubmit={handleSaveEditTask} className="space-y-3 text-xs">
               <div>
-                <label className="font-semibold text-slate-700 block mb-1">Bezeichnung der Aufgabe *</label>
+                <label className="font-semibold text-slate-700 block mb-1">{t.pcvTaskNameLabel}</label>
                 <input
                   type="text"
                   required
@@ -2656,25 +2686,25 @@ export const ProjectsClientsView: React.FC = () => {
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="font-semibold text-slate-700 block mb-1">Budget (Stunden)</label>
+                  <label className="font-semibold text-slate-700 block mb-1">{t.pcvBudgetHoursLabel}</label>
                   <input
                     type="number"
                     step="0.5"
-                    placeholder="Kein Limit"
+                    placeholder={t.pcvNoLimit}
                     value={editTaskBudgetHours}
                     onChange={e => setEditTaskBudgetHours(e.target.value)}
                     className="w-full border border-slate-200 rounded-xl px-3 py-2 text-xs"
                   />
                 </div>
                 <div>
-                  <label className="font-semibold text-slate-700 block mb-1">Status</label>
+                  <label className="font-semibold text-slate-700 block mb-1">{t.pcvColStatus}</label>
                   <select
                     value={editTaskStatus}
                     onChange={e => setEditTaskStatus(e.target.value as any)}
                     className="w-full border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold"
                   >
-                    <option value="ACTIVE">Aktiv (Auswählbar)</option>
-                    <option value="ARCHIVED">Archiviert (Gesperrt)</option>
+                    <option value="ACTIVE">{t.pcvStatusActiveSelectable}</option>
+                    <option value="ARCHIVED">{t.pcvStatusArchivedLockedTask}</option>
                   </select>
                 </div>
               </div>
@@ -2687,7 +2717,7 @@ export const ProjectsClientsView: React.FC = () => {
                     onChange={e => setEditTaskIsBillable(e.target.checked)}
                     className="rounded border-slate-300 text-slate-900 focus:ring-0 w-4 h-4"
                   />
-                  <span>Standardmäßig abrechenbar für Zeiterfassung</span>
+                  <span>{t.pcvTaskDefaultBillable}</span>
                 </label>
               </div>
 
@@ -2730,7 +2760,7 @@ export const ProjectsClientsView: React.FC = () => {
                     </div>
                     <div>
                       <h3 className="text-base font-bold text-slate-900">
-                        {hasEntries ? 'Aufgabe kann nicht gelöscht werden' : 'Aufgabe wirklich löschen?'}
+                        {hasEntries ? t.pcvTaskNotDeletable : t.pcvTaskDeleteConfirm}
                       </h3>
                       <div className="text-xs text-slate-500">{taskToDelete.name}</div>
                     </div>
@@ -2739,13 +2769,23 @@ export const ProjectsClientsView: React.FC = () => {
                   {hasEntries ? (
                     <div className="space-y-3 text-xs text-slate-600">
                       <div className="p-3 bg-amber-50 rounded-xl border border-amber-200 text-amber-900">
-                        Auf diese Aufgabe wurden bereits <strong>{entriesUsingTask.length} Zeiteintrag/Zeiteinträge ({totalHours.toFixed(1)} Stunden)</strong> erfasst.
+                        {language === 'de' ? (
+                          <>Auf diese Aufgabe wurden bereits <strong>{entriesUsingTask.length} Zeiteintrag/Zeiteinträge ({totalHours.toFixed(1)} Stunden)</strong> erfasst.</>
+                        ) : (
+                          <>This task already has <strong>{entriesUsingTask.length} time entry/entries ({totalHours.toFixed(1)} hours)</strong> recorded.</>
+                        )}
                         <div className="mt-1 text-[11px] text-amber-800">
-                          Gemäß GoBD-Vorgaben dürfen referenzierte Aufgaben historischer Zeiteinträge nicht gelöscht werden.
+                          {language === 'de'
+                            ? 'Gemäß GoBD-Vorgaben dürfen referenzierte Aufgaben historischer Zeiteinträge nicht gelöscht werden.'
+                            : 'Under GoBD rules, tasks referenced by historical time entries must not be deleted.'}
                         </div>
                       </div>
                       <p>
-                        Möchten Sie die Aufgabe stattdessen <strong>archivieren</strong>? Dadurch bleibt sie in bisherigen Berichten und Zeiteinträgen erhalten, kann aber für neue Erfassungen nicht mehr ausgewählt werden.
+                        {language === 'de' ? (
+                          <>Möchten Sie die Aufgabe stattdessen <strong>archivieren</strong>? Dadurch bleibt sie in bisherigen Berichten und Zeiteinträgen erhalten, kann aber für neue Erfassungen nicht mehr ausgewählt werden.</>
+                        ) : (
+                          <>Would you like to <strong>archive</strong> the task instead? It then remains in existing reports and time entries, but can no longer be selected for new records.</>
+                        )}
                       </p>
 
                       {deleteTaskError && (
@@ -2768,17 +2808,23 @@ export const ProjectsClientsView: React.FC = () => {
                           className="px-4 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-xs font-semibold flex items-center gap-1.5 shadow-xs"
                         >
                           <Archive className="w-3.5 h-3.5" />
-                          <span>Aufgabe archivieren</span>
+                          <span>{t.pcvArchiveTask}</span>
                         </button>
                       </div>
                     </div>
                   ) : (
                     <div className="space-y-3 text-xs text-slate-600">
                       <p>
-                        Möchten Sie die Aufgabe <strong>"{taskToDelete.name}"</strong> wirklich unwiderruflich löschen?
+                        {language === 'de' ? (
+                          <>Möchten Sie die Aufgabe <strong>"{taskToDelete.name}"</strong> wirklich unwiderruflich löschen?</>
+                        ) : (
+                          <>Do you really want to permanently delete the task <strong>"{taskToDelete.name}"</strong>?</>
+                        )}
                       </p>
                       <p className="text-slate-500">
-                        Da noch keine Zeiteinträge auf diese Aufgabe gebucht wurden, kann sie rückstandslos entfernt werden.
+                        {language === 'de'
+                          ? 'Da noch keine Zeiteinträge auf diese Aufgabe gebucht wurden, kann sie rückstandslos entfernt werden.'
+                          : 'Since no time entries have been booked to this task, it can be removed without any residue.'}
                       </p>
 
                       {deleteTaskError && (
@@ -2802,7 +2848,7 @@ export const ProjectsClientsView: React.FC = () => {
                           className="px-4 py-1.5 rounded-lg bg-red-600 hover:bg-red-700 text-white text-xs font-semibold flex items-center gap-1.5 shadow-xs disabled:opacity-50"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
-                          <span>{isDeletingTask ? 'Wird gelöscht...' : 'Aufgabe löschen'}</span>
+                          <span>{isDeletingTask ? t.pcvDeleting : t.pcvDeleteTaskTitle}</span>
                         </button>
                       </div>
                     </div>
@@ -2836,26 +2882,46 @@ export const ProjectsClientsView: React.FC = () => {
 
             <div className="space-y-3 text-xs text-slate-600">
               <p className="leading-relaxed">
-                Möchten Sie <strong>{memberToExclude.name}</strong> aus dem Projekt <strong>"{selectedProject.name}"</strong> ausschließen?
+                {language === 'de' ? (
+                  <>Möchten Sie <strong>{memberToExclude.name}</strong> aus dem Projekt <strong>"{selectedProject.name}"</strong> ausschließen?</>
+                ) : (
+                  <>Do you want to exclude <strong>{memberToExclude.name}</strong> from the project <strong>"{selectedProject.name}"</strong>?</>
+                )}
               </p>
 
               <div className="p-3.5 bg-amber-50/80 rounded-xl border border-amber-200 text-amber-950 space-y-2">
                 <div className="font-bold flex items-center gap-1.5 text-amber-900">
                   <ShieldCheck className="w-4 h-4 text-amber-700" />
-                  <span>Revisionssichere Auswirkung des Ausschlusses:</span>
+                  <span>{t.pcvExclusionImpact}</span>
                 </div>
                 <ul className="list-disc list-inside space-y-1.5 text-[11px] text-amber-900/90 pl-1 leading-relaxed">
                   <li>
-                    <strong>Zukünftige Buchungen gesperrt:</strong> Der Mitarbeiter kann dieses Projekt ab sofort nicht mehr im Zeiterfassungsmenü auswählen.
+                    {language === 'de' ? (
+                      <><strong>Zukünftige Buchungen gesperrt:</strong> Der Mitarbeiter kann dieses Projekt ab sofort nicht mehr im Zeiterfassungsmenü auswählen.</>
+                    ) : (
+                      <><strong>Future bookings locked:</strong> The employee can no longer select this project in the time tracking menu.</>
+                    )}
                   </li>
                   <li>
-                    <strong>Sämtliche historischen Daten bleiben erhalten:</strong> Die bisher erfassten <strong>{memberToExclude.hours.toFixed(1)} Stunden</strong> ({memberToExclude.bookingsCount} Buchungen, € {memberToExclude.revenue.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}) bleiben unverändert in Projektberichten, Soll/Ist-Vergleichen und Leistungsnachweisen gespeichert.
+                    {language === 'de' ? (
+                      <><strong>Sämtliche historischen Daten bleiben erhalten:</strong> Die bisher erfassten <strong>{memberToExclude.hours.toFixed(1)} Stunden</strong> ({memberToExclude.bookingsCount} Buchungen, € {memberToExclude.revenue.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}) bleiben unverändert in Projektberichten, Soll/Ist-Vergleichen und Leistungsnachweisen gespeichert.</>
+                    ) : (
+                      <><strong>All historical data is preserved:</strong> The <strong>{memberToExclude.hours.toFixed(1)} hours</strong> recorded so far ({memberToExclude.bookingsCount} bookings, € {memberToExclude.revenue.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}) remain unchanged in project reports, target/actual comparisons and performance records.</>
+                    )}
                   </li>
                   <li>
-                    <strong>Forecast-Versionen unverändert:</strong> Alle bisherigen Projekt- und Forecast-Snapshots behalten ihre Gültigkeit.
+                    {language === 'de' ? (
+                      <><strong>Forecast-Versionen unverändert:</strong> Alle bisherigen Projekt- und Forecast-Snapshots behalten ihre Gültigkeit.</>
+                    ) : (
+                      <><strong>Forecast versions unchanged:</strong> All previous project and forecast snapshots retain their validity.</>
+                    )}
                   </li>
                   <li>
-                    <strong>Jederzeit reaktivierbar:</strong> Sie können den Mitarbeiter bei Bedarf jederzeit wieder freischalten.
+                    {language === 'de' ? (
+                      <><strong>Jederzeit reaktivierbar:</strong> Sie können den Mitarbeiter bei Bedarf jederzeit wieder freischalten.</>
+                    ) : (
+                      <><strong>Reactivatable at any time:</strong> You can re-enable the employee again whenever needed.</>
+                    )}
                   </li>
                 </ul>
               </div>
@@ -2877,7 +2943,7 @@ export const ProjectsClientsView: React.FC = () => {
                 className="px-4 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-xs font-semibold flex items-center gap-1.5 shadow-xs disabled:opacity-50"
               >
                 <UserMinus className="w-3.5 h-3.5" />
-                <span>{isExcludingMember ? 'Wird ausgeschlossen...' : 'Mitarbeiter ausschließen & Buchungen sperren'}</span>
+                <span>{isExcludingMember ? t.pcvExcluding : t.pcvExcludeAndLock}</span>
               </button>
             </div>
           </div>

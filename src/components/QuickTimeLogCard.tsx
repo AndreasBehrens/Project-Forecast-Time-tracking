@@ -426,14 +426,15 @@ export const QuickTimeLogCard: React.FC<QuickTimeLogCardProps> = ({ onEntryCreat
           <button
             type="button"
             onClick={() => setIsBillable(!isBillable)}
-            className={`px-2.5 py-1.5 rounded-xl text-xs font-semibold border transition-all ${
+            className={`w-9 h-9 flex items-center justify-center rounded-xl text-base font-bold border transition-all ${
               isBillable
                 ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
-                : 'bg-slate-50 text-slate-500 border-slate-200'
+                : 'bg-slate-50 text-slate-400 border-slate-200'
             }`}
+            aria-label={isBillable ? (t.billable || 'Abrechenbar') : (t.nonBillable || 'Nicht abrechenbar')}
             title={isBillable ? (t.billable || 'Abrechenbar') : (t.nonBillable || 'Nicht abrechenbar')}
           >
-            {isBillable ? '€ Abrechenbar' : 'Nicht abrechenbar'}
+            <span className={isBillable ? '' : 'line-through'}>€</span>
           </button>
 
           {/* 1-Click Timer Start/Pause Button */}
