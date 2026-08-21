@@ -144,7 +144,7 @@ async function startServer() {
       status: 'ok',
       service: 'Insight Arcs Zeiterfassung & Arbeitszeit API',
       euHostingLocation: 'Germany (netcup RZ Nürnberg)',
-      database: 'Local JSON Storage (persistent)',
+      database: 'PostgreSQL (persistent)',
       auditRetention: '10 years GoBD & ArbZG compliant',
       securityEngine: 'JWT HMAC-SHA256 & SHA-256 Audit Blockchain',
       timestamp: new Date().toISOString()
