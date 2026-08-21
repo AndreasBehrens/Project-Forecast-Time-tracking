@@ -18,7 +18,32 @@ async function startServer() {
   const app = express();
   const PORT = 3000;
 
-  app.use(cors());
+  // --- CORS-HAERTUNG (Section: Security Hardening) ---
+  // Erlaubte Origins werden zur Laufzeit aus der Umgebungsvariable ALLOWED_ORIGINS
+  // (kommagetrennte Liste) eingelesen. Fallback fuer die Entwicklung.
+  const DEFAULT_ALLOWED_ORIGINS = ['http://localhost:3000', 'http://localhost:4200'];
+  const allowedOrigins = (process.env.ALLOWED_ORIGINS || '')
+    .split(',')
+    .map((origin) => origin.trim())
+    .filter((origin) => origin.length > 0);
+  const effectiveAllowedOrigins = allowedOrigins.length > 0 ? allowedOrigins : DEFAULT_ALLOWED_ORIGINS;
+
+  const corsOptions: cors.CorsOptions = {
+    origin: (origin, callback) => {
+      // Requests ohne Origin-Header (z. B. curl, Server-zu-Server, gleiche Herkunft) zulassen.
+      if (!origin) {
+        return callback(null, true);
+      }
+      if (effectiveAllowedOrigins.includes(origin)) {
+        return callback(null, true);
+      }
+      return callback(new Error(`CORS: Origin '${origin}' ist nicht erlaubt`));
+    },
+    // Credentials nur bei definierten (whitelisted) Origins aktiv – kein Wildcard mit Credentials.
+    credentials: true
+  };
+
+  app.use(cors(corsOptions));
   app.use(express.json({ limit: '10mb' }));
   app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
@@ -60,6 +85,55 @@ async function startServer() {
 
     next();
   };
+
+  // --- ADMIN-ROUTENSCHUTZ (Section: Security Hardening) ---
+  // Schuetzt alle Routen mit dem Praefix /admin bzw. /api/admin.
+  // Konsistent zur bestehenden Auth-Logik: primaer JWT-Bearer-Token
+  // (verifyJwtToken), alternativ die vorhandene Session ueber den
+  // x-user-id-Header. Bei fehlendem/ungueltigem Token: HTTP 401.
+  const requireAdminAuth = (req: Request, res: Response, next: NextFunction) => {
+    // a) Bearer-Token im Authorization-Header pruefen
+    const authHeader = req.headers['authorization'];
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      const token = authHeader.slice(7).trim();
+      // verifyJwtToken kann bei manipulierten Tokens werfen -> absichern.
+      let verified: ReturnType<typeof verifyJwtToken>;
+      try {
+        verified = verifyJwtToken(token);
+      } catch {
+        return res.status(401).json({ error: 'Unauthorized' });
+      }
+      if (verified.valid && verified.payload) {
+        // Nur ADMIN/SUPERADMIN duerfen Admin-Routen nutzen.
+        const role = verified.payload.role;
+        if (role === 'ADMIN' || role === 'SUPERADMIN') {
+          return next();
+        }
+        return res.status(403).json({ error: 'Forbidden' });
+      }
+      // Token vorhanden, aber ungueltig/abgelaufen
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    // b) Fallback: bestehende Session-/Cookie-basierte Authentifizierung.
+    // Nur ein EXPLIZIT gesetzter x-user-id-Header wird akzeptiert – der interne
+    // Mock-Default (currentUserId) darf den Schutz nicht aushebeln.
+    const sessionUserId = req.headers['x-user-id'] as string | undefined;
+    if (sessionUserId) {
+      const user = storage.getUsers().find((u) => u.id === sessionUserId);
+      if (user && (user.role === 'ADMIN' || user.role === 'SUPERADMIN')) {
+        return next();
+      }
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    // Kein Bearer-Token und keine Session -> nicht autorisiert.
+    return res.status(401).json({ error: 'Unauthorized' });
+  };
+
+  // Admin-Routenschutz vor allen /admin- und /api/admin-Routen aktivieren.
+  app.use('/admin', requireAdminAuth);
+  app.use('/api/admin', requireAdminAuth);
 
   // -------------------------------------------------------------
   // INTERNAL APPLICATION API ROUTES
