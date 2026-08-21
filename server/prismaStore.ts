@@ -77,19 +77,22 @@ export async function loadAll(): Promise<AppStateSnapshot | null> {
     periodLocks,
     appState,
   ] = await Promise.all([
-    prisma.organization.findMany(),
-    prisma.user.findMany(),
-    prisma.employeeJobRole.findMany(),
-    prisma.client.findMany(),
-    prisma.partner.findMany(),
-    prisma.project.findMany(),
-    prisma.task.findMany(),
-    prisma.timeEntry.findMany(),
-    prisma.workingTimeEntry.findMany(),
-    prisma.auditLogEntry.findMany(),
-    prisma.forecastEntry.findMany(),
-    prisma.apiKey.findMany(),
-    prisma.periodLock.findMany(),
+    // Always order by the surrogate `seq` key so rows come back in exactly the
+    // order they were written. This is essential for the order-dependent GoBD
+    // audit hash chain.
+    prisma.organization.findMany({ orderBy: { seq: 'asc' } }),
+    prisma.user.findMany({ orderBy: { seq: 'asc' } }),
+    prisma.employeeJobRole.findMany({ orderBy: { seq: 'asc' } }),
+    prisma.client.findMany({ orderBy: { seq: 'asc' } }),
+    prisma.partner.findMany({ orderBy: { seq: 'asc' } }),
+    prisma.project.findMany({ orderBy: { seq: 'asc' } }),
+    prisma.task.findMany({ orderBy: { seq: 'asc' } }),
+    prisma.timeEntry.findMany({ orderBy: { seq: 'asc' } }),
+    prisma.workingTimeEntry.findMany({ orderBy: { seq: 'asc' } }),
+    prisma.auditLogEntry.findMany({ orderBy: { seq: 'asc' } }),
+    prisma.forecastEntry.findMany({ orderBy: { seq: 'asc' } }),
+    prisma.apiKey.findMany({ orderBy: { seq: 'asc' } }),
+    prisma.periodLock.findMany({ orderBy: { seq: 'asc' } }),
     prisma.appState.findMany(),
   ]);
 
