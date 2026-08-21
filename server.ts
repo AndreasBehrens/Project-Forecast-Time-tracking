@@ -144,7 +144,7 @@ async function startServer() {
       status: 'ok',
       service: 'Insight Arcs Zeiterfassung & Arbeitszeit API',
       euHostingLocation: 'Germany (netcup RZ Nürnberg)',
-      database: 'Local JSON Storage (persistent)',
+      database: 'PostgreSQL (persistent)',
       auditRetention: '10 years GoBD & ArbZG compliant',
       securityEngine: 'JWT HMAC-SHA256 & SHA-256 Audit Blockchain',
       timestamp: new Date().toISOString()
@@ -1040,11 +1040,33 @@ async function startServer() {
     });
   }
 
-  app.listen(PORT, '0.0.0.0', () => {
+  // Load persisted state from PostgreSQL before accepting requests.
+  const loaded = await storage.initFromDatabase();
+  console.log(loaded
+    ? 'Loaded existing application state from PostgreSQL.'
+    : 'PostgreSQL was empty; seeded initial application state.');
+
+  const server = app.listen(PORT, '0.0.0.0', () => {
     console.log(`Insight Arcs Zeiterfassung Server running on http://0.0.0.0:${PORT}`);
   });
+
+  // Graceful shutdown: flush any pending PostgreSQL writes before exiting.
+  const shutdown = async (signal: string) => {
+    console.log(`Received ${signal}, shutting down gracefully...`);
+    server.close(async () => {
+      try {
+        await storage.flush();
+      } catch (err) {
+        console.error('Error while flushing state on shutdown:', err);
+      }
+      process.exit(0);
+    });
+  };
+  process.on('SIGTERM', () => shutdown('SIGTERM'));
+  process.on('SIGINT', () => shutdown('SIGINT'));
 }
 
 startServer().catch(err => {
   console.error('Failed to start server:', err);
+  process.exit(1);
 });

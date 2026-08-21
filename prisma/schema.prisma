@@ -1,0 +1,218 @@
+// Prisma schema for Project-Forecast-Time-tracking
+// Persistence migration: local JSON storage -> PostgreSQL
+//
+// Design note:
+// The application keeps its rich domain objects (see src/types.ts) as the runtime
+// source of truth inside StorageService. To migrate persistence to PostgreSQL
+// WITHOUT rewriting ~4800 lines of business logic AND to guarantee lossless
+// round-tripping (which the GoBD SHA-256 audit hash chain depends on), every
+// entity is stored in its own table with the full domain object in a JSONB
+// `data` column plus indexed scalar columns (id, orgId, ...) for querying.
+// Singletons (activeOrgId, thresholdPercent) live in the AppState key/value table.
+//
+// Every table uses a surrogate auto-increment `seq` primary key instead of the
+// business `id`. This is required because:
+//   1. Audit log entries in the legacy data can share the same business `id`
+//      (62 duplicates were found in production), yet GoBD forbids dropping any
+//      audit record.
+//   2. The audit hash chain is order-dependent, so rows must be read back in
+//      exactly the order they were written. `seq` guarantees a stable insertion
+//      order (loadAll always orders by `seq` ascending).
+// The business `id` is kept as an indexed, non-unique column for querying.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Organization {
+  seq       BigInt   @id @default(autoincrement())
+  id        String
+  data      Json
+  updatedAt DateTime @updatedAt
+
+  @@index([id])
+  @@map("organizations")
+}
+
+model User {
+  seq       BigInt   @id @default(autoincrement())
+  id        String
+  orgId     String?
+  email     String?
+  data      Json
+  updatedAt DateTime @updatedAt
+
+  @@index([id])
+  @@index([orgId])
+  @@index([email])
+  @@map("users")
+}
+
+model EmployeeJobRole {
+  seq       BigInt   @id @default(autoincrement())
+  id        String
+  orgId     String?
+  data      Json
+  updatedAt DateTime @updatedAt
+
+  @@index([id])
+  @@index([orgId])
+  @@map("job_roles")
+}
+
+model Client {
+  seq       BigInt   @id @default(autoincrement())
+  id        String
+  orgId     String?
+  data      Json
+  updatedAt DateTime @updatedAt
+
+  @@index([id])
+  @@index([orgId])
+  @@map("clients")
+}
+
+model Partner {
+  seq       BigInt   @id @default(autoincrement())
+  id        String
+  orgId     String?
+  data      Json
+  updatedAt DateTime @updatedAt
+
+  @@index([id])
+  @@index([orgId])
+  @@map("partners")
+}
+
+model Project {
+  seq       BigInt   @id @default(autoincrement())
+  id        String
+  orgId     String?
+  clientId  String?
+  data      Json
+  updatedAt DateTime @updatedAt
+
+  @@index([id])
+  @@index([orgId])
+  @@index([clientId])
+  @@map("projects")
+}
+
+model Task {
+  seq       BigInt   @id @default(autoincrement())
+  id        String
+  projectId String?
+  data      Json
+  updatedAt DateTime @updatedAt
+
+  @@index([id])
+  @@index([projectId])
+  @@map("tasks")
+}
+
+model TimeEntry {
+  seq       BigInt   @id @default(autoincrement())
+  id        String
+  orgId     String?
+  userId    String?
+  projectId String?
+  date      String?
+  data      Json
+  updatedAt DateTime @updatedAt
+
+  @@index([id])
+  @@index([orgId])
+  @@index([userId])
+  @@index([projectId])
+  @@index([date])
+  @@map("time_entries")
+}
+
+model WorkingTimeEntry {
+  seq       BigInt   @id @default(autoincrement())
+  id        String
+  orgId     String?
+  userId    String?
+  date      String?
+  data      Json
+  updatedAt DateTime @updatedAt
+
+  @@index([id])
+  @@index([orgId])
+  @@index([userId])
+  @@index([date])
+  @@map("working_time_entries")
+}
+
+model ForecastEntry {
+  seq       BigInt   @id @default(autoincrement())
+  id        String
+  orgId     String?
+  projectId String?
+  userId    String?
+  month     String?
+  data      Json
+  updatedAt DateTime @updatedAt
+
+  @@index([id])
+  @@index([orgId])
+  @@index([projectId])
+  @@index([userId])
+  @@index([month])
+  @@map("forecast_entries")
+}
+
+model AuditLogEntry {
+  seq       BigInt   @id @default(autoincrement())
+  id        String
+  orgId     String?
+  entityId  String?
+  timestamp String?
+  data      Json
+  updatedAt DateTime @updatedAt
+
+  @@index([id])
+  @@index([orgId])
+  @@index([entityId])
+  @@map("audit_logs")
+}
+
+model PeriodLock {
+  seq       BigInt   @id @default(autoincrement())
+  id        String
+  orgId     String?
+  periodKey String?
+  data      Json
+  updatedAt DateTime @updatedAt
+
+  @@index([id])
+  @@index([orgId])
+  @@index([periodKey])
+  @@map("period_locks")
+}
+
+model ApiKey {
+  seq       BigInt   @id @default(autoincrement())
+  id        String
+  orgId     String?
+  data      Json
+  updatedAt DateTime @updatedAt
+
+  @@index([id])
+  @@index([orgId])
+  @@map("api_keys")
+}
+
+// Key/value store for runtime singletons (activeOrgId, thresholdPercent, ...)
+model AppState {
+  key       String   @id
+  value     Json
+  updatedAt DateTime @updatedAt
+
+  @@map("app_state")
+}
