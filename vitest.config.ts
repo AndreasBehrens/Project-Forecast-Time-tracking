@@ -32,7 +32,7 @@ export default defineConfig({
   test: {
     // Reine Node-Umgebung: Wir testen ausschließlich Server-/Kernlogik.
     environment: 'node',
-    include: ['tests/unit/**/*.test.ts'],
+    include: ['tests/unit/**/*.test.ts', 'tests/integration/**/*.test.ts'],
     globals: true,
     coverage: {
       provider: 'v8',
