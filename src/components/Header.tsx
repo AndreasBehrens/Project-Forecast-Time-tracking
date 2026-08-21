@@ -17,6 +17,8 @@ import {
   Sparkles
 } from 'lucide-react';
 import { CompanyLocationModal } from './CompanyLocationModal';
+import { CloudDatabaseModal } from './CloudDatabaseModal';
+import { Cloud } from 'lucide-react';
 
 export const Header: React.FC = () => {
   const {
@@ -39,6 +41,7 @@ export const Header: React.FC = () => {
 
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [showLocationModal, setShowLocationModal] = useState(false);
+  const [showCloudDbModal, setShowCloudDbModal] = useState(false);
 
   const formatTimer = (totalSeconds: number) => {
     const hours = Math.floor(totalSeconds / 3600);
@@ -58,17 +61,17 @@ export const Header: React.FC = () => {
 
   return (
     <header className="bg-white border-b border-slate-200 sticky top-0 z-30 shadow-xs">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex justify-between items-center h-16">
+      <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
+        <div className="flex justify-between items-center h-16 gap-2">
           {/* Logo & Brand */}
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-slate-900 flex items-center justify-center text-white shadow-sm">
-              <Clock className="w-5 h-5 text-emerald-400" />
+          <div className="flex items-center gap-2.5 shrink-0">
+            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-slate-900 flex items-center justify-center text-white shadow-sm shrink-0">
+              <Clock className="w-4 h-4 sm:w-5 sm:h-5 text-emerald-400" />
             </div>
             <div>
-              <div className="flex items-center gap-2">
-                <span className="font-bold text-slate-900 text-lg tracking-tight">Insight Arcs</span>
-                <span className="text-xs bg-emerald-50 text-emerald-700 border border-emerald-200/60 font-medium px-1.5 py-0.5 rounded">
+              <div className="flex items-center gap-1.5">
+                <span className="font-bold text-slate-900 text-base sm:text-lg tracking-tight">Insight Arcs</span>
+                <span className="hidden sm:inline-flex text-xs bg-emerald-50 text-emerald-700 border border-emerald-200/60 font-medium px-1.5 py-0.5 rounded">
                   {t.navTimeTracker}
                 </span>
               </div>
@@ -123,30 +126,42 @@ export const Header: React.FC = () => {
           )}
 
           {/* Right Controls: Mandanten-Umschalter, EU Compliance, Location, Language, User */}
-          <div className="flex items-center gap-2.5">
+          <div className="flex items-center gap-1.5 sm:gap-2.5">
             {/* Active Organization (Strikte Datenisolation) */}
             <div
               id="header-active-organization"
-              className={`flex items-center gap-2 text-xs border px-3 py-1.5 rounded-lg shadow-2xs ${
+              className={`flex items-center gap-1.5 sm:gap-2 text-xs border px-2 sm:px-3 py-1 sm:py-1.5 rounded-lg shadow-2xs ${
                 organization?.id === 'org-insight-arcs-01' || organization?.name.toLowerCase().includes('test')
                   ? 'bg-amber-50/90 border-amber-300 text-amber-900'
                   : 'bg-slate-100/90 border-slate-200/90 text-slate-800'
               }`}
               title={`${t.tenantBadge} (${t.multiTenantDataIsolation}) - ${organization?.name}`}
             >
-              <Building2 className={`w-4 h-4 ${organization?.id === 'org-insight-arcs-01' ? 'text-amber-700' : 'text-slate-700'}`} />
+              <Building2 className={`w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0 ${organization?.id === 'org-insight-arcs-01' ? 'text-amber-700' : 'text-slate-700'}`} />
               <div className="text-left">
-                <div className="flex items-center gap-1.5">
-                  <span className="text-[9px] uppercase font-bold text-slate-500 tracking-wider">{t.tenantBadge}</span>
+                <div className="flex items-center gap-1">
+                  <span className="text-[9px] uppercase font-bold text-slate-500 tracking-wider hidden xs:inline">{t.tenantBadge}</span>
                   {organization?.id === 'org-insight-arcs-01' && (
                     <span className="bg-amber-200 text-amber-900 text-[9px] font-extrabold px-1 rounded">TEST</span>
                   )}
                 </div>
-                <div className="font-bold text-slate-900 truncate max-w-[140px] sm:max-w-[200px]">
+                <div className="font-bold text-slate-900 truncate max-w-[90px] xs:max-w-[130px] sm:max-w-[200px]">
                   {organization?.name || 'Insight Arcs GmbH'}
                 </div>
               </div>
             </div>
+
+            {/* Google Cloud Firestore DB Badge */}
+            <button
+              id="btn-header-cloud-db"
+              onClick={() => setShowCloudDbModal(true)}
+              className="hidden md:flex items-center gap-1.5 text-xs text-indigo-700 bg-indigo-50/90 hover:bg-indigo-100/90 border border-indigo-200/80 px-2.5 py-1.5 rounded-lg transition-colors font-medium"
+              title="Google Cloud Firestore Status & Synchronisation"
+            >
+              <Cloud className="w-3.5 h-3.5 text-indigo-600" />
+              <span className="font-semibold">Cloud DB</span>
+              <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+            </button>
 
             {/* EU Badge */}
             <div className="hidden xl:flex items-center gap-1.5 text-xs text-slate-600 bg-slate-50 border border-slate-200/80 px-2.5 py-1.5 rounded-md">
@@ -322,6 +337,12 @@ export const Header: React.FC = () => {
         isOpen={showLocationModal}
         onClose={() => setShowLocationModal(false)}
       />
+
+      {showCloudDbModal && (
+        <CloudDatabaseModal
+          onClose={() => setShowCloudDbModal(false)}
+        />
+      )}
     </header>
   );
 };

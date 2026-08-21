@@ -1,6 +1,6 @@
 {
   "name": "Zeiterfassung & Arbeitszeit (Insight Arcs)",
-  "description": "Mandantenfähige Zeiterfassung und Arbeitszeiterfassung mit 4-stufiger Satzhierarchie, Freigabeprozess, Audit-Log, Forecast-Planung, Clockify-Import und REST-API.",
+  "description": "Mandantenfähige Zeiterfassung und Arbeitszeiterfassung mit 4-stufiger Satzhierarchie, Freigabeprozess, GoBD-Periodensperren, kryptografischer SHA-256 Hash-Kette, Forecast-Planung und REST-API.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

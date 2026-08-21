@@ -17,7 +17,10 @@ import {
   ForecastComparisonItem,
   ProjectForecastSummary,
   EmployeeCapacitySummaryItem,
-  ForecastAuditHistoryItem
+  ForecastAuditHistoryItem,
+  PeriodLock,
+  AuditHashVerificationReport,
+  GoBDComplianceCertificate
 } from '../types';
 import { translations } from '../i18n/translations';
 
@@ -39,6 +42,7 @@ interface AppContextType {
   t: typeof translations['de'];
   currentUser: User | null;
   setCurrentUser: (user: User) => void;
+  authToken: string | null;
   users: User[];
   organization: Organization | null;
   organizations: Organization[];
@@ -53,6 +57,7 @@ interface AppContextType {
   auditLogs: AuditLogEntry[];
   forecasts: ForecastEntry[];
   apiKeys: ApiKey[];
+  periodLocks: PeriodLock[];
   isLoading: boolean;
   login: (credentials: { email?: string; password?: string; userId?: string; orgId?: string }) => Promise<{ success: boolean; error?: string }>;
   logout: () => Promise<void>;
@@ -79,6 +84,11 @@ interface AppContextType {
   approveTimeEntries: (ids: string[], status: 'APPROVED' | 'REJECTED') => Promise<void>;
   saveWorkingTime: (entry: Partial<WorkingTimeEntry>) => Promise<void>;
   saveForecast: (entry: Partial<ForecastEntry>) => Promise<void>;
+  // GoBD & Revisionssicherheit Actions
+  lockPeriod: (periodKey: string, reason?: string) => Promise<{ success: boolean; error?: string }>;
+  unlockPeriod: (periodKey: string, reason: string) => Promise<{ success: boolean; error?: string }>;
+  verifyAuditHashChain: () => Promise<AuditHashVerificationReport>;
+  getGoBDCertificate: (periodKey: string) => Promise<GoBDComplianceCertificate>;
   createProject: (project: Partial<Project>) => Promise<Project>;
   updateProject: (id: string, updates: Partial<Project>) => Promise<void>;
   deleteProject: (id: string) => Promise<{ success: boolean; error?: string }>;
@@ -196,6 +206,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [auditLogs, setAuditLogs] = useState<AuditLogEntry[]>([]);
   const [forecasts, setForecasts] = useState<ForecastEntry[]>([]);
   const [apiKeys, setApiKeys] = useState<ApiKey[]>([]);
+  const [periodLocks, setPeriodLocks] = useState<PeriodLock[]>([]);
+  const [authToken, setAuthToken] = useState<string | null>(() => {
+    return localStorage.getItem('insight_arcs_auth_jwt_token') || null;
+  });
   const [isLoading, setIsLoading] = useState(true);
 
   // Active Timer state
@@ -268,25 +282,36 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const refreshAllData = useCallback(async () => {
     try {
       setIsLoading(true);
-      const [authRes, orgsRes, usersRes, rolesRes, clientsRes, partnersRes, projectsRes, tasksRes, timeRes, workRes, auditRes, fcRes, keysRes] = await Promise.all([
-        fetch('/api/auth/me').then(r => r.json()),
-        fetch('/api/organizations').then(r => r.json()),
-        fetch('/api/users').then(r => r.json()),
-        fetch('/api/employee-roles').then(r => r.json()),
-        fetch('/api/clients').then(r => r.json()),
-        fetch('/api/partners').then(r => r.json()),
-        fetch('/api/projects').then(r => r.json()),
-        fetch('/api/tasks').then(r => r.json()),
-        fetch('/api/time-entries?limit=1000').then(r => r.json()),
-        fetch('/api/working-time').then(r => r.json()),
-        fetch('/api/audit-logs').then(r => r.json()),
-        fetch('/api/forecasts').then(r => r.json()),
-        fetch('/api/api-keys').then(r => r.json())
+      const token = localStorage.getItem('insight_arcs_auth_jwt_token');
+      const reqHeaders: Record<string, string> = {
+        'Content-Type': 'application/json'
+      };
+      if (token) reqHeaders['Authorization'] = `Bearer ${token}`;
+
+      const [authRes, orgsRes, usersRes, rolesRes, clientsRes, partnersRes, projectsRes, tasksRes, timeRes, workRes, auditRes, fcRes, keysRes, locksRes] = await Promise.all([
+        fetch('/api/auth/me', { headers: reqHeaders }).then(r => r.json()),
+        fetch('/api/organizations', { headers: reqHeaders }).then(r => r.json()),
+        fetch('/api/users', { headers: reqHeaders }).then(r => r.json()),
+        fetch('/api/employee-roles', { headers: reqHeaders }).then(r => r.json()),
+        fetch('/api/clients', { headers: reqHeaders }).then(r => r.json()),
+        fetch('/api/partners', { headers: reqHeaders }).then(r => r.json()),
+        fetch('/api/projects', { headers: reqHeaders }).then(r => r.json()),
+        fetch('/api/tasks', { headers: reqHeaders }).then(r => r.json()),
+        fetch('/api/time-entries?limit=1000', { headers: reqHeaders }).then(r => r.json()),
+        fetch('/api/working-time', { headers: reqHeaders }).then(r => r.json()),
+        fetch('/api/audit-logs', { headers: reqHeaders }).then(r => r.json()),
+        fetch('/api/forecasts', { headers: reqHeaders }).then(r => r.json()),
+        fetch('/api/api-keys', { headers: reqHeaders }).then(r => r.json()),
+        fetch('/api/gobd/period-locks', { headers: reqHeaders }).then(r => r.json())
       ]);
 
       if (authRes.user) {
         setCurrentUser(authRes.user);
         if (authRes.user.language) setLanguageState(authRes.user.language);
+      }
+      if (authRes.token) {
+        setAuthToken(authRes.token);
+        localStorage.setItem('insight_arcs_auth_jwt_token', authRes.token);
       }
       if (authRes.organization) setOrganization(authRes.organization);
       if (authRes.activeOrgId) setActiveOrgId(authRes.activeOrgId);
@@ -302,6 +327,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       setAuditLogs(auditRes || []);
       setForecasts(fcRes || []);
       setApiKeys(keysRes || []);
+      setPeriodLocks(locksRes || []);
 
       // If active timer project is empty, select first project
       if (projectsRes && projectsRes.length > 0 && !projectsRes.some((p: any) => p.id === activeTimer.projectId)) {
@@ -364,6 +390,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       const data = await res.json();
       if (data.success && data.user) {
         setCurrentUser(data.user);
+        if (data.token) {
+          setAuthToken(data.token);
+          localStorage.setItem('insight_arcs_auth_jwt_token', data.token);
+        }
         if (data.user.language) setLanguageState(data.user.language);
         if (data.activeOrgId) setActiveOrgId(data.activeOrgId);
         if (data.organization) setOrganization(data.organization);
@@ -386,6 +416,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       setIsLoading(true);
       await fetch('/api/auth/logout', { method: 'POST' });
       localStorage.removeItem('insight_arcs_logged_in_user');
+      localStorage.removeItem('insight_arcs_auth_jwt_token');
+      setAuthToken(null);
       setCurrentUser(null);
     } catch (err) {
       console.error('Logout error:', err);
@@ -971,6 +1003,71 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     return await res.json();
   };
 
+  // GoBD Revisionssicherheit Handlers
+  const lockPeriod = async (periodKey: string, reason?: string): Promise<{ success: boolean; error?: string }> => {
+    try {
+      const res = await fetch('/api/gobd/lock-period', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-user-id': currentUser?.id || 'u-1',
+          ...(authToken ? { 'Authorization': `Bearer ${authToken}` } : {})
+        },
+        body: JSON.stringify({ periodKey, reason })
+      });
+      const data = await res.json();
+      if (!res.ok || data.error) {
+        return { success: false, error: data.error || 'Fehler beim Festschreiben der Periode' };
+      }
+      await refreshAllData();
+      return { success: true };
+    } catch (err: any) {
+      return { success: false, error: err.message || 'Verbindungsfehler beim Sperren der Periode' };
+    }
+  };
+
+  const unlockPeriod = async (periodKey: string, reason: string): Promise<{ success: boolean; error?: string }> => {
+    try {
+      const res = await fetch('/api/gobd/unlock-period', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-user-id': currentUser?.id || 'u-1',
+          ...(authToken ? { 'Authorization': `Bearer ${authToken}` } : {})
+        },
+        body: JSON.stringify({ periodKey, reason })
+      });
+      const data = await res.json();
+      if (!res.ok || data.error) {
+        return { success: false, error: data.error || 'Fehler beim Entsperren der Periode' };
+      }
+      await refreshAllData();
+      return { success: true };
+    } catch (err: any) {
+      return { success: false, error: err.message || 'Verbindungsfehler beim Entsperren der Periode' };
+    }
+  };
+
+  const verifyAuditHashChain = async (): Promise<AuditHashVerificationReport> => {
+    const res = await fetch('/api/gobd/verify-hash-chain', {
+      headers: {
+        'x-user-id': currentUser?.id || 'u-1',
+        ...(authToken ? { 'Authorization': `Bearer ${authToken}` } : {})
+      }
+    });
+    return await res.json();
+  };
+
+  const getGoBDCertificate = async (periodKey: string): Promise<GoBDComplianceCertificate> => {
+    const res = await fetch(`/api/gobd/certificate/${periodKey}`, {
+      headers: {
+        'x-user-id': currentUser?.id || 'u-1',
+        ...(authToken ? { 'Authorization': `Bearer ${authToken}` } : {})
+      }
+    });
+    return await res.json();
+  };
+
   return (
     <AppContext.Provider
       value={{
@@ -979,6 +1076,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         t,
         currentUser,
         setCurrentUser,
+        authToken,
         users,
         organization,
         organizations,
@@ -993,6 +1091,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         auditLogs,
         forecasts,
         apiKeys,
+        periodLocks,
         isLoading,
         login,
         logout,
@@ -1016,6 +1115,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         approveTimeEntries,
         saveWorkingTime,
         saveForecast,
+        lockPeriod,
+        unlockPeriod,
+        verifyAuditHashChain,
+        getGoBDCertificate,
         createProject,
         updateProject,
         deleteProject,

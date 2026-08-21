@@ -1,0 +1,151 @@
+{
+  "entities": {
+    "Organization": {
+      "title": "Organization",
+      "description": "Tenant organization representing a company or subsidiary",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "code": { "type": "string" },
+        "defaultHourlyBillingRate": { "type": "number" },
+        "defaultHourlyCostRate": { "type": "number" },
+        "defaultCurrency": { "type": "string" },
+        "stateLocation": { "type": "string" },
+        "locationCity": { "type": "string" },
+        "allowMobileWorkplaces": { "type": "boolean" },
+        "logoColor": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "name", "code", "defaultHourlyBillingRate", "defaultHourlyCostRate", "defaultCurrency"]
+    },
+    "User": {
+      "title": "User",
+      "description": "System user or employee",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "role": { "type": "string", "enum": ["SUPERADMIN", "ADMIN", "PROJECT_MANAGER", "EMPLOYEE", "PARTNER"] },
+        "jobRole": { "type": "string" },
+        "primaryOrgId": { "type": "string" },
+        "hourlyBillingRate": { "type": "number" },
+        "hourlyCostRate": { "type": "number" },
+        "weeklyTargetHours": { "type": "number" },
+        "isActive": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "name", "email", "role", "primaryOrgId", "hourlyCostRate"]
+    },
+    "TimeEntry": {
+      "title": "TimeEntry",
+      "description": "Project time entry recorded by a user",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "organizationId": { "type": "string" },
+        "userId": { "type": "string" },
+        "projectId": { "type": "string" },
+        "taskId": { "type": "string" },
+        "date": { "type": "string", "format": "date" },
+        "startTime": { "type": "string" },
+        "endTime": { "type": "string" },
+        "durationHoursDecimal": { "type": "number" },
+        "description": { "type": "string" },
+        "isBillable": { "type": "boolean" },
+        "approvalStatus": { "type": "string", "enum": ["DRAFT", "SUBMITTED", "APPROVED", "REJECTED"] },
+        "calculatedRate": { "type": "number" },
+        "calculatedAmount": { "type": "number" },
+        "calculatedCostRate": { "type": "number" },
+        "calculatedCostAmount": { "type": "number" },
+        "appliedRateHierarchyLevel": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "organizationId", "userId", "projectId", "date", "durationHoursDecimal", "description"]
+    },
+    "WorkingTime": {
+      "title": "WorkingTime",
+      "description": "Daily working attendance hours for ArbZG compliance",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "organizationId": { "type": "string" },
+        "userId": { "type": "string" },
+        "date": { "type": "string", "format": "date" },
+        "totalWorkingHours": { "type": "number" },
+        "breakMinutes": { "type": "number" },
+        "entryType": { "type": "string", "enum": ["WORK", "VACATION", "SICK_LEAVE", "HOLIDAY", "PARENTAL_LEAVE", "SPECIAL_LEAVE"] },
+        "isArbZgCompliant": { "type": "boolean" },
+        "notes": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "organizationId", "userId", "date", "totalWorkingHours", "entryType"]
+    },
+    "AuditLog": {
+      "title": "AuditLog",
+      "description": "Immutable SHA-256 hashed audit log record for GoBD compliance",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "organizationId": { "type": "string" },
+        "timestamp": { "type": "string", "format": "date-time" },
+        "userId": { "type": "string" },
+        "userName": { "type": "string" },
+        "action": { "type": "string" },
+        "entityType": { "type": "string" },
+        "entityId": { "type": "string" },
+        "changes": { "type": "array" },
+        "reason": { "type": "string" },
+        "hash": { "type": "string" },
+        "previousHash": { "type": "string" }
+      },
+      "required": ["id", "organizationId", "timestamp", "userId", "action", "entityType", "entityId"]
+    },
+    "PeriodLock": {
+      "title": "PeriodLock",
+      "description": "GoBD Period lock and cryptographic seal",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "organizationId": { "type": "string" },
+        "periodKey": { "type": "string" },
+        "isLocked": { "type": "boolean" },
+        "lockedAt": { "type": "string", "format": "date-time" },
+        "lockedByUserId": { "type": "string" },
+        "lockedByName": { "type": "string" },
+        "snapshotHash": { "type": "string" },
+        "lockReason": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "organizationId", "periodKey", "isLocked", "lockedAt", "lockedByUserId"]
+    }
+  },
+  "firestore": {
+    "/organizations/{organizationId}": {
+      "schema": "Organization",
+      "description": "Organization details and tenant configuration"
+    },
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "User profiles and credentials"
+    },
+    "/organizations/{organizationId}/time_entries/{timeEntryId}": {
+      "schema": "TimeEntry",
+      "description": "Project time entries within an organization"
+    },
+    "/organizations/{organizationId}/working_times/{workingTimeId}": {
+      "schema": "WorkingTime",
+      "description": "Daily ArbZG attendance and working time logs"
+    },
+    "/organizations/{organizationId}/audit_logs/{auditLogId}": {
+      "schema": "AuditLog",
+      "description": "Revisionssichere SHA-256 verkettete Audit Logs"
+    },
+    "/organizations/{organizationId}/period_locks/{periodLockId}": {
+      "schema": "PeriodLock",
+      "description": "GoBD Periodenfestschreibung und Schutzsiegel"
+    }
+  }
+}

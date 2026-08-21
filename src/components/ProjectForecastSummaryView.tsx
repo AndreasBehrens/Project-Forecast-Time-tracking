@@ -25,10 +25,13 @@ import {
   History,
   Target,
   FileCheck2,
-  PieChart
+  PieChart,
+  Maximize2,
+  BarChart2
 } from 'lucide-react';
 import { CompanyLocationModal } from './CompanyLocationModal';
 import { ForecastHistoryModal } from './ForecastHistoryModal';
+import { ChartExpandedModal } from './ChartExpandedModal';
 
 export const ProjectForecastSummaryView: React.FC = () => {
   const {
@@ -49,6 +52,7 @@ export const ProjectForecastSummaryView: React.FC = () => {
 
   // Modal States
   const [showLocationModal, setShowLocationModal] = useState(false);
+  const [showExpandedChartModal, setShowExpandedChartModal] = useState(false);
   const [historyModalConfig, setHistoryModalConfig] = useState<{
     isOpen: boolean;
     projectId?: string;
@@ -542,6 +546,113 @@ export const ProjectForecastSummaryView: React.FC = () => {
         </div>
       )}
 
+      {/* Responsive Visual Forecast Charts (Stacked on Mobile, Side-by-Side on Desktop) */}
+      {kpis && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* Visual Chart Card 1: Revenue vs Cost Comparison */}
+          <div className="bg-white rounded-2xl border border-slate-200/90 p-4 sm:p-5 shadow-xs space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-2.5">
+              <div className="flex items-center gap-2">
+                <BarChart2 className="w-4 h-4 text-emerald-600" />
+                <span className="font-bold text-xs text-slate-900">Umsatz & Kosten (Plan vs. Hochrechnung)</span>
+              </div>
+              <button
+                id="btn-expand-chart-revenue"
+                onClick={() => setShowExpandedChartModal(true)}
+                className="text-xs font-semibold text-emerald-700 hover:text-emerald-800 bg-emerald-50 hover:bg-emerald-100 px-2.5 py-1 rounded-lg flex items-center gap-1 transition-colors"
+                title={t.expandChart || 'Diagramm vergrößern'}
+              >
+                <Maximize2 className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">{t.expandChart || 'Vergrößern'}</span>
+              </button>
+            </div>
+
+            <div className="space-y-3 pt-1">
+              {/* Planned Revenue Bar */}
+              <div className="space-y-1">
+                <div className="flex justify-between text-xs font-semibold">
+                  <span className="text-slate-600">Geplanter Umsatz</span>
+                  <span className="text-slate-900">{formatEUR(kpis.totalPlannedRevenue)}</span>
+                </div>
+                <div className="w-full h-3 bg-slate-100 rounded-full overflow-hidden">
+                  <div className="h-full bg-slate-400 rounded-full w-full" />
+                </div>
+              </div>
+
+              {/* Extrapolated Revenue Bar */}
+              <div className="space-y-1">
+                <div className="flex justify-between text-xs font-semibold">
+                  <span className="text-emerald-700">Hochgerechneter Umsatz</span>
+                  <span className="text-emerald-800 font-bold">{formatEUR(kpis.totalExtrapolatedRevenue)}</span>
+                </div>
+                <div className="w-full h-3 bg-slate-100 rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-emerald-500 rounded-full transition-all duration-500"
+                    style={{
+                      width: `${Math.min(100, kpis.totalPlannedRevenue > 0 ? (kpis.totalExtrapolatedRevenue / kpis.totalPlannedRevenue) * 100 : 100)}%`
+                    }}
+                  />
+                </div>
+              </div>
+
+              {/* Extrapolated Costs Bar */}
+              <div className="space-y-1">
+                <div className="flex justify-between text-xs font-semibold">
+                  <span className="text-slate-600">Hochgerechnete Gesamtkosten</span>
+                  <span className="text-slate-900">{formatEUR(kpis.totalExtrapolatedCost)}</span>
+                </div>
+                <div className="w-full h-3 bg-slate-100 rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-rose-400 rounded-full transition-all duration-500"
+                    style={{
+                      width: `${Math.min(100, kpis.totalExtrapolatedRevenue > 0 ? (kpis.totalExtrapolatedCost / kpis.totalExtrapolatedRevenue) * 100 : 50)}%`
+                    }}
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Visual Chart Card 2: Margen-Effizienz & Deckungsbeitrag */}
+          <div className="bg-white rounded-2xl border border-slate-200/90 p-4 sm:p-5 shadow-xs space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-2.5">
+              <div className="flex items-center gap-2">
+                <TrendingUp className="w-4 h-4 text-emerald-600" />
+                <span className="font-bold text-xs text-slate-900">Margen-Entwicklung & Rendite</span>
+              </div>
+              <button
+                id="btn-expand-chart-margin"
+                onClick={() => setShowExpandedChartModal(true)}
+                className="text-xs font-semibold text-emerald-700 hover:text-emerald-800 bg-emerald-50 hover:bg-emerald-100 px-2.5 py-1 rounded-lg flex items-center gap-1 transition-colors"
+                title={t.expandChart || 'Diagramm vergrößern'}
+              >
+                <Maximize2 className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">{t.expandChart || 'Vergrößern'}</span>
+              </button>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3 pt-1">
+              <div className="bg-slate-50 p-3 rounded-xl border border-slate-200/80 text-center space-y-1">
+                <div className="text-[11px] font-semibold text-slate-500">Plan-Marge (%)</div>
+                <div className="text-xl font-bold text-slate-800">{kpis.plannedMarginPercent.toFixed(1)}%</div>
+                <div className="text-[10px] text-slate-500">{formatEUR(kpis.totalPlannedMargin)}</div>
+              </div>
+
+              <div className="bg-emerald-50 p-3 rounded-xl border border-emerald-200/80 text-center space-y-1">
+                <div className="text-[11px] font-bold text-emerald-700">Hochrechnung Marge (%)</div>
+                <div className="text-xl font-extrabold text-emerald-800">{kpis.extrapolatedMarginPercent.toFixed(1)}%</div>
+                <div className="text-[10px] font-semibold text-emerald-700">{formatEUR(kpis.totalExtrapolatedMargin)}</div>
+              </div>
+            </div>
+
+            <div className="text-[11px] text-slate-500 bg-slate-50 p-2.5 rounded-xl flex items-center justify-between">
+              <span>Deckungsbeitrag Gesamt</span>
+              <span className="font-bold text-emerald-700">{formatEUR(kpis.totalExtrapolatedMargin)}</span>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Main Aggregated Table */}
       <div className="bg-white rounded-2xl border border-slate-200/90 shadow-xs overflow-hidden">
         <div className="p-4 bg-slate-50/80 border-b border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
@@ -979,6 +1090,114 @@ export const ProjectForecastSummaryView: React.FC = () => {
         projectName={historyModalConfig.projectName}
         userName={historyModalConfig.userName}
       />
+
+      {/* Full-Screen / Expanded Chart Modal for Mobile & Tablets */}
+      {showExpandedChartModal && kpis && (
+        <ChartExpandedModal
+          title={`Forecast & Performance Analyse (${summaryData?.periodLabel || periodKey})`}
+          subtitle={`Mandant: ${organization?.name || 'Insight Arcs'} • Standort: ${summaryData?.locationCity || 'Berlin'}`}
+          kpiList={[
+            {
+              label: 'Hochgerechneter Umsatz',
+              value: formatEUR(kpis.totalExtrapolatedRevenue),
+              subtext: `Plan: ${formatEUR(kpis.totalPlannedRevenue)}`,
+              color: 'text-emerald-700',
+              icon: DollarSign
+            },
+            {
+              label: 'Hochgerechnete Kosten',
+              value: formatEUR(kpis.totalExtrapolatedCost),
+              subtext: `Plan: ${formatEUR(kpis.totalPlannedCost)}`,
+              color: 'text-slate-800',
+              icon: Layers
+            },
+            {
+              label: 'Deckungsbeitrag / Marge',
+              value: `${kpis.extrapolatedMarginPercent.toFixed(1)}%`,
+              subtext: `Total: ${formatEUR(kpis.totalExtrapolatedMargin)}`,
+              color: 'text-emerald-700',
+              icon: TrendingUp
+            },
+            {
+              label: 'Stunden & Kapazität',
+              value: `${kpis.totalExtrapolatedHours.toFixed(1)}h`,
+              subtext: `Ist: ${kpis.totalActualHours.toFixed(0)}h / Plan: ${kpis.totalPlannedHours.toFixed(0)}h`,
+              color: 'text-blue-700',
+              icon: Clock
+            }
+          ]}
+          chartNode={
+            <div className="space-y-6 py-2">
+              <div className="space-y-2">
+                <div className="flex justify-between text-sm font-bold text-slate-800">
+                  <span>Umsatz (Plan vs. Hochrechnung)</span>
+                  <span className="text-emerald-700 font-extrabold">{formatEUR(kpis.totalExtrapolatedRevenue)}</span>
+                </div>
+                <div className="w-full h-4 bg-slate-200 rounded-full overflow-hidden flex">
+                  <div
+                    className="h-full bg-emerald-600 rounded-full"
+                    style={{
+                      width: `${Math.min(100, kpis.totalPlannedRevenue > 0 ? (kpis.totalExtrapolatedRevenue / kpis.totalPlannedRevenue) * 100 : 100)}%`
+                    }}
+                  />
+                </div>
+                <div className="flex justify-between text-xs text-slate-500">
+                  <span>Geplant: {formatEUR(kpis.totalPlannedRevenue)}</span>
+                  <span>Ist gebucht: {formatEUR(kpis.totalActualRevenue)}</span>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <div className="flex justify-between text-sm font-bold text-slate-800">
+                  <span>Kosten vs. Umsatzquote</span>
+                  <span className="text-rose-600 font-extrabold">{formatEUR(kpis.totalExtrapolatedCost)}</span>
+                </div>
+                <div className="w-full h-4 bg-slate-200 rounded-full overflow-hidden flex">
+                  <div
+                    className="h-full bg-rose-500 rounded-full"
+                    style={{
+                      width: `${Math.min(100, kpis.totalExtrapolatedRevenue > 0 ? (kpis.totalExtrapolatedCost / kpis.totalExtrapolatedRevenue) * 100 : 50)}%`
+                    }}
+                  />
+                </div>
+                <div className="flex justify-between text-xs text-slate-500">
+                  <span>Kostenquote: {kpis.totalExtrapolatedRevenue > 0 ? ((kpis.totalExtrapolatedCost / kpis.totalExtrapolatedRevenue) * 100).toFixed(1) : 0}%</span>
+                  <span>Reingewinn: {formatEUR(kpis.totalExtrapolatedMargin)}</span>
+                </div>
+              </div>
+            </div>
+          }
+          tableNode={
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead className="bg-slate-50 text-slate-600 border-b border-slate-200 font-bold">
+                  <tr>
+                    <th className="p-3">Projekt</th>
+                    <th className="p-3 text-right">Plan-Std</th>
+                    <th className="p-3 text-right">Hochrechnung-Std</th>
+                    <th className="p-3 text-right">Plan-Umsatz</th>
+                    <th className="p-3 text-right">Hochrechnung-Umsatz</th>
+                    <th className="p-3 text-right">Marge</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {(summaryData?.projects || []).map(p => (
+                    <tr key={p.projectId} className="hover:bg-slate-50">
+                      <td className="p-3 font-semibold text-slate-800">{p.projectName}</td>
+                      <td className="p-3 text-right text-slate-600">{p.plannedHours.toFixed(1)}h</td>
+                      <td className="p-3 text-right font-bold text-slate-900">{p.extrapolatedHours.toFixed(1)}h</td>
+                      <td className="p-3 text-right text-slate-600">{formatEUR(p.plannedRevenue)}</td>
+                      <td className="p-3 text-right font-bold text-emerald-800">{formatEUR(p.extrapolatedRevenue)}</td>
+                      <td className="p-3 text-right font-bold text-emerald-700">{p.extrapolatedMarginPercent.toFixed(1)}%</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          }
+          onClose={() => setShowExpandedChartModal(false)}
+        />
+      )}
     </div>
   );
 };

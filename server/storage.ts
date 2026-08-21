@@ -1,5 +1,6 @@
 import fs from 'fs';
 import path from 'path';
+import crypto from 'crypto';
 import {
   Organization,
   User,
@@ -25,7 +26,10 @@ import {
   BillableSummaryReport,
   BillableSummaryTotals,
   BillableProjectSummary,
-  BillableUserSummary
+  BillableUserSummary,
+  PeriodLock,
+  AuditHashVerificationReport,
+  GoBDComplianceCertificate
 } from '../src/types.js';
 import { getGermanHolidays, getWorkingDaysInRange, GERMAN_STATES, HolidayInfo } from './holidays.js';
 
@@ -43,6 +47,7 @@ export class StorageService {
   private auditLogs: AuditLogEntry[] = [];
   private forecasts: ForecastEntry[] = [];
   private apiKeys: ApiKey[] = [];
+  private periodLocks: PeriodLock[] = [];
   private thresholdPercent: number = 20;
   private storageFilePath: string = path.join(process.cwd(), 'data', 'app_storage.json');
 
@@ -130,6 +135,7 @@ export class StorageService {
         auditLogs: this.auditLogs,
         forecasts: this.forecasts,
         apiKeys: this.apiKeys,
+        periodLocks: this.periodLocks,
         thresholdPercent: this.thresholdPercent,
         savedAt: new Date().toISOString()
       };
@@ -158,6 +164,7 @@ export class StorageService {
           if (Array.isArray(data.auditLogs)) this.auditLogs = data.auditLogs;
           if (Array.isArray(data.forecasts)) this.forecasts = data.forecasts;
           if (Array.isArray(data.apiKeys)) this.apiKeys = data.apiKeys;
+          if (Array.isArray(data.periodLocks)) this.periodLocks = data.periodLocks;
           if (typeof data.thresholdPercent === 'number') this.thresholdPercent = data.thresholdPercent;
 
           // --- OPTION A AUTOMIGRATION ---
@@ -241,7 +248,7 @@ export class StorageService {
                   isDefault: false
                 });
               }
-            } else if (u.id.startsWith('u-') && parseInt(u.id.replace('u-', ''), 10) >= 2 && parseInt(u.id.replace('u-', ''), 10) <= 25) {
+            } else if (['u-2', 'u-3', 'u-4', 'u-5', 'u-6', 'u-7', 'u-8', 'u-9', 'u-10', 'u-11', 'u-12', 'u-13', 'u-14', 'u-15', 'u-16', 'u-17', 'u-18', 'u-19', 'u-20', 'u-21'].includes(u.id)) {
               // Move seeded demo team members strictly to Testmandant
               u.orgId = 'org-insight-arcs-01';
               if (u.jobRoleId && u.jobRoleId.startsWith('role-prod-')) {
@@ -304,6 +311,15 @@ export class StorageService {
             this.activeOrgId = 'org-insight-arcs-prod';
           }
 
+          // 8. Self-healing ID uniqueness guarantee across all time entries
+          const seenTimeEntryIds = new Set<string>();
+          this.timeEntries.forEach((te, i) => {
+            if (seenTimeEntryIds.has(te.id)) {
+              te.id = `te-${Date.now()}-${Math.random().toString(36).substring(2, 9)}-${i}`;
+            }
+            seenTimeEntryIds.add(te.id);
+          });
+
           this.saveToFile();
           return true;
         }
@@ -344,7 +360,16 @@ export class StorageService {
       if (Array.isArray(data.partners)) this.partners = data.partners;
       if (Array.isArray(data.projects)) this.projects = data.projects;
       if (Array.isArray(data.tasks)) this.tasks = data.tasks;
-      if (Array.isArray(data.timeEntries)) this.timeEntries = data.timeEntries;
+      if (Array.isArray(data.timeEntries)) {
+        const seenImportIds = new Set<string>();
+        this.timeEntries = data.timeEntries.map((te: any, i: number) => {
+          if (seenImportIds.has(te.id)) {
+            te.id = `te-${Date.now()}-${Math.random().toString(36).substring(2, 9)}-${i}`;
+          }
+          seenImportIds.add(te.id);
+          return te;
+        });
+      }
       if (Array.isArray(data.workingTimeEntries)) this.workingTimeEntries = data.workingTimeEntries;
       if (Array.isArray(data.auditLogs)) this.auditLogs = data.auditLogs;
       if (Array.isArray(data.forecasts)) this.forecasts = data.forecasts;
@@ -1937,7 +1962,7 @@ export class StorageService {
     }
 
     const newUser: User = {
-      id: 'u-' + (this.users.length + 1),
+      id: userData.id || ('u-' + (Date.now() + Math.floor(Math.random() * 1000))),
       orgId: this.activeOrgId || this.organization.id,
       name: userData.name || 'Neuer Mitarbeiter',
       email: userData.email || '',
@@ -2652,8 +2677,14 @@ export class StorageService {
           return e;
         });
       } else {
-        // Regular Employee sees ONLY their own time entries!
-        list = list.filter(e => e.userId === actorId);
+        // Regular Employee (internal or external) sees ONLY their own time entries without financial/revenue numbers!
+        list = list.filter(e => e.userId === actorId).map(e => ({
+          ...e,
+          hourlyBillingRate: 0,
+          calculatedAmount: 0,
+          hourlyCostRate: undefined,
+          calculatedCost: undefined
+        }));
       }
     }
 
@@ -2695,6 +2726,12 @@ export class StorageService {
   }
 
   public createTimeEntry(entryData: Partial<TimeEntry>, actorId: string): TimeEntry {
+    const bookingDate = entryData.date || new Date().toISOString().split('T')[0];
+    const periodCheck = this.isPeriodLocked(bookingDate);
+    if (periodCheck.isLocked) {
+      throw new Error(`GoBD-Revisionsschutz: Der Abrechnungsmonat ${bookingDate.slice(0, 7)} ist durch einen Monatsabschluss gesperrt. Neue Buchungen sind nicht mehr zulässig.`);
+    }
+
     const bookingUserId = entryData.userId || actorId;
     const user = this.users.find(u => u.id === bookingUserId);
     const project = this.projects.find(p => p.id === entryData.projectId);
@@ -2745,11 +2782,11 @@ export class StorageService {
     const calculatedAmount = Math.round(durationHoursDecimal * hourlyBillingRate * 100) / 100;
 
     // Cost rate & internal cost: ALWAYS active regardless of billability status
-    const hourlyCostRate = rateInfo.costRate;
+    const hourlyCostRate = entryData.hourlyCostRate !== undefined ? entryData.hourlyCostRate : rateInfo.costRate;
     const calculatedCost = Math.round(durationHoursDecimal * hourlyCostRate * 100) / 100;
 
     const entry: TimeEntry = {
-      id: 'te-' + (Date.now() + Math.floor(Math.random() * 1000)),
+      id: 'te-' + Date.now() + '-' + Math.random().toString(36).substring(2, 9),
       orgId: this.organization.id,
       userId: user?.id || actorId,
       userName: user?.name || 'Mitarbeiter',
@@ -2797,6 +2834,17 @@ export class StorageService {
     if (idx === -1) return null;
 
     const oldEntry = { ...this.timeEntries[idx] };
+    const periodCheck = this.isPeriodLocked(oldEntry.date);
+    if (periodCheck.isLocked) {
+      throw new Error(`GoBD-Revisionsschutz: Der Eintrag liegt im abgeschlossenen und gesperrten Monat ${oldEntry.date.slice(0, 7)}. Änderungen sind gesetzlich unzulässig.`);
+    }
+    if (updates.date && updates.date !== oldEntry.date) {
+      const newPeriodCheck = this.isPeriodLocked(updates.date);
+      if (newPeriodCheck.isLocked) {
+        throw new Error(`GoBD-Revisionsschutz: Das Ziel-Datum liegt im gesperrten Monat ${updates.date.slice(0, 7)}.`);
+      }
+    }
+
     const wasApproved = oldEntry.approvalStatus === 'APPROVED';
 
     let durationMinutes = updates.durationMinutes ?? oldEntry.durationMinutes;
@@ -2858,6 +2906,12 @@ export class StorageService {
     const idx = this.timeEntries.findIndex(e => e.id === entryId);
     if (idx === -1) return false;
     const deleted = this.timeEntries[idx];
+
+    const periodCheck = this.isPeriodLocked(deleted.date);
+    if (periodCheck.isLocked) {
+      throw new Error(`GoBD-Revisionsschutz: Der Eintrag liegt im gesperrten Abrechnungsmonat ${deleted.date.slice(0, 7)} und darf nicht gelöscht werden.`);
+    }
+
     this.timeEntries.splice(idx, 1);
 
     this.logAudit({
@@ -2964,6 +3018,12 @@ export class StorageService {
   }
 
   public createOrUpdateWorkingTime(entryData: Partial<WorkingTimeEntry>, actorId: string): WorkingTimeEntry {
+    const entryDate = entryData.date || new Date().toISOString().split('T')[0];
+    const periodCheck = this.isPeriodLocked(entryDate);
+    if (periodCheck.isLocked) {
+      throw new Error(`GoBD-Revisionsschutz: Die Arbeitszeit im Monat ${entryDate.slice(0, 7)} kann nicht geändert werden, da dieser Monat revisionssicher abgeschlossen und gesperrt ist.`);
+    }
+
     const user = this.users.find(u => u.id === (entryData.userId || actorId));
     const grossMinutes = (entryData.startTime && entryData.endTime)
       ? this.calculateMinutes(entryData.startTime, entryData.endTime)
@@ -3117,13 +3177,14 @@ export class StorageService {
     const plannedMargin = plannedRevenue - plannedCost;
 
     // Check existing version
-    const existing = this.forecasts.filter(f => f.projectId === entry.projectId && f.userId === entry.userId && f.month === entry.month);
+    const activeOrg = this.activeOrgId || this.organization.id;
+    const existing = this.forecasts.filter(f => f.orgId === activeOrg && f.projectId === entry.projectId && f.userId === entry.userId && f.month === entry.month);
     const nextVersion = existing.length > 0 ? Math.max(...existing.map(e => e.version)) + 1 : 1;
     const previousPlannedHours = existing.length > 0 ? existing.sort((a, b) => b.version - a.version)[0].plannedHours : undefined;
 
     const newForecast: ForecastEntry = {
       id: 'fc-' + (Date.now() + Math.floor(Math.random() * 1000)),
-      orgId: this.organization.id,
+      orgId: activeOrg,
       projectId: entry.projectId!,
       projectName: project?.name || '',
       userId: entry.userId!,
@@ -3175,7 +3236,7 @@ export class StorageService {
   }
 
   public getForecastHistory(projectId?: string, userId?: string, month?: string): ForecastAuditHistoryItem[] {
-    let list = [...this.forecasts];
+    let list = this.forecasts.filter(f => f.orgId === this.activeOrgId);
     if (projectId) list = list.filter(f => f.projectId === projectId);
     if (userId) list = list.filter(f => f.userId === userId);
     if (month) list = list.filter(f => f.month === month);
@@ -3186,7 +3247,7 @@ export class StorageService {
     return list.map(f => {
       const creator = this.users.find(u => u.id === f.createdBy);
       const prev = this.forecasts.find(
-        other => other.projectId === f.projectId && other.userId === f.userId && other.month === f.month && other.version === f.version - 1
+        other => other.orgId === this.activeOrgId && other.projectId === f.projectId && other.userId === f.userId && other.month === f.month && other.version === f.version - 1
       );
       return {
         id: f.id,
@@ -3231,8 +3292,8 @@ export class StorageService {
 
     const extrapolationFactor = (passedWorkDays > 0 && isCurrentMonth) ? (totalWorkDays / passedWorkDays) : 1;
 
-    // Group active forecasts by project & user (latest version)
-    const activeForecasts = this.forecasts.filter(f => f.month === month);
+    // Group active forecasts by project & user (latest version) for current organization only
+    const activeForecasts = this.forecasts.filter(f => f.orgId === this.activeOrgId && f.month === month);
     const map = new Map<string, ForecastEntry>();
     activeForecasts.forEach(f => {
       const key = `${f.projectId}_${f.userId}`;
@@ -3246,7 +3307,7 @@ export class StorageService {
       const project = this.projects.find(p => p.id === fc.projectId);
       const from = `${month}-01`;
       const to = `${month}-${daysInMonth}`;
-      const actualEntries = this.timeEntries.filter(t => t.projectId === fc.projectId && t.userId === fc.userId && t.date >= from && t.date <= to);
+      const actualEntries = this.timeEntries.filter(t => t.orgId === this.activeOrgId && t.projectId === fc.projectId && t.userId === fc.userId && t.date >= from && t.date <= to);
 
       const actualHoursSoFar = actualEntries.reduce((sum, e) => sum + e.durationHoursDecimal, 0);
       const actualRevenueSoFar = actualEntries.reduce((sum, e) => sum + e.calculatedAmount, 0);
@@ -3400,8 +3461,8 @@ export class StorageService {
       ? (totalWorkdaysInPeriod / passedWorkdaysInPeriod)
       : 1;
 
-    // Filter active contracted projects (Requirement: vorerst nur beauftragte Projekte)
-    let projectList = this.projects.filter(p => p.status === 'ACTIVE' && p.clientId !== 'c-5');
+    // Filter active contracted projects of current organization only (Requirement: vorerst nur beauftragte Projekte)
+    let projectList = this.projects.filter(p => p.orgId === this.activeOrgId && p.status === 'ACTIVE' && p.clientId !== 'c-5');
 
     if (options.clientId) {
       projectList = projectList.filter(p => p.clientId === options.clientId);
@@ -3422,7 +3483,7 @@ export class StorageService {
 
     projectList.forEach(project => {
       // 1. Gather all forecast entries for this project in the period
-      const projectForecasts = this.forecasts.filter(f => f.projectId === project.id && months.includes(f.month));
+      const projectForecasts = this.forecasts.filter(f => f.orgId === this.activeOrgId && f.projectId === project.id && months.includes(f.month));
       // Deduplicate to latest version per user per month
       const forecastMap = new Map<string, ForecastEntry>();
       projectForecasts.forEach(f => {
@@ -3438,7 +3499,8 @@ export class StorageService {
       // Rule: Non-billable hours are considered in Forecast/Capacity management ONLY for Time-&-Material projects (not for Fixed Price projects).
       const isTmProject = project.billingModel === 'TIME_AND_MATERIAL';
       const actualEntries = this.timeEntries.filter(
-        t => t.projectId === project.id && 
+        t => t.orgId === this.activeOrgId &&
+             t.projectId === project.id && 
              t.date >= startDate && 
              t.date <= endDate &&
              (isTmProject ? true : t.isBillable)
@@ -3881,8 +3943,8 @@ export class StorageService {
     const isPastPeriod = endDate < todayStr;
     const isFuturePeriod = startDate > todayStr;
 
-    // Filter users
-    let userList = this.users.filter(u => u.status === 'ACTIVE');
+    // Filter users of current organization only
+    let userList = this.getUsers().filter(u => u.status === 'ACTIVE');
     if (options.employmentType) {
       userList = userList.filter(u => u.employmentType === options.employmentType);
     }
@@ -3914,8 +3976,8 @@ export class StorageService {
       const dailyTarget = user.dailyTargetHours || (user.weeklyTargetHours ? Math.round((user.weeklyTargetHours / 5) * 10) / 10 : 8);
       const targetCapacityHours = Math.round(targetWorkdaysInPeriod * dailyTarget * 10) / 10;
 
-      // 1. Gather all forecast entries for this user in the period across all active contracted projects
-      const userForecasts = this.forecasts.filter(f => f.userId === user.id && months.includes(f.month));
+      // 1. Gather all forecast entries for this user in the period across all active contracted projects for this organization
+      const userForecasts = this.forecasts.filter(f => f.orgId === this.activeOrgId && f.userId === user.id && months.includes(f.month));
       // Deduplicate to latest version per project per month
       const forecastMap = new Map<string, ForecastEntry>();
       userForecasts.forEach(f => {
@@ -3927,9 +3989,9 @@ export class StorageService {
       });
       const activeUserForecasts = Array.from(forecastMap.values());
 
-      // 2. Gather all actual time entries for this user in period
+      // 2. Gather all actual time entries for this user in period in this organization
       const userActualEntries = this.timeEntries.filter(
-        t => t.userId === user.id && t.date >= startDate && t.date <= endDate
+        t => t.orgId === this.activeOrgId && t.userId === user.id && t.date >= startDate && t.date <= endDate
       );
 
       // 3. Project breakdown for this user
@@ -4191,13 +4253,19 @@ export class StorageService {
 
         // Billable Rate extraction
         let hourlyBillingRate: number | undefined = undefined;
+        let hourlyCostRate: number | undefined = undefined;
         for (const key of Object.keys(row)) {
           const k = key.toLowerCase();
           if ((k.includes('billable rate') || k.includes('stundensatz') || k.includes('hourly rate')) && row[key]) {
             const val = parseFloat(String(row[key]).replace(',', '.').trim());
             if (!isNaN(val) && val > 0) {
               hourlyBillingRate = val;
-              break;
+            }
+          }
+          if ((k.includes('cost rate') || k.includes('kostensatz')) && row[key]) {
+            const val = parseFloat(String(row[key]).replace(',', '.').trim());
+            if (!isNaN(val) && val > 0) {
+              hourlyCostRate = val;
             }
           }
         }
@@ -4205,6 +4273,11 @@ export class StorageService {
         const isBillable = String(row['Billable'] || row['Abrechenbar'] || 'Yes').toLowerCase().includes('y') ||
                            String(row['Billable'] || '').toLowerCase().includes('ja') ||
                            row['Billable'] === true;
+
+        const isExternal = !!(userGroup && !userGroup.toLowerCase().includes('insight arcs'));
+        if (hourlyCostRate === undefined && isExternal && hourlyBillingRate) {
+          hourlyCostRate = hourlyBillingRate;
+        }
 
         // 1. Ensure Client exists in current organization
         let client = this.clients.find(c => c.orgId === currentOrgId && c.name.toLowerCase() === clientName.toLowerCase());
@@ -4242,8 +4315,6 @@ export class StorageService {
             u.email.toLowerCase() === userEmail.toLowerCase() || u.name.toLowerCase() === userName.toLowerCase()
           );
 
-          const isExternal = userGroup && !userGroup.toLowerCase().includes('insight arcs');
-
           if (existingGlobalUser) {
             user = existingGlobalUser;
             if (!user.memberships) user.memberships = [];
@@ -4254,6 +4325,7 @@ export class StorageService {
                 role: 'EMPLOYEE',
                 employmentType: isExternal ? 'EXTERNAL' : 'INTERNAL',
                 individualBillingRate: hourlyBillingRate,
+                individualCostRate: hourlyCostRate || (isExternal ? hourlyBillingRate : undefined),
                 isDefault: false
               });
             }
@@ -4265,7 +4337,8 @@ export class StorageService {
               status: 'ACTIVE',
               employmentType: isExternal ? 'EXTERNAL' : 'INTERNAL',
               companyName: isExternal ? userGroup : undefined,
-              individualBillingRate: hourlyBillingRate
+              individualBillingRate: hourlyBillingRate,
+              individualCostRate: hourlyCostRate || (isExternal ? hourlyBillingRate : undefined)
             }, actorId);
             report.createdUsers.push(userName);
           }
@@ -4304,6 +4377,7 @@ export class StorageService {
           description,
           isBillable,
           hourlyBillingRate,
+          hourlyCostRate: hourlyCostRate || (isExternal ? hourlyBillingRate : undefined),
           approvalStatus: 'APPROVED'
         }, actorId);
 
@@ -4505,6 +4579,220 @@ export class StorageService {
     return false;
   }
 
+  // --- GoBD Period Locking & Revisionssicherheit ---
+  public getPeriodLocks(orgId?: string): PeriodLock[] {
+    const targetOrgId = orgId || this.activeOrgId;
+    return this.periodLocks.filter(p => p.orgId === targetOrgId);
+  }
+
+  public isPeriodLocked(dateOrPeriodKey: string, orgId?: string): { isLocked: boolean; lock?: PeriodLock } {
+    const targetOrgId = orgId || this.activeOrgId;
+    const periodKey = dateOrPeriodKey.length === 7 ? dateOrPeriodKey : dateOrPeriodKey.slice(0, 7);
+    const lock = this.periodLocks.find(p => p.orgId === targetOrgId && p.periodKey === periodKey && p.status === 'LOCKED');
+    return { isLocked: !!lock, lock };
+  }
+
+  public lockPeriod(params: { periodKey: string; reason?: string; actorId: string }): PeriodLock {
+    const { periodKey, reason, actorId } = params;
+    const actor = this.users.find(u => u.id === actorId);
+    const roleInfo = this.getActorRoleInfo(actorId);
+
+    if (!roleInfo.isAdmin && !roleInfo.isSuperAdmin) {
+      throw new Error('Nur Administratoren können GoBD-Monatsabschlüsse durchführen und Perioden sperren.');
+    }
+
+    // Check if already locked
+    const existingIdx = this.periodLocks.findIndex(p => p.orgId === this.activeOrgId && p.periodKey === periodKey);
+    
+    // Calculate aggregate snapshot at lock time
+    const entriesInPeriod = this.timeEntries.filter(e => e.orgId === this.activeOrgId && e.date.startsWith(periodKey));
+    const totalHours = entriesInPeriod.reduce((sum, e) => sum + e.durationHoursDecimal, 0);
+    const totalBillingAmount = entriesInPeriod.reduce((sum, e) => sum + (e.calculatedAmount || 0), 0);
+    const totalInternalCost = entriesInPeriod.reduce((sum, e) => sum + (e.calculatedCost || 0), 0);
+
+    // Compute digital signature hash of the snapshot
+    const hashData = `${this.activeOrgId}|${periodKey}|${entriesInPeriod.length}|${totalHours.toFixed(2)}|${totalBillingAmount.toFixed(2)}|${totalInternalCost.toFixed(2)}`;
+    const digitalSignatureHash = crypto.createHash('sha256').update(hashData).digest('hex');
+
+    const newLock: PeriodLock = {
+      id: 'lock-' + periodKey + '-' + Date.now().toString().slice(-4),
+      orgId: this.activeOrgId,
+      periodKey,
+      status: 'LOCKED',
+      reason: reason || 'GoBD-Monatsabschluss & Revisionssperre',
+      lockedByUserId: actorId,
+      lockedByUserName: actor?.name || 'Administrator',
+      lockedAt: new Date().toISOString(),
+      digitalSignatureHash,
+      entriesCount: entriesInPeriod.length,
+      totalHours: Math.round(totalHours * 100) / 100,
+      totalBillingAmount: Math.round(totalBillingAmount * 100) / 100,
+      totalInternalCost: Math.round(totalInternalCost * 100) / 100,
+      complianceStatus: 'COMPLIANT'
+    };
+
+    if (existingIdx !== -1) {
+      this.periodLocks[existingIdx] = newLock;
+    } else {
+      this.periodLocks.push(newLock);
+    }
+
+    this.logAudit({
+      entityType: 'PERIOD_LOCK',
+      entityId: newLock.id,
+      action: 'LOCK_PERIOD',
+      userId: actorId,
+      userName: actor?.name || 'Administrator',
+      changes: [{ field: 'status', oldValue: 'OPEN', newValue: 'LOCKED' }],
+      reason: reason || `Monatsabschluss für Periode ${periodKey} mit ${entriesInPeriod.length} Buchungen abgeschlossen (${totalHours.toFixed(1)} Std.).`
+    });
+
+    this.saveToFile();
+    return newLock;
+  }
+
+  public unlockPeriod(params: { periodKey: string; reason: string; actorId: string }): PeriodLock {
+    const { periodKey, reason, actorId } = params;
+    const actor = this.users.find(u => u.id === actorId);
+    const roleInfo = this.getActorRoleInfo(actorId);
+
+    if (!roleInfo.isAdmin && !roleInfo.isSuperAdmin) {
+      throw new Error('Nur Administratoren können eine gesperrte Periode entsperren.');
+    }
+
+    if (!reason || reason.trim().length < 5) {
+      throw new Error('Für die Aufhebung einer GoBD-Revisionssperre ist eine nachvollziehbare Begründung (mindestens 5 Zeichen) gesetzlich vorgeschrieben.');
+    }
+
+    const lock = this.periodLocks.find(p => p.orgId === this.activeOrgId && p.periodKey === periodKey);
+    if (!lock || lock.status !== 'LOCKED') {
+      throw new Error(`Die Periode ${periodKey} ist derzeit nicht gesperrt.`);
+    }
+
+    lock.status = 'OPEN';
+    lock.unlockedAt = new Date().toISOString();
+    lock.unlockedByUserId = actorId;
+    lock.unlockedByUserName = actor?.name || 'Administrator';
+    lock.unlockReason = reason.trim();
+
+    this.logAudit({
+      entityType: 'PERIOD_LOCK',
+      entityId: lock.id,
+      action: 'UNLOCK_PERIOD',
+      userId: actorId,
+      userName: actor?.name || 'Administrator',
+      changes: [{ field: 'status', oldValue: 'LOCKED', newValue: 'OPEN' }],
+      reason: `Sperre aufgehoben: ${reason.trim()}`
+    });
+
+    this.saveToFile();
+    return lock;
+  }
+
+  public verifyAuditHashChain(orgId?: string): AuditHashVerificationReport {
+    const targetOrgId = orgId || this.activeOrgId;
+    const logs = this.auditLogs.filter(l => l.orgId === targetOrgId).slice().reverse(); // Oldest first
+    const tamperedIds: string[] = [];
+
+    let runningPreviousHash = 'GENESIS_INSIGHT_ARCS_2026';
+
+    for (const log of logs) {
+      if (log.previousHash && log.previousHash !== runningPreviousHash) {
+        tamperedIds.push(log.id);
+      }
+
+      // Verify log's own hash if present
+      if (log.hash) {
+        const payload = `${log.previousHash || runningPreviousHash}|${log.id}|${log.timestamp}|${log.orgId}|${log.entityType}|${log.entityId}|${log.action}|${log.userId}|${JSON.stringify(log.changes || [])}|${log.reason || ''}`;
+        const calculatedHash = crypto.createHash('sha256').update(payload).digest('hex');
+        if (calculatedHash !== log.hash) {
+          tamperedIds.push(log.id);
+        }
+        runningPreviousHash = log.hash;
+      } else {
+        runningPreviousHash = log.id;
+      }
+    }
+
+    return {
+      isChainValid: tamperedIds.length === 0,
+      totalEntriesChecked: logs.length,
+      tamperedEntryIds: tamperedIds,
+      headHash: runningPreviousHash,
+      genesisTimestamp: logs[0]?.timestamp || new Date().toISOString(),
+      verifiedAt: new Date().toISOString()
+    };
+  }
+
+  public generateGoBDCertificate(periodKey: string, actorId: string): GoBDComplianceCertificate {
+    const actor = this.users.find(u => u.id === actorId);
+    const org = this.organization;
+    const entriesInPeriod = this.timeEntries.filter(e => e.orgId === this.activeOrgId && e.date.startsWith(periodKey));
+    const workingDays = this.workingTimeEntries.filter(w => w.orgId === this.activeOrgId && w.date.startsWith(periodKey));
+
+    const totalHours = entriesInPeriod.reduce((sum, e) => sum + e.durationHoursDecimal, 0);
+    const totalBillableHours = entriesInPeriod.filter(e => e.isBillable).reduce((sum, e) => sum + e.durationHoursDecimal, 0);
+    const totalNonBillableHours = totalHours - totalBillableHours;
+    const totalRevenue = entriesInPeriod.reduce((sum, e) => sum + (e.calculatedAmount || 0), 0);
+    const totalCost = entriesInPeriod.reduce((sum, e) => sum + (e.calculatedCost || 0), 0);
+    const grossMargin = totalRevenue - totalCost;
+    const grossMarginPercent = totalRevenue > 0 ? (grossMargin / totalRevenue) * 100 : 0;
+
+    // ArbZG Compliance Check
+    let maxDailyViolations = 0;
+    let breakTimeViolations = 0;
+
+    const userDailyMinutes: Record<string, Record<string, number>> = {};
+    for (const e of entriesInPeriod) {
+      if (!userDailyMinutes[e.userId]) userDailyMinutes[e.userId] = {};
+      userDailyMinutes[e.userId][e.date] = (userDailyMinutes[e.userId][e.date] || 0) + e.durationMinutes;
+    }
+
+    for (const userId in userDailyMinutes) {
+      for (const date in userDailyMinutes[userId]) {
+        const min = userDailyMinutes[userId][date];
+        if (min > 600) maxDailyViolations++;
+        if (min > 360 && !workingDays.some(w => w.userId === userId && w.date === date && (w.breakMinutes || 0) >= 30)) {
+          breakTimeViolations++;
+        }
+      }
+    }
+
+    const certData = `${org.id}|${periodKey}|${entriesInPeriod.length}|${totalHours.toFixed(2)}|${totalRevenue.toFixed(2)}|${Date.now()}`;
+    const digitalSignatureSha256 = crypto.createHash('sha256').update(certData).digest('hex');
+
+    const report = this.verifyAuditHashChain();
+
+    return {
+      certificateId: 'GOBD-CERT-' + periodKey + '-' + crypto.randomBytes(4).toString('hex').toUpperCase(),
+      organizationId: org.id,
+      organizationName: org.name,
+      periodKey,
+      periodLabel: new Date(periodKey + '-01').toLocaleDateString('de-DE', { month: 'long', year: 'numeric' }),
+      issueTimestamp: new Date().toISOString(),
+      auditedByUserName: actor?.name || 'Compliance Auditor',
+      auditedByUserId: actorId,
+      digitalSignatureSha256,
+      metrics: {
+        totalBookings: entriesInPeriod.length,
+        totalWorkingDays: workingDays.length,
+        totalBillableHours: Math.round(totalBillableHours * 100) / 100,
+        totalNonBillableHours: Math.round(totalNonBillableHours * 100) / 100,
+        totalHours: Math.round(totalHours * 100) / 100,
+        totalRevenue: Math.round(totalRevenue * 100) / 100,
+        totalCost: Math.round(totalCost * 100) / 100,
+        grossMargin: Math.round(grossMargin * 100) / 100,
+        grossMarginPercent: Math.round(grossMarginPercent * 10) / 10
+      },
+      arbzgCompliance: {
+        maxDailyHoursViolationsCount: maxDailyViolations,
+        breakTimeViolationsCount: breakTimeViolations,
+        isArbzgCompliant: maxDailyViolations === 0
+      },
+      hashChainHead: report.headHash
+    };
+  }
+
   // --- Helpers ---
   private calculateMinutes(start: string, end: string): number {
     try {
@@ -4519,11 +4807,24 @@ export class StorageService {
   }
 
   private logAudit(entry: Omit<AuditLogEntry, 'id' | 'orgId' | 'timestamp'>) {
+    const id = 'aud-' + (Date.now() + Math.floor(Math.random() * 1000));
+    const timestamp = new Date().toISOString();
+    const orgId = this.organization.id;
+
+    // Cryptographic Chain Hashing (GoBD-konformer Manipulationsnachweis)
+    const latestLog = this.auditLogs[0];
+    const previousHash = latestLog ? (latestLog.hash || latestLog.id) : 'GENESIS_INSIGHT_ARCS_2026';
+
+    const payload = `${previousHash}|${id}|${timestamp}|${orgId}|${entry.entityType}|${entry.entityId}|${entry.action}|${entry.userId}|${JSON.stringify(entry.changes || [])}|${entry.reason || ''}`;
+    const hash = crypto.createHash('sha256').update(payload).digest('hex');
+
     this.auditLogs.unshift({
-      id: 'aud-' + (Date.now() + Math.floor(Math.random() * 1000)),
-      orgId: this.organization.id,
-      timestamp: new Date().toISOString(),
-      ...entry
+      id,
+      orgId,
+      timestamp,
+      ...entry,
+      hash,
+      previousHash
     });
     this.saveToFile();
   }

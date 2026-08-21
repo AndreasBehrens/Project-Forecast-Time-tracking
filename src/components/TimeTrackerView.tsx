@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useApp } from '../context/AppContext';
 import { TimeEntry } from '../types';
+import { QuickTimeLogCard } from './QuickTimeLogCard';
 import {
   Play,
   Pause,
@@ -17,7 +18,8 @@ import {
   ChevronRight,
   Filter,
   Users,
-  AlertCircle
+  AlertCircle,
+  Lock
 } from 'lucide-react';
 
 export const TimeTrackerView: React.FC = () => {
@@ -39,7 +41,8 @@ export const TimeTrackerView: React.FC = () => {
     deleteTimeEntry,
     splitTimeEntry,
     batchUpdateTimeEntries,
-    approveTimeEntries
+    approveTimeEntries,
+    periodLocks
   } = useApp();
 
   // Mode: 'timer' | 'duration' | 'range'
@@ -76,6 +79,7 @@ export const TimeTrackerView: React.FC = () => {
   // Effective user for booking & permission checking
   const effectiveUserId = targetUserId || currentUser?.id || 'u-1';
   const isPrivilegedUser = currentUser?.role === 'ADMIN' || currentUser?.role === 'PROJECT_MANAGER';
+  const canViewFinancials = currentUser?.role === 'ADMIN' || currentUser?.role === 'SUPER_ADMIN' || currentUser?.role === 'PROJECT_MANAGER';
 
   // Allowed projects for booking (filters out archived/completed projects, excluded members, and restricted projects where user is not assigned)
   const allowedProjects = useMemo(() => {
@@ -207,8 +211,11 @@ export const TimeTrackerView: React.FC = () => {
   const sortedDates = Object.keys(groupedEntries).sort((a, b) => b.localeCompare(a));
 
   return (
-    <div className="space-y-6">
-      {/* Top Banner / Hero Controls */}
+    <div className="space-y-6 animate-in fade-in duration-150">
+      {/* Persistent 1-Click & Natural Expression Quick Log Component */}
+      <QuickTimeLogCard />
+
+      {/* Main Detailed Tracker & Forgotten Days Entry Controls */}
       <div className="bg-white rounded-2xl border border-slate-200/90 shadow-sm p-5 space-y-4">
         {/* Main Mode Toggle: Live Timer vs. Manuelle Zeiterfassung */}
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-3">
@@ -751,6 +758,9 @@ export const TimeTrackerView: React.FC = () => {
             const totalBillableHours = dayEntries.filter(e => e.isBillable).reduce((sum, e) => sum + e.durationHoursDecimal, 0);
             const totalAmount = dayEntries.reduce((sum, e) => sum + e.calculatedAmount, 0);
 
+            const periodKey = dateStr.substring(0, 7);
+            const isDayLocked = periodLocks.some(p => p.isLocked && p.periodKey === periodKey);
+
             const dateObj = new Date(dateStr);
             const formattedDate = dateObj.toLocaleDateString(t.appName.includes('Zeiterfassung') ? 'de-DE' : 'en-US', {
               weekday: 'short',
@@ -771,21 +781,29 @@ export const TimeTrackerView: React.FC = () => {
                       className="rounded text-slate-900 focus:ring-slate-900"
                     />
                     <span className="font-semibold text-slate-800">{formattedDate}</span>
+                    {isDayLocked && (
+                      <span className="bg-emerald-100 text-emerald-800 border border-emerald-200 text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1">
+                        <Lock className="w-3 h-3 text-emerald-700" />
+                        GoBD Festgeschrieben
+                      </span>
+                    )}
                   </div>
                   <div className="flex items-center gap-3 text-slate-600 font-medium">
-                    <button
-                      type="button"
-                      onClick={() => setDateAndOpenManual(dateStr)}
-                      className="bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 px-2 py-0.5 rounded text-[11px] font-semibold flex items-center gap-1 transition-colors shadow-2xs"
-                      title={`Zeit für den ${formattedDate} nachtragen`}
-                    >
-                      <Plus className="w-3 h-3 text-slate-900" />
-                      <span>{t.addTimeForDay}</span>
-                    </button>
+                    {!isDayLocked && (
+                      <button
+                        type="button"
+                        onClick={() => setDateAndOpenManual(dateStr)}
+                        className="bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 px-2 py-0.5 rounded text-[11px] font-semibold flex items-center gap-1 transition-colors shadow-2xs"
+                        title={`Zeit für den ${formattedDate} nachtragen`}
+                      >
+                        <Plus className="w-3 h-3 text-slate-900" />
+                        <span>{t.addTimeForDay}</span>
+                      </button>
+                    )}
                     <span>
                       {t.totalDay}: <strong className="text-slate-900">{formatMode === 'decimal' ? `${totalHours.toFixed(2)}h` : `${Math.floor(totalHours)}:${Math.round((totalHours % 1) * 60).toString().padStart(2, '0')}`}</strong>
                     </span>
-                    {totalBillableHours > 0 && (
+                    {canViewFinancials && totalBillableHours > 0 && (
                       <span className="text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200/60 font-semibold">
                         {totalAmount.toLocaleString('de-DE', { style: 'currency', currency: 'EUR' })}
                       </span>
@@ -859,7 +877,7 @@ export const TimeTrackerView: React.FC = () => {
                             <div className="font-bold text-sm text-slate-900">
                               {formatMode === 'decimal' ? `${entry.durationHoursDecimal.toFixed(2)}h` : `${Math.floor(entry.durationHoursDecimal)}:${Math.round((entry.durationHoursDecimal % 1) * 60).toString().padStart(2, '0')}`}
                             </div>
-                            {entry.isBillable && (
+                            {canViewFinancials && entry.isBillable && (
                               <div className="text-[11px] text-emerald-700 font-medium">
                                 {entry.calculatedAmount.toLocaleString('de-DE', { style: 'currency', currency: 'EUR' })}
                               </div>
@@ -881,30 +899,41 @@ export const TimeTrackerView: React.FC = () => {
 
                           {/* Actions */}
                           <div className="flex items-center gap-1">
-                            <button
-                              id={`btn-split-${entry.id}`}
-                              onClick={() => openSplitModal(entry)}
-                              className="p-1.5 hover:bg-slate-100 rounded text-slate-500 hover:text-slate-900"
-                              title={t.splitEntry}
-                            >
-                              <Split className="w-3.5 h-3.5" />
-                            </button>
-                            <button
-                              id={`btn-edit-${entry.id}`}
-                              onClick={() => setEditingEntry(entry)}
-                              className="p-1.5 hover:bg-slate-100 rounded text-slate-500 hover:text-slate-900"
-                              title={t.edit}
-                            >
-                              <Edit2 className="w-3.5 h-3.5" />
-                            </button>
-                            <button
-                              id={`btn-del-${entry.id}`}
-                              onClick={() => deleteTimeEntry(entry.id)}
-                              className="p-1.5 hover:bg-rose-50 rounded text-slate-400 hover:text-rose-600"
-                              title={t.delete}
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
+                            {isDayLocked ? (
+                              <span
+                                className="p-1.5 text-slate-400 cursor-not-allowed"
+                                title="GoBD-Gesperrt: Diese Periode ist festgeschrieben und kann nicht mehr geändert werden."
+                              >
+                                <Lock className="w-3.5 h-3.5 text-slate-400" />
+                              </span>
+                            ) : (
+                              <>
+                                <button
+                                  id={`btn-split-${entry.id}`}
+                                  onClick={() => openSplitModal(entry)}
+                                  className="p-1.5 hover:bg-slate-100 rounded text-slate-500 hover:text-slate-900"
+                                  title={t.splitEntry}
+                                >
+                                  <Split className="w-3.5 h-3.5" />
+                                </button>
+                                <button
+                                  id={`btn-edit-${entry.id}`}
+                                  onClick={() => setEditingEntry(entry)}
+                                  className="p-1.5 hover:bg-slate-100 rounded text-slate-500 hover:text-slate-900"
+                                  title={t.edit}
+                                >
+                                  <Edit2 className="w-3.5 h-3.5" />
+                                </button>
+                                <button
+                                  id={`btn-del-${entry.id}`}
+                                  onClick={() => deleteTimeEntry(entry.id)}
+                                  className="p-1.5 hover:bg-rose-50 rounded text-slate-400 hover:text-rose-600"
+                                  title={t.delete}
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </>
+                            )}
                           </div>
                         </div>
                       </div>
@@ -1023,7 +1052,7 @@ export const TimeTrackerView: React.FC = () => {
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-2">
+              <div className={canViewFinancials ? "grid grid-cols-2 gap-2" : "space-y-2"}>
                 <div>
                   <label className="font-medium text-slate-700 block mb-1">{t.durationMinutesLabel}</label>
                   <input
@@ -1033,15 +1062,17 @@ export const TimeTrackerView: React.FC = () => {
                     className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm font-bold"
                   />
                 </div>
-                <div>
-                  <label className="font-medium text-slate-700 block mb-1">{t.hourlyRateLabel}</label>
-                  <input
-                    type="number"
-                    value={editingEntry.hourlyBillingRate}
-                    onChange={e => setEditingEntry({ ...editingEntry, hourlyBillingRate: parseFloat(e.target.value) || 0 })}
-                    className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm"
-                  />
-                </div>
+                {canViewFinancials && (
+                  <div>
+                    <label className="font-medium text-slate-700 block mb-1">{t.hourlyRateLabel}</label>
+                    <input
+                      type="number"
+                      value={editingEntry.hourlyBillingRate}
+                      onChange={e => setEditingEntry({ ...editingEntry, hourlyBillingRate: parseFloat(e.target.value) || 0 })}
+                      className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm"
+                    />
+                  </div>
+                )}
               </div>
 
               {editingEntry.approvalStatus === 'APPROVED' && (

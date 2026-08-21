@@ -71,24 +71,24 @@ export const WorkingTimeView: React.FC = () => {
   return (
     <div className="space-y-6">
       {/* Header & Month/User Selector */}
-      <div className="bg-white rounded-2xl border border-slate-200/90 shadow-sm p-5 flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div className="bg-white rounded-2xl border border-slate-200/90 shadow-sm p-4 sm:p-5 flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
-            <Calendar className="w-5 h-5 text-emerald-600" />
-            {t.workingTimeTitle}
+            <Calendar className="w-5 h-5 text-emerald-600 shrink-0" />
+            <span>{t.workingTimeTitle}</span>
           </h2>
           <p className="text-xs text-slate-500 mt-1">
             {t.workingTimeSubtitle}
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 w-full md:w-auto">
           {isAdmin ? (
             <select
               id="select-worktime-user"
               value={selectedUserId}
               onChange={e => setSelectedUserId(e.target.value)}
-              className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800"
+              className="bg-slate-50 hover:bg-slate-100/80 focus:bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 w-full sm:w-auto focus:ring-2 focus:ring-emerald-500 focus:outline-hidden transition-colors"
             >
               {users.map(u => (
                 <option key={u.id} value={u.id}>
@@ -97,19 +97,21 @@ export const WorkingTimeView: React.FC = () => {
               ))}
             </select>
           ) : (
-            <div className="bg-slate-100 border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
-              <span>{currentUser?.name} ({currentUser?.weeklyTargetHours || 40} {t.hoursPerWeek})</span>
+            <div className="bg-slate-100 border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 flex items-center gap-2 w-full sm:w-auto">
+              <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0"></span>
+              <span className="truncate">{currentUser?.name} ({currentUser?.weeklyTargetHours || 40} {t.hoursPerWeek})</span>
             </div>
           )}
 
-          <input
-            id="input-worktime-month"
-            type="month"
-            value={selectedMonth}
-            onChange={e => setSelectedMonth(e.target.value)}
-            className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800"
-          />
+          <div className="relative flex items-center w-full sm:w-auto">
+            <input
+              id="input-worktime-month"
+              type="month"
+              value={selectedMonth}
+              onChange={e => setSelectedMonth(e.target.value)}
+              className="bg-slate-50 hover:bg-slate-100/80 focus:bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 w-full sm:w-auto min-w-[140px] focus:ring-2 focus:ring-emerald-500 focus:outline-hidden transition-colors"
+            />
+          </div>
         </div>
       </div>
 

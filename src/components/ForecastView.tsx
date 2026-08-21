@@ -170,22 +170,22 @@ export const ForecastView: React.FC = () => {
               </p>
             </div>
 
-            <div className="flex items-center gap-3">
+            <div className="flex flex-wrap sm:flex-nowrap items-center gap-2.5 w-full sm:w-auto">
               <input
                 id="input-forecast-month"
                 type="month"
                 value={selectedMonth}
                 onChange={e => setSelectedMonth(e.target.value)}
-                className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800"
+                className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 w-full sm:w-auto focus:bg-white focus:ring-2 focus:ring-emerald-500 focus:outline-hidden"
               />
 
               <button
                 id="btn-open-forecast-modal"
                 onClick={() => setShowNewForecastModal(true)}
-                className="bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold px-3.5 py-2 rounded-xl flex items-center gap-1.5 shadow-xs transition-colors"
+                className="bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold px-3.5 py-2 rounded-xl flex items-center justify-center gap-1.5 shadow-xs transition-colors w-full sm:w-auto shrink-0"
               >
                 <Plus className="w-4 h-4" />
-                {t.saveForecast}
+                <span>{t.saveForecast}</span>
               </button>
             </div>
           </div>

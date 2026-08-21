@@ -314,14 +314,75 @@ export interface AuditLogChange {
 export interface AuditLogEntry {
   id: string;
   orgId: string;
-  entityType: 'TIME_ENTRY' | 'WORKING_TIME' | 'FORECAST' | 'PROJECT' | 'USER' | 'RATE' | 'ORGANIZATION' | 'CLIENT' | 'TASK' | 'JOB_ROLE' | 'PARTNER';
+  entityType: 'TIME_ENTRY' | 'WORKING_TIME' | 'FORECAST' | 'PROJECT' | 'USER' | 'RATE' | 'ORGANIZATION' | 'CLIENT' | 'TASK' | 'JOB_ROLE' | 'PARTNER' | 'PERIOD_LOCK';
   entityId: string;
-  action: 'CREATE' | 'UPDATE' | 'DELETE' | 'APPROVE' | 'REJECT' | 'CORRECT_AFTER_APPROVAL';
+  action: 'CREATE' | 'UPDATE' | 'DELETE' | 'APPROVE' | 'REJECT' | 'CORRECT_AFTER_APPROVAL' | 'LOCK_PERIOD' | 'UNLOCK_PERIOD';
   userId: string;
   userName: string;
   timestamp: string;
   changes: AuditLogChange[];
   reason?: string;
+  hash?: string; // Cryptographic SHA-256 hash
+  previousHash?: string; // Blockchain-style integrity chain
+}
+
+export interface PeriodLock {
+  id: string;
+  orgId: string;
+  periodKey: string; // YYYY-MM
+  status: 'LOCKED' | 'OPEN' | 'ARCHIVED';
+  reason?: string;
+  lockedByUserId: string;
+  lockedByUserName: string;
+  lockedAt: string;
+  unlockedAt?: string;
+  unlockedByUserId?: string;
+  unlockedByUserName?: string;
+  unlockReason?: string;
+  digitalSignatureHash: string; // SHA-256 digest of entries & totals at lock time
+  entriesCount: number;
+  totalHours: number;
+  totalBillingAmount: number;
+  totalInternalCost: number;
+  complianceStatus: 'COMPLIANT' | 'WARNING' | 'NON_COMPLIANT';
+}
+
+export interface AuditHashVerificationReport {
+  isChainValid: boolean;
+  totalEntriesChecked: number;
+  tamperedEntryIds: string[];
+  headHash: string;
+  genesisTimestamp: string;
+  verifiedAt: string;
+}
+
+export interface GoBDComplianceCertificate {
+  certificateId: string;
+  organizationId: string;
+  organizationName: string;
+  periodKey: string;
+  periodLabel: string;
+  issueTimestamp: string;
+  auditedByUserName: string;
+  auditedByUserId: string;
+  digitalSignatureSha256: string;
+  metrics: {
+    totalBookings: number;
+    totalWorkingDays: number;
+    totalBillableHours: number;
+    totalNonBillableHours: number;
+    totalHours: number;
+    totalRevenue: number;
+    totalCost: number;
+    grossMargin: number;
+    grossMarginPercent: number;
+  };
+  arbzgCompliance: {
+    maxDailyHoursViolationsCount: number;
+    breakTimeViolationsCount: number;
+    isArbzgCompliant: boolean;
+  };
+  hashChainHead: string;
 }
 
 export type ForecastChangeReason =

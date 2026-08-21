@@ -4,6 +4,15 @@ import path from 'path';
 import { createServer as createViteServer } from 'vite';
 import { storage } from './server/storage.js';
 import { GERMAN_STATES, getGermanHolidays, getWorkingDaysInRange, resolveUserHolidayState } from './server/holidays.js';
+import { generateJwtToken, verifyJwtToken } from './server/authService.js';
+import {
+  CreateTimeEntrySchema,
+  UpdateTimeEntrySchema,
+  CreateWorkingTimeSchema,
+  CreateForecastSchema,
+  PeriodLockSchema
+} from './server/validationSchemas.js';
+import { checkFirestoreHealth, syncStorageToFirestore } from './server/firestoreSync.js';
 
 async function startServer() {
   const app = express();
@@ -17,6 +26,17 @@ async function startServer() {
   let currentUserId: string = 'u-1';
 
   const getActorId = (req: Request): string => {
+    // 1. Check JWT Bearer Token
+    const authHeader = req.headers['authorization'];
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      const token = authHeader.slice(7).trim();
+      const verified = verifyJwtToken(token);
+      if (verified.valid && verified.payload) {
+        return verified.payload.userId;
+      }
+    }
+
+    // 2. Fallback to header or session
     const headerUserId = req.headers['x-user-id'] as string;
     return headerUserId || currentUserId || 'u-1';
   };
@@ -45,30 +65,90 @@ async function startServer() {
   // INTERNAL APPLICATION API ROUTES
   // -------------------------------------------------------------
 
-  // Health
+  // Health & Compliance Status
   app.get('/api/health', (req, res) => {
     res.json({
       status: 'ok',
       service: 'Insight Arcs Zeiterfassung & Arbeitszeit API',
       euHostingLocation: 'europe-west3 (Frankfurt, Germany)',
-      auditRetention: '10 years compliant',
+      database: 'Firebase Firestore (Cloud Storage)',
+      auditRetention: '10 years GoBD & ArbZG compliant',
+      securityEngine: 'JWT HMAC-SHA256 & SHA-256 Audit Blockchain',
       timestamp: new Date().toISOString()
     });
   });
 
+  // Cloud Database (Firestore) Status & Migration Endpoints
+  app.get('/api/database/status', async (req, res) => {
+    const status = await checkFirestoreHealth();
+    res.json({
+      ...status,
+      localEntities: {
+        organizations: storage.getOrganizations().length,
+        users: storage.getUsers(true).length,
+        projects: storage.getProjects().length,
+        tasks: storage.getTasks().length,
+        timeEntries: storage.getTimeEntries({ allOrgs: true }).total,
+        workingTimes: storage.getWorkingTimeEntries().length,
+        auditLogs: storage.getAuditLogs().length,
+        forecasts: storage.getForecasts().length,
+        periodLocks: storage.getPeriodLocks().length
+      }
+    });
+  });
+
+  app.post('/api/database/migrate-to-firestore', async (req, res) => {
+    try {
+      const data = {
+        organizations: storage.getOrganizations(),
+        users: storage.getUsers(true),
+        projects: storage.getProjects(),
+        tasks: storage.getTasks(),
+        timeEntries: storage.getTimeEntries({ allOrgs: true }).data,
+        workingTimeEntries: storage.getWorkingTimeEntries(),
+        auditLogs: storage.getAuditLogs(),
+        forecasts: storage.getForecasts(),
+        periodLocks: storage.getPeriodLocks(),
+        jobRoles: storage.getJobRoles(),
+        clients: storage.getClients(),
+        partners: storage.getPartners()
+      };
+
+      const result = await syncStorageToFirestore(data);
+      if (!result.success) {
+        return res.status(500).json({ success: false, error: result.error });
+      }
+
+      res.json({
+        success: true,
+        message: 'Datenbank-Migration zu Google Cloud Firestore erfolgreich abgeschlossen.',
+        syncedCounts: result.syncedCounts,
+        syncedAt: new Date().toISOString()
+      });
+    } catch (err: any) {
+      res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
   // Auth / Session Login, Logout, Switching & Organization Management
   app.get('/api/auth/me', (req, res) => {
-    const headerUserId = req.headers['x-user-id'] as string;
-    const targetId = headerUserId || currentUserId;
+    const targetId = getActorId(req);
     const allUsers = storage.getUsers(true);
     const user = targetId ? (allUsers.find(u => u.id === targetId) || null) : null;
+    const org = user ? storage.getOrganization() : null;
+
+    let tokenData = null;
+    if (user && org) {
+      tokenData = generateJwtToken(user, org.id, org.name);
+    }
     
     res.json({
       user,
-      organization: user ? storage.getOrganization() : null,
+      organization: org,
       organizations: storage.getOrganizations(),
       activeOrgId: storage.getActiveOrgId(),
-      roles: storage.getJobRoles()
+      roles: storage.getJobRoles(),
+      token: tokenData?.token
     });
   });
 
@@ -106,12 +186,23 @@ async function startServer() {
       }
     }
 
+    const org = storage.getOrganization();
+    const tokenData = generateJwtToken(user, org.id, org.name);
+
     res.json({
       success: true,
       user,
-      organization: storage.getOrganization(),
-      activeOrgId: storage.getActiveOrgId()
+      organization: org,
+      activeOrgId: storage.getActiveOrgId(),
+      token: tokenData.token,
+      expiresAt: tokenData.payload.exp
     });
+  });
+
+  app.post('/api/auth/verify-token', (req, res) => {
+    const { token } = req.body;
+    const result = verifyJwtToken(token);
+    res.json(result);
   });
 
   app.post('/api/auth/logout', (req, res) => {
@@ -420,23 +511,51 @@ async function startServer() {
 
   app.post('/api/time-entries', (req, res) => {
     const actorId = getActorId(req);
-    const entry = storage.createTimeEntry(req.body, actorId);
-    res.status(201).json(entry);
+    const parseResult = CreateTimeEntrySchema.safeParse(req.body);
+    if (!parseResult.success) {
+      return res.status(400).json({
+        error: 'Validierungsfehler bei Zeiterfassung',
+        details: parseResult.error.issues.map(i => i.message).join(', ')
+      });
+    }
+
+    try {
+      const entry = storage.createTimeEntry(req.body, actorId);
+      res.status(201).json(entry);
+    } catch (err: any) {
+      res.status(400).json({ error: err.message || 'Fehler beim Erstellen der Zeiterfassung' });
+    }
   });
 
   app.put('/api/time-entries/:id', (req, res) => {
     const actorId = getActorId(req);
-    const { reason, ...updates } = req.body;
-    const entry = storage.updateTimeEntry(req.params.id, updates, actorId, reason);
-    if (!entry) return res.status(404).json({ error: 'Time entry not found' });
-    res.json(entry);
+    const parseResult = UpdateTimeEntrySchema.safeParse(req.body);
+    if (!parseResult.success) {
+      return res.status(400).json({
+        error: 'Validierungsfehler bei Zeiteintrags-Korrektur',
+        details: parseResult.error.issues.map(i => i.message).join(', ')
+      });
+    }
+
+    try {
+      const { reason, ...updates } = req.body;
+      const entry = storage.updateTimeEntry(req.params.id, updates, actorId, reason);
+      if (!entry) return res.status(404).json({ error: 'Time entry not found' });
+      res.json(entry);
+    } catch (err: any) {
+      res.status(400).json({ error: err.message || 'Fehler beim Aktualisieren der Zeiterfassung' });
+    }
   });
 
   app.delete('/api/time-entries/:id', (req, res) => {
     const actorId = getActorId(req);
-    const ok = storage.deleteTimeEntry(req.params.id, actorId);
-    if (!ok) return res.status(404).json({ error: 'Time entry not found' });
-    res.json({ success: true });
+    try {
+      const ok = storage.deleteTimeEntry(req.params.id, actorId);
+      if (!ok) return res.status(404).json({ error: 'Time entry not found' });
+      res.json({ success: true });
+    } catch (err: any) {
+      res.status(400).json({ error: err.message || 'Fehler beim Löschen des Zeiteintrags' });
+    }
   });
 
   app.post('/api/time-entries/split', (req, res) => {
@@ -466,6 +585,54 @@ async function startServer() {
     res.json(storage.getAuditLogs(actorId));
   });
 
+  // GoBD Revisionssicherheit, Period Locking & Hash-Chain Verifikation
+  app.get('/api/gobd/period-locks', (req, res) => {
+    res.json(storage.getPeriodLocks());
+  });
+
+  app.post('/api/gobd/lock-period', (req, res) => {
+    const actorId = getActorId(req);
+    const { periodKey, reason } = req.body;
+    if (!periodKey || !/^\d{4}-\d{2}$/.test(periodKey)) {
+      return res.status(400).json({ error: 'Ungültiges Periodenformat. Erwartet wird YYYY-MM.' });
+    }
+    try {
+      const lock = storage.lockPeriod({ periodKey, reason, actorId });
+      res.json({ success: true, lock });
+    } catch (err: any) {
+      res.status(400).json({ error: err.message || 'Fehler beim Sperren der Periode' });
+    }
+  });
+
+  app.post('/api/gobd/unlock-period', (req, res) => {
+    const actorId = getActorId(req);
+    const { periodKey, reason } = req.body;
+    if (!periodKey || !reason) {
+      return res.status(400).json({ error: 'Periode und gesetzlich vorgeschriebener Entsperr-Grund sind erforderlich.' });
+    }
+    try {
+      const lock = storage.unlockPeriod({ periodKey, reason, actorId });
+      res.json({ success: true, lock });
+    } catch (err: any) {
+      res.status(400).json({ error: err.message || 'Fehler beim Entsperren der Periode' });
+    }
+  });
+
+  app.get('/api/gobd/verify-hash-chain', (req, res) => {
+    const report = storage.verifyAuditHashChain();
+    res.json(report);
+  });
+
+  app.get('/api/gobd/certificate/:periodKey', (req, res) => {
+    const actorId = getActorId(req);
+    const { periodKey } = req.params;
+    if (!periodKey || !/^\d{4}-\d{2}$/.test(periodKey)) {
+      return res.status(400).json({ error: 'Ungültiges Periodenformat (YYYY-MM erwartet).' });
+    }
+    const cert = storage.generateGoBDCertificate(periodKey, actorId);
+    res.json(cert);
+  });
+
   // Working Time (Section 20)
   app.get('/api/working-time', (req, res) => {
     const actorId = getActorId(req);
@@ -475,8 +642,20 @@ async function startServer() {
 
   app.post('/api/working-time', (req, res) => {
     const actorId = getActorId(req);
-    const entry = storage.createOrUpdateWorkingTime(req.body, actorId);
-    res.json(entry);
+    const parseResult = CreateWorkingTimeSchema.safeParse(req.body);
+    if (!parseResult.success) {
+      return res.status(400).json({
+        error: 'Validierungsfehler bei Arbeitszeit',
+        details: parseResult.error.issues.map(i => i.message).join(', ')
+      });
+    }
+
+    try {
+      const entry = storage.createOrUpdateWorkingTime(req.body, actorId);
+      res.json(entry);
+    } catch (err: any) {
+      res.status(400).json({ error: err.message || 'Fehler beim Speichern der Arbeitszeit' });
+    }
   });
 
   app.get('/api/working-time/summary', (req, res) => {
@@ -841,6 +1020,34 @@ async function startServer() {
 
   app.listen(PORT, '0.0.0.0', () => {
     console.log(`Insight Arcs Zeiterfassung Server running on http://0.0.0.0:${PORT}`);
+    
+    // Asynchronously perform initial background sync to Firestore
+    setTimeout(async () => {
+      try {
+        console.log('[Firestore] Initiating initial cloud database sync...');
+        const result = await syncStorageToFirestore({
+          organizations: storage.getOrganizations(),
+          users: storage.getUsers(true),
+          projects: storage.getProjects(),
+          tasks: storage.getTasks(),
+          timeEntries: storage.getTimeEntries({ allOrgs: true }).data,
+          workingTimeEntries: storage.getWorkingTimeEntries(),
+          auditLogs: storage.getAuditLogs(),
+          forecasts: storage.getForecasts(),
+          periodLocks: storage.getPeriodLocks(),
+          jobRoles: storage.getJobRoles(),
+          clients: storage.getClients(),
+          partners: storage.getPartners()
+        });
+        if (result.success) {
+          console.log('[Firestore] Initial cloud database sync complete:', result.syncedCounts);
+        } else {
+          console.warn('[Firestore] Initial cloud database sync warning:', result.error);
+        }
+      } catch (err) {
+        console.warn('[Firestore] Background cloud sync skipped:', err);
+      }
+    }, 1500);
   });
 }
 
