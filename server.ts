@@ -330,10 +330,11 @@ async function startServer() {
   app.post('/api/users/invite', (req, res) => {
     const actorId = getActorId(req);
     const newUser = storage.addUser(req.body, actorId);
+    const appUrl = process.env.APP_URL || 'https://timetracking.insightarcs.com';
     res.status(201).json({
       success: true,
       user: newUser,
-      invitationLink: `https://app.insightarcs.de/join?token=${newUser.invitationToken}`,
+      invitationLink: `${appUrl}/join?token=${newUser.invitationToken}`,
       message: `Einladungs-E-Mail wurde an ${newUser.email} simuliert versandt.`
     });
   });
