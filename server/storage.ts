@@ -1,4 +1,3 @@
-import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
 import {
@@ -32,6 +31,8 @@ import {
   GoBDComplianceCertificate
 } from '../src/types.js';
 import { getGermanHolidays, getWorkingDaysInRange, GERMAN_STATES, HolidayInfo } from './holidays.js';
+import * as prismaStore from './prismaStore.js';
+import type { AppStateSnapshot } from './prismaStore.js';
 
 export class StorageService {
   private organizations: Organization[] = [];
@@ -49,7 +50,12 @@ export class StorageService {
   private apiKeys: ApiKey[] = [];
   private periodLocks: PeriodLock[] = [];
   private thresholdPercent: number = 20;
+  // Legacy JSON storage path, kept only for reference / one-off migration tooling.
   private storageFilePath: string = path.join(process.cwd(), 'data', 'app_storage.json');
+  // Serialized write-through persistence to PostgreSQL. Every saveToFile() call
+  // enqueues a full-state save onto this chain so writes are applied in order and
+  // an error in one save does not break the next.
+  private persistChain: Promise<void> = Promise.resolve();
 
   constructor() {
     this.organizations = [
@@ -109,64 +115,108 @@ export class StorageService {
 
     this.activeOrgId = 'org-insight-arcs-prod';
     this.seedInitialData();
-    const loaded = this.loadFromFile();
-    if (!loaded) {
-      this.saveToFile();
-    }
+    // Persistence is now loaded asynchronously from PostgreSQL via
+    // initFromDatabase(), which the server awaits before accepting requests.
+    // The constructor only prepares the in-memory seed state.
   }
 
+  /**
+   * Builds a deep-cloned snapshot of the entire in-memory state. The clone is
+   * important because persistence is asynchronous: cloning at enqueue time
+   * ensures the persisted data matches the state at the moment saveToFile() was
+   * called, even if the in-memory arrays mutate before the async save runs.
+   */
+  private buildSnapshot(): AppStateSnapshot {
+    const raw: AppStateSnapshot = {
+      organizations: this.organizations,
+      activeOrgId: this.activeOrgId,
+      users: this.users,
+      jobRoles: this.jobRoles,
+      clients: this.clients,
+      partners: this.partners,
+      projects: this.projects,
+      tasks: this.tasks,
+      timeEntries: this.timeEntries,
+      workingTimeEntries: this.workingTimeEntries,
+      auditLogs: this.auditLogs,
+      forecasts: this.forecasts,
+      apiKeys: this.apiKeys,
+      periodLocks: this.periodLocks,
+      thresholdPercent: this.thresholdPercent,
+    };
+    return JSON.parse(JSON.stringify(raw)) as AppStateSnapshot;
+  }
+
+  /**
+   * Write-through persistence. Kept synchronous (returns void) so none of the
+   * ~90 existing call sites need to change. A deep-cloned snapshot of the
+   * current state is enqueued onto persistChain and written to PostgreSQL in
+   * order. The method name is retained for backward compatibility with existing
+   * call sites and the /api/database/save endpoint.
+   */
   public saveToFile(): void {
-    try {
-      const dir = path.join(process.cwd(), 'data');
-      if (!fs.existsSync(dir)) {
-        fs.mkdirSync(dir, { recursive: true });
-      }
-      const state = {
-        organizations: this.organizations,
-        activeOrgId: this.activeOrgId,
-        users: this.users,
-        jobRoles: this.jobRoles,
-        clients: this.clients,
-        partners: this.partners,
-        projects: this.projects,
-        tasks: this.tasks,
-        timeEntries: this.timeEntries,
-        workingTimeEntries: this.workingTimeEntries,
-        auditLogs: this.auditLogs,
-        forecasts: this.forecasts,
-        apiKeys: this.apiKeys,
-        periodLocks: this.periodLocks,
-        thresholdPercent: this.thresholdPercent,
-        savedAt: new Date().toISOString()
-      };
-      fs.writeFileSync(this.storageFilePath, JSON.stringify(state, null, 2), 'utf-8');
-    } catch (err) {
-      console.error('Failed to save persistent storage to disk:', err);
-    }
+    const snapshot = this.buildSnapshot();
+    this.persistChain = this.persistChain
+      .then(() => prismaStore.saveAll(snapshot))
+      .catch((err) => {
+        console.error('Failed to persist state to PostgreSQL:', err);
+      });
   }
 
-  public loadFromFile(): boolean {
-    try {
-      if (fs.existsSync(this.storageFilePath)) {
-        const raw = fs.readFileSync(this.storageFilePath, 'utf-8');
-        const data = JSON.parse(raw);
-        if (data && Array.isArray(data.organizations) && data.organizations.length > 0) {
-          this.organizations = data.organizations;
-          if (data.activeOrgId) this.activeOrgId = data.activeOrgId;
-          if (Array.isArray(data.users)) this.users = data.users;
-          if (Array.isArray(data.jobRoles)) this.jobRoles = data.jobRoles;
-          if (Array.isArray(data.clients)) this.clients = data.clients;
-          if (Array.isArray(data.partners)) this.partners = data.partners;
-          if (Array.isArray(data.projects)) this.projects = data.projects;
-          if (Array.isArray(data.tasks)) this.tasks = data.tasks;
-          if (Array.isArray(data.timeEntries)) this.timeEntries = data.timeEntries;
-          if (Array.isArray(data.workingTimeEntries)) this.workingTimeEntries = data.workingTimeEntries;
-          if (Array.isArray(data.auditLogs)) this.auditLogs = data.auditLogs;
-          if (Array.isArray(data.forecasts)) this.forecasts = data.forecasts;
-          if (Array.isArray(data.apiKeys)) this.apiKeys = data.apiKeys;
-          if (Array.isArray(data.periodLocks)) this.periodLocks = data.periodLocks;
-          if (typeof data.thresholdPercent === 'number') this.thresholdPercent = data.thresholdPercent;
+  /**
+   * Waits for all pending PostgreSQL writes to complete. Used for graceful
+   * shutdown so no in-flight persistence is lost when the process exits.
+   */
+  public async flush(): Promise<void> {
+    await this.persistChain;
+  }
 
+  /**
+   * Loads the entire application state from PostgreSQL at startup.
+   * - If the database already contains data, it replaces the seeded in-memory
+   *   arrays, runs the automigration / self-healing routine, and persists the
+   *   result back.
+   * - If the database is empty, it persists the freshly seeded state so the
+   *   tables get populated on first run.
+   * Returns true when existing data was loaded, false when the DB was empty.
+   */
+  public async initFromDatabase(): Promise<boolean> {
+    const data = await prismaStore.loadAll();
+    if (data) {
+      this.organizations = data.organizations;
+      if (data.activeOrgId) this.activeOrgId = data.activeOrgId;
+      if (Array.isArray(data.users)) this.users = data.users;
+      if (Array.isArray(data.jobRoles)) this.jobRoles = data.jobRoles;
+      if (Array.isArray(data.clients)) this.clients = data.clients;
+      if (Array.isArray(data.partners)) this.partners = data.partners;
+      if (Array.isArray(data.projects)) this.projects = data.projects;
+      if (Array.isArray(data.tasks)) this.tasks = data.tasks;
+      if (Array.isArray(data.timeEntries)) this.timeEntries = data.timeEntries;
+      if (Array.isArray(data.workingTimeEntries)) this.workingTimeEntries = data.workingTimeEntries;
+      if (Array.isArray(data.auditLogs)) this.auditLogs = data.auditLogs;
+      if (Array.isArray(data.forecasts)) this.forecasts = data.forecasts;
+      if (Array.isArray(data.apiKeys)) this.apiKeys = data.apiKeys;
+      if (Array.isArray(data.periodLocks)) this.periodLocks = data.periodLocks;
+      if (typeof data.thresholdPercent === 'number') this.thresholdPercent = data.thresholdPercent;
+
+      this.applyAutomigrations();
+      this.saveToFile();
+      await this.flush();
+      return true;
+    }
+
+    // Empty database: persist the seeded initial state.
+    this.saveToFile();
+    await this.flush();
+    return false;
+  }
+
+  /**
+   * Automigration / self-healing routine applied to persisted state on load.
+   * This logic is unchanged from the original loadFromFile() implementation and
+   * MUST remain behaviorally identical.
+   */
+  private applyAutomigrations(): void {
           // --- OPTION A AUTOMIGRATION ---
           // 1. Rename org-insight-arcs-01 to Testmandant
           const testOrg = this.organizations.find(o => o.id === 'org-insight-arcs-01');
@@ -320,14 +370,6 @@ export class StorageService {
             seenTimeEntryIds.add(te.id);
           });
 
-          this.saveToFile();
-          return true;
-        }
-      }
-    } catch (err) {
-      console.error('Failed to load persistent storage from disk:', err);
-    }
-    return false;
   }
 
   public exportDatabase() {
