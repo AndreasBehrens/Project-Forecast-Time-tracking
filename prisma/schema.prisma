@@ -1,0 +1,182 @@
+// Prisma schema for Project-Forecast-Time-tracking
+// Persistence migration: local JSON storage -> PostgreSQL
+//
+// Design note:
+// The application keeps its rich domain objects (see src/types.ts) as the runtime
+// source of truth inside StorageService. To migrate persistence to PostgreSQL
+// WITHOUT rewriting ~4800 lines of business logic AND to guarantee lossless
+// round-tripping (which the GoBD SHA-256 audit hash chain depends on), every
+// entity is stored in its own table with the full domain object in a JSONB
+// `data` column plus indexed scalar columns (id, orgId) for querying.
+// Singletons (activeOrgId, thresholdPercent) live in the AppState key/value table.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Organization {
+  id        String   @id
+  data      Json
+  updatedAt DateTime @updatedAt
+
+  @@map("organizations")
+}
+
+model User {
+  id        String   @id
+  orgId     String?
+  email     String?
+  data      Json
+  updatedAt DateTime @updatedAt
+
+  @@index([orgId])
+  @@index([email])
+  @@map("users")
+}
+
+model EmployeeJobRole {
+  id        String   @id
+  orgId     String?
+  data      Json
+  updatedAt DateTime @updatedAt
+
+  @@index([orgId])
+  @@map("job_roles")
+}
+
+model Client {
+  id        String   @id
+  orgId     String?
+  data      Json
+  updatedAt DateTime @updatedAt
+
+  @@index([orgId])
+  @@map("clients")
+}
+
+model Partner {
+  id        String   @id
+  orgId     String?
+  data      Json
+  updatedAt DateTime @updatedAt
+
+  @@index([orgId])
+  @@map("partners")
+}
+
+model Project {
+  id        String   @id
+  orgId     String?
+  clientId  String?
+  data      Json
+  updatedAt DateTime @updatedAt
+
+  @@index([orgId])
+  @@index([clientId])
+  @@map("projects")
+}
+
+model Task {
+  id        String   @id
+  projectId String?
+  data      Json
+  updatedAt DateTime @updatedAt
+
+  @@index([projectId])
+  @@map("tasks")
+}
+
+model TimeEntry {
+  id        String   @id
+  orgId     String?
+  userId    String?
+  projectId String?
+  date      String?
+  data      Json
+  updatedAt DateTime @updatedAt
+
+  @@index([orgId])
+  @@index([userId])
+  @@index([projectId])
+  @@index([date])
+  @@map("time_entries")
+}
+
+model WorkingTimeEntry {
+  id        String   @id
+  orgId     String?
+  userId    String?
+  date      String?
+  data      Json
+  updatedAt DateTime @updatedAt
+
+  @@index([orgId])
+  @@index([userId])
+  @@index([date])
+  @@map("working_time_entries")
+}
+
+model ForecastEntry {
+  id        String   @id
+  orgId     String?
+  projectId String?
+  userId    String?
+  month     String?
+  data      Json
+  updatedAt DateTime @updatedAt
+
+  @@index([orgId])
+  @@index([projectId])
+  @@index([userId])
+  @@index([month])
+  @@map("forecast_entries")
+}
+
+model AuditLogEntry {
+  id        String   @id
+  orgId     String?
+  entityId  String?
+  timestamp String?
+  data      Json
+  updatedAt DateTime @updatedAt
+
+  @@index([orgId])
+  @@index([entityId])
+  @@map("audit_logs")
+}
+
+model PeriodLock {
+  id        String   @id
+  orgId     String?
+  periodKey String?
+  data      Json
+  updatedAt DateTime @updatedAt
+
+  @@index([orgId])
+  @@index([periodKey])
+  @@map("period_locks")
+}
+
+model ApiKey {
+  id        String   @id
+  orgId     String?
+  data      Json
+  updatedAt DateTime @updatedAt
+
+  @@index([orgId])
+  @@map("api_keys")
+}
+
+// Key/value store for runtime singletons (activeOrgId, thresholdPercent, ...)
+model AppState {
+  key       String   @id
+  value     Json
+  updatedAt DateTime @updatedAt
+
+  @@map("app_state")
+}
