@@ -288,12 +288,17 @@ export interface TimeEntry {
   updatedAt: string;
 }
 
+// Art des Tageseintrags: Reguläre Arbeitszeit oder Abwesenheitsarten
+export type DayType = 'REGULAR' | 'VACATION' | 'SICK' | 'SPECIAL_LEAVE' | 'PARENTAL_LEAVE';
+
 export interface WorkingTimeEntry {
   id: string;
   orgId: string;
   userId: string;
   userName?: string;
   date: string; // YYYY-MM-DD
+  dayType?: DayType; // Standard: 'REGULAR'
+  halfDay?: boolean; // Nur bei Abwesenheiten: true = halber Tag (Zeitfelder sichtbar)
   startTime: string; // HH:mm
   endTime: string; // HH:mm
   breakMinutes: number;

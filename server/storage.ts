@@ -13,6 +13,7 @@ import {
   Task,
   TimeEntry,
   WorkingTimeEntry,
+  DayType,
   AuditLogEntry,
   ForecastEntry,
   ApiKey,
@@ -368,6 +369,16 @@ export class StorageService {
               te.id = `te-${Date.now()}-${Math.random().toString(36).substring(2, 9)}-${i}`;
             }
             seenTimeEntryIds.add(te.id);
+          });
+
+          // 9. Backfill dayType='REGULAR' for existing working time entries (Präzisierung Arbeitszeiterfassung)
+          this.workingTimeEntries.forEach(w => {
+            if (!w.dayType) {
+              w.dayType = 'REGULAR';
+            }
+            if (w.halfDay === undefined) {
+              w.halfDay = false;
+            }
           });
 
   }
@@ -3067,26 +3078,58 @@ export class StorageService {
     }
 
     const user = this.users.find(u => u.id === (entryData.userId || actorId));
-    const grossMinutes = (entryData.startTime && entryData.endTime)
-      ? this.calculateMinutes(entryData.startTime, entryData.endTime)
-      : 480;
-    const breakMin = entryData.breakMinutes || 0;
-    const netMinutes = Math.max(0, grossMinutes - breakMin);
-    const netHours = Math.round((netMinutes / 60) * 100) / 100;
+    const dayType: DayType = entryData.dayType || 'REGULAR';
+    const halfDay = entryData.halfDay === true;
+
+    // Bei Ganztags-Abwesenheiten (Urlaub, Krankheit, Sonderurlaub, Elternzeit) werden keine
+    // Arbeitszeiten erfasst. Nur bei regulärer Arbeitszeit oder halbtägiger Abwesenheit
+    // (der gearbeitete Teil) werden Kommen/Gehen berechnet.
+    const isFullDayAbsence = dayType !== 'REGULAR' && !halfDay;
+    const hasTimes = !!(entryData.startTime && entryData.endTime);
+
+    let grossMinutes = 0;
+    let breakMin = 0;
+    let netMinutes = 0;
+    let netHours = 0;
+
+    if (!isFullDayAbsence && hasTimes) {
+      grossMinutes = this.calculateMinutes(entryData.startTime!, entryData.endTime!);
+      breakMin = entryData.breakMinutes || 0;
+      netMinutes = Math.max(0, grossMinutes - breakMin);
+      netHours = Math.round((netMinutes / 60) * 100) / 100;
+    }
 
     const existingIdx = this.workingTimeEntries.findIndex(
       w => w.userId === (user?.id || actorId) && w.date === entryData.date
     );
 
     if (existingIdx !== -1) {
+      const previous = this.workingTimeEntries[existingIdx];
       this.workingTimeEntries[existingIdx] = {
-        ...this.workingTimeEntries[existingIdx],
+        ...previous,
         ...entryData,
+        dayType,
+        halfDay,
+        startTime: isFullDayAbsence ? '' : (entryData.startTime || previous.startTime || ''),
+        endTime: isFullDayAbsence ? '' : (entryData.endTime || previous.endTime || ''),
+        breakMinutes: breakMin,
         totalGrossMinutes: grossMinutes,
         totalNetMinutes: netMinutes,
         totalNetHoursDecimal: netHours,
         updatedAt: new Date().toISOString()
       };
+      // GoBD-Nachvollziehbarkeit: Korrektur eines bestehenden Tageseintrags protokollieren
+      this.logAudit({
+        entityType: 'WORKING_TIME',
+        entityId: previous.id,
+        action: 'UPDATE',
+        userId: actorId,
+        userName: this.users.find(u => u.id === actorId)?.name || 'System',
+        changes: [
+          { field: 'dayType', oldValue: previous.dayType || 'REGULAR', newValue: dayType },
+          { field: 'date', oldValue: previous.date, newValue: entryData.date }
+        ]
+      });
       this.saveToFile();
       return this.workingTimeEntries[existingIdx];
     } else {
@@ -3096,8 +3139,10 @@ export class StorageService {
         userId: user?.id || actorId,
         userName: user?.name,
         date: entryData.date || new Date().toISOString().split('T')[0],
-        startTime: entryData.startTime || '09:00',
-        endTime: entryData.endTime || '17:00',
+        dayType,
+        halfDay,
+        startTime: isFullDayAbsence ? '' : (entryData.startTime || '09:00'),
+        endTime: isFullDayAbsence ? '' : (entryData.endTime || '17:00'),
         breakMinutes: breakMin,
         totalGrossMinutes: grossMinutes,
         totalNetMinutes: netMinutes,
@@ -3107,6 +3152,18 @@ export class StorageService {
         updatedAt: new Date().toISOString()
       };
       this.workingTimeEntries.push(entry);
+      // GoBD-Nachvollziehbarkeit: Neuen Tageseintrag protokollieren
+      this.logAudit({
+        entityType: 'WORKING_TIME',
+        entityId: entry.id,
+        action: 'CREATE',
+        userId: actorId,
+        userName: this.users.find(u => u.id === actorId)?.name || 'System',
+        changes: [
+          { field: 'dayType', oldValue: null, newValue: dayType },
+          { field: 'date', oldValue: null, newValue: entry.date }
+        ]
+      });
       this.saveToFile();
       return entry;
     }
@@ -3121,7 +3178,6 @@ export class StorageService {
     const workingEntries = this.workingTimeEntries.filter(w => w.userId === userId && w.date >= from && w.date <= to);
     const projectEntries = this.timeEntries.filter(t => t.userId === userId && t.date >= from && t.date <= to);
 
-    const actualWorkingHours = workingEntries.reduce((sum, w) => sum + w.totalNetHoursDecimal, 0);
     const actualProjectHours = projectEntries.reduce((sum, t) => sum + t.durationHoursDecimal, 0);
 
     // Calculate Target hours for workdays in month, accounting for configured state holidays (e.g. Berlin Frauentag 8. März)
@@ -3133,11 +3189,56 @@ export class StorageService {
     const endDate = `${month}-${String(daysInMonth).padStart(2, '0')}`;
     const userWorkDays = user?.workDays || [1, 2, 3, 4, 5];
     const stateCode = this.organization.stateLocation || 'DE-BE';
+    const dailyTargetHours = user?.dailyTargetHours || 8.0;
 
     const workdaysData = getWorkingDaysInRange(startDate, endDate, stateCode, userWorkDays);
     const targetWorkDays = workdaysData.totalWorkdays;
 
-    const targetHoursTotal = targetWorkDays * (user?.dailyTargetHours || 8.0);
+    // --- Arbeitszeit-Art-Logik (Anrechnung von Abwesenheiten & Neutralisierung bei Elternzeit) ---
+    // Set der regulären Arbeitstage (nur Werktage, keine Feiertage) für die Neutralisierung.
+    const workdayDatesSet = new Set(workdaysData.workdayDates || []);
+
+    let actualWorkedHours = 0;   // Tatsächlich gearbeitete Netto-Stunden (Regulär + halbtägige Abwesenheit)
+    let creditedHours = 0;       // Angerechnete Stunden aus Urlaub/Krankheit/Sonderurlaub
+    let creditedDays = 0;        // Anzahl angerechneter Abwesenheitstage (Halbtag zählt 0,5)
+    let parentalLeaveDays = 0;   // Anzahl Elternzeit-Tage auf regulären Arbeitstagen (neutralisiert)
+
+    workingEntries.forEach(w => {
+      const dt: DayType = w.dayType || 'REGULAR';
+      const isHalf = w.halfDay === true;
+      if (dt === 'REGULAR') {
+        actualWorkedHours += w.totalNetHoursDecimal;
+      } else if (dt === 'PARENTAL_LEAVE') {
+        // Elternzeit neutralisiert die Sollzeit dieses Tages (weder Soll noch Ist).
+        if (workdayDatesSet.has(w.date)) {
+          parentalLeaveDays += 1;
+        }
+        // Bei halbtägiger Elternzeit wird der gearbeitete Teil dennoch als Ist gezählt.
+        if (isHalf) {
+          actualWorkedHours += w.totalNetHoursDecimal;
+        }
+      } else {
+        // VACATION / SICK / SPECIAL_LEAVE: angerechnet (Saldo neutral)
+        if (isHalf) {
+          creditedHours += 0.5 * dailyTargetHours;
+          creditedDays += 0.5;
+          actualWorkedHours += w.totalNetHoursDecimal; // gearbeitete Hälfte zählt zusätzlich
+        } else {
+          creditedHours += dailyTargetHours;
+          creditedDays += 1;
+        }
+      }
+    });
+
+    // Elternzeit reduziert die effektive Sollzeit (halbtägige Elternzeit = halber Tag Soll).
+    const parentalHalfDays = workingEntries.filter(
+      w => (w.dayType === 'PARENTAL_LEAVE') && w.halfDay === true && workdayDatesSet.has(w.date)
+    ).length;
+    const parentalReductionDays = parentalLeaveDays - (parentalHalfDays * 0.5);
+    const effectiveTargetDays = Math.max(0, targetWorkDays - parentalReductionDays);
+
+    const targetHoursTotal = Math.round(effectiveTargetDays * dailyTargetHours * 100) / 100;
+    const actualWorkingHours = actualWorkedHours + creditedHours;
     const balanceHours = Math.round((actualWorkingHours - targetHoursTotal) * 100) / 100;
 
     // Daily Sanity Check: Warn if project time > working time
@@ -3172,8 +3273,13 @@ export class StorageService {
       stateLocation: stateCode,
       holidaysInMonth: workdaysData.holidaysInRange,
       targetWorkDays,
+      effectiveTargetDays: Math.round(effectiveTargetDays * 100) / 100,
       targetHoursTotal,
       actualWorkingHours: Math.round(actualWorkingHours * 100) / 100,
+      actualWorkedHours: Math.round(actualWorkedHours * 100) / 100,
+      creditedHours: Math.round(creditedHours * 100) / 100,
+      creditedDays: Math.round(creditedDays * 100) / 100,
+      parentalLeaveDays: Math.round(parentalReductionDays * 100) / 100,
       actualProjectHours: Math.round(actualProjectHours * 100) / 100,
       balanceHours,
       isOvertime: balanceHours > 0,

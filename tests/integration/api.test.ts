@@ -63,8 +63,9 @@ describe('Zentrale Fehlerbehandlung', () => {
     expect(res.body.details[0]).toHaveProperty('message');
   });
 
-  it('POST /api/working-time ohne Pflichtfelder liefert 422', async () => {
-    const res = await request(app).post('/api/working-time').send({ date: '2025-06-02' });
+  it('POST /api/working-time mit ungültigem Datum liefert 422', async () => {
+    // date ist Pflichtfeld; Uhrzeiten sind seit der Tagesart-Erweiterung optional
+    const res = await request(app).post('/api/working-time').send({ date: 'kein-datum' });
     expect(res.status).toBe(422);
     expect(res.body.code).toBe('VALIDATION_ERROR');
   });

@@ -29,8 +29,11 @@ export const UpdateTimeEntrySchema = CreateTimeEntrySchema.partial().extend({
 export const CreateWorkingTimeSchema = z.object({
   userId: z.string().optional(),
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Datum muss im Format YYYY-MM-DD vorliegen'),
-  startTime: z.string().regex(/^([01]\d|2[0-3]):([0-5]\d)$/, 'Startzeit muss im Format HH:MM sein'),
-  endTime: z.string().regex(/^([01]\d|2[0-3]):([0-5]\d)$/, 'Endzeit muss im Format HH:MM sein'),
+  dayType: z.enum(['REGULAR', 'VACATION', 'SICK', 'SPECIAL_LEAVE', 'PARENTAL_LEAVE']).optional().default('REGULAR'),
+  halfDay: z.boolean().optional().default(false),
+  // Zeitfelder sind bei Ganztags-Abwesenheiten nicht erforderlich, daher optional
+  startTime: z.string().regex(/^([01]\d|2[0-3]):([0-5]\d)$/, 'Startzeit muss im Format HH:MM sein').optional(),
+  endTime: z.string().regex(/^([01]\d|2[0-3]):([0-5]\d)$/, 'Endzeit muss im Format HH:MM sein').optional(),
   breakMinutes: z.number().int().min(0).max(480).default(30),
   note: z.string().max(500).optional()
 });

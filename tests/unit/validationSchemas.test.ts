@@ -81,8 +81,21 @@ describe('CreateWorkingTimeSchema', () => {
     if (r.success) expect(r.data.breakMinutes).toBe(30);
   });
 
-  it('erfordert Start- und Endzeit', () => {
-    expect(CreateWorkingTimeSchema.safeParse({ date: '2025-06-02' }).success).toBe(false);
+  it('erlaubt Ganztags-Abwesenheiten ohne Start- und Endzeit', () => {
+    // Für Abwesenheiten (Urlaub, Krankheit, Elternzeit) sind Uhrzeiten nicht erforderlich
+    const r = CreateWorkingTimeSchema.safeParse({ date: '2025-06-02', dayType: 'VACATION' });
+    expect(r.success).toBe(true);
+    if (r.success) expect(r.data.dayType).toBe('VACATION');
+  });
+
+  it('setzt dayType-Default auf REGULAR', () => {
+    const r = CreateWorkingTimeSchema.safeParse({ date: '2025-06-02' });
+    expect(r.success).toBe(true);
+    if (r.success) expect(r.data.dayType).toBe('REGULAR');
+  });
+
+  it('lehnt eine ungültige Tagesart ab', () => {
+    expect(CreateWorkingTimeSchema.safeParse({ date: '2025-06-02', dayType: 'FOO' }).success).toBe(false);
   });
 
   it('lehnt Pause über 480 Minuten ab', () => {

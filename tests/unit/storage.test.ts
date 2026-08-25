@@ -128,3 +128,103 @@ describe('StorageService GoBD Audit-Hashkette', () => {
     expect(report.isChainValid).toBe(true);
   });
 });
+
+describe('StorageService.getWorkingTimeSummary (Tagesart-Anrechnung & Neutralisierung)', () => {
+  let storage: StorageService;
+  const MONTH = '2026-08';
+
+  beforeEach(() => {
+    storage = new StorageService();
+    const s = storage as any;
+    // Testbenutzer mit 8h Tagessoll, Mo–Fr
+    s.users.push({
+      id: 'u-wt',
+      orgId: s.organization.id,
+      name: 'Zeit Tester',
+      dailyTargetHours: 8,
+      workDays: [1, 2, 3, 4, 5],
+    });
+  });
+
+  it('rechnet reguläre Arbeitszeit als Ist an', () => {
+    storage.createOrUpdateWorkingTime(
+      { userId: 'u-wt', date: '2026-08-03', dayType: 'REGULAR', startTime: '08:00', endTime: '16:30', breakMinutes: 30 },
+      'u-wt'
+    );
+    const sum = storage.getWorkingTimeSummary('u-wt', MONTH);
+    // 8,5h brutto - 0,5h Pause = 8h netto
+    expect(sum.actualWorkedHours).toBe(8);
+    expect(sum.actualWorkingHours).toBe(8);
+    expect(sum.creditedDays).toBe(0);
+    expect(sum.parentalLeaveDays).toBe(0);
+  });
+
+  it('rechnet einen ganztägigen Urlaubstag an (Saldo neutral, Sollzeit unverändert)', () => {
+    const base = storage.getWorkingTimeSummary('u-wt', MONTH);
+    storage.createOrUpdateWorkingTime(
+      { userId: 'u-wt', date: '2026-08-04', dayType: 'VACATION', halfDay: false },
+      'u-wt'
+    );
+    const sum = storage.getWorkingTimeSummary('u-wt', MONTH);
+    // Sollzeit bleibt identisch (Urlaubstag zählt weiterhin als Arbeitstag)
+    expect(sum.targetHoursTotal).toBe(base.targetHoursTotal);
+    // 8h werden angerechnet -> Saldo verbessert sich um genau 8h ggü. Baseline
+    expect(sum.creditedHours).toBe(8);
+    expect(sum.creditedDays).toBe(1);
+    expect(sum.balanceHours).toBeCloseTo(base.balanceHours + 8, 2);
+  });
+
+  it('rechnet Krankheit und Sonderurlaub ebenfalls an', () => {
+    storage.createOrUpdateWorkingTime({ userId: 'u-wt', date: '2026-08-04', dayType: 'SICK', halfDay: false }, 'u-wt');
+    storage.createOrUpdateWorkingTime({ userId: 'u-wt', date: '2026-08-05', dayType: 'SPECIAL_LEAVE', halfDay: false }, 'u-wt');
+    const sum = storage.getWorkingTimeSummary('u-wt', MONTH);
+    expect(sum.creditedDays).toBe(2);
+    expect(sum.creditedHours).toBe(16);
+  });
+
+  it('neutralisiert Elternzeit vollständig (Sollzeit reduziert, keine Anrechnung)', () => {
+    const base = storage.getWorkingTimeSummary('u-wt', MONTH);
+    storage.createOrUpdateWorkingTime(
+      { userId: 'u-wt', date: '2026-08-03', dayType: 'PARENTAL_LEAVE', halfDay: false },
+      'u-wt'
+    );
+    const sum = storage.getWorkingTimeSummary('u-wt', MONTH);
+    // Ein Werktag weniger im Soll
+    expect(sum.effectiveTargetDays).toBeCloseTo(base.targetWorkDays - 1, 2);
+    expect(sum.targetHoursTotal).toBeCloseTo(base.targetHoursTotal - 8, 2);
+    expect(sum.parentalLeaveDays).toBe(1);
+    expect(sum.creditedHours).toBe(0);
+    // Saldo bleibt neutral (weder Soll noch Ist an diesem Tag)
+    expect(sum.balanceHours).toBeCloseTo(base.balanceHours + 8, 2);
+  });
+
+  it('behandelt einen halben Urlaubstag korrekt (0,5 Tag angerechnet + gearbeitete Hälfte)', () => {
+    storage.createOrUpdateWorkingTime(
+      { userId: 'u-wt', date: '2026-08-04', dayType: 'VACATION', halfDay: true, startTime: '08:00', endTime: '12:00', breakMinutes: 0 },
+      'u-wt'
+    );
+    const sum = storage.getWorkingTimeSummary('u-wt', MONTH);
+    expect(sum.creditedDays).toBe(0.5);
+    expect(sum.creditedHours).toBe(4); // 0,5 * 8h
+    expect(sum.actualWorkedHours).toBe(4); // 4h gearbeitet
+  });
+
+  it('setzt dayType standardmäßig auf REGULAR, wenn nicht angegeben', () => {
+    const entry = storage.createOrUpdateWorkingTime(
+      { userId: 'u-wt', date: '2026-08-03', startTime: '09:00', endTime: '17:00', breakMinutes: 60 },
+      'u-wt'
+    );
+    expect(entry.dayType).toBe('REGULAR');
+    expect(entry.halfDay).toBe(false);
+  });
+
+  it('speichert Ganztags-Abwesenheiten ohne Uhrzeiten', () => {
+    const entry = storage.createOrUpdateWorkingTime(
+      { userId: 'u-wt', date: '2026-08-03', dayType: 'VACATION', halfDay: false },
+      'u-wt'
+    );
+    expect(entry.totalNetHoursDecimal).toBe(0);
+    expect(entry.startTime).toBe('');
+    expect(entry.endTime).toBe('');
+  });
+});
