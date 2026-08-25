@@ -96,22 +96,77 @@ Diese Ansicht dient der **gesetzlich vorgeschriebenen Arbeitszeiterfassung (ArbZ
 - **nicht auf einem Projekt** arbeitest (z. B. allgemeine Aufgaben, Besprechungen, Verwaltung), oder
 - **nicht in Vollzeit einem Projekt zugeordnet** bist und deine tägliche Anwesenheit dokumentieren musst.
 
+### Tagesarten und Abwesenheiten
+
+Jeder Tag kann jetzt einer von **fünf Arten** zugeordnet werden:
+
+| Art | Symbol | Beschreibung | Zeitfelder |
+|---|---|---|---|
+| **Reguläre Arbeitszeit** | grau | Normaler Arbeitstag | Kommen, Gehen, Pause erforderlich |
+| **Urlaub** | 🌴 blau | Urlaubstag | Optional: nur bei Halbtag |
+| **Krankheit** | 🩺 orange | Krankheitstag | Optional: nur bei Halbtag |
+| **Sonderurlaub** | 💼 lila | Sonderurlaub (z. B. Umzug, Hochzeit) | Optional: nur bei Halbtag |
+| **Elternzeit** | 👶 grün | Elternzeit | Keine Zeitfelder |
+
+#### Ganztags-Abwesenheit vs. Halbtag
+
+- **Ganztags-Abwesenheit:** Wähle die entsprechende Tagesart (z. B. „Urlaub") – die Zeitfelder (Kommen/Gehen/Pause) werden automatisch ausgeblendet. Der Tag gilt als vollständig abwesend.
+- **Halber Tag:** Aktiviere die Checkbox **„Halber Tag"** – die Zeitfelder bleiben sichtbar, sodass du den gearbeiteten halben Tag erfassen kannst (z. B. Vormittag Urlaub, Nachmittag gearbeitet).
+
+#### Sollzeit-Berechnung: Anrechnung vs. Neutralisierung
+
+Die Tagesart beeinflusst, wie der Tag in die **monatliche Sollzeit** einfließt:
+
+- **Reguläre Arbeitszeit:** Zählt zur Sollzeit, die gearbeiteten Stunden werden erfasst.
+- **Urlaub / Krankheit / Sonderurlaub:** Der Tag wird **angerechnet** – er zählt zur Sollzeit UND gilt als erfüllt (wird dem Zeitkonto gutgeschrieben). Dein Saldo bleibt neutral.
+  - **Ganztag:** volle Tagessollzeit (z. B. 8 Stunden) wird gutgeschrieben
+  - **Halbtag:** halbe Tagessollzeit (z. B. 4 Stunden) wird gutgeschrieben, die gearbeiteten Stunden werden zusätzlich erfasst
+- **Elternzeit:** Der Tag wird **neutralisiert** – er fällt komplett aus der Sollzeit heraus (weder Soll noch Ist). Die monatliche Sollzeit reduziert sich entsprechend.
+
+**Beispiel:** 20 Sollarbeitstage im Monat, davon 3 Tage Urlaub und 2 Tage Elternzeit:
+- Sollzeit bleibt bei 20 Tagen (Urlaub zählt)
+- Urlaub wird mit 3 × 8h = 24h gutgeschrieben
+- Effektive Sollzeit reduziert sich auf 18 Tage (−2 Tage Elternzeit)
+
+Die **Metrikkarten** oben zeigen dir:
+- **Sollstunden Monat** – inkl. Anzahl angerechneter Tage und Elternzeit-Tage
+- **Ist-Stunden Monat** – inkl. gutgeschriebene Stunden
+- **Überstunden-Saldo**
+
+### Arbeitstag erfassen
+
 So erfasst du einen Arbeitstag:
 
 1. Wähle das **Datum**.
-2. Trage **Kommen** (Startzeit) ein.
-3. Trage **Gehen** (Endzeit) ein.
-4. Erfasse die **Pause (Min)**.
+2. Wähle die **Art** des Tages (Standard: „Reguläre Arbeitszeit").
+3. Bei Abwesenheiten: optional **„Halber Tag"** aktivieren.
+4. Bei regulärer Arbeit oder Halbtag: **Kommen** (Startzeit), **Gehen** (Endzeit), **Pause (Min)** eintragen.
 5. Optional: eine **Notiz** hinzufügen (z. B. „Home Office" oder Ort).
-6. Klicke auf **➕**, um den Tag zu speichern.
+6. Klicke auf **➕ Speichern**, um den Tag zu speichern.
+
+### Tageseinträge bearbeiten
+
+Jeder gespeicherte Tag kann nachträglich **bearbeitet** werden (außer in gesperrten Monaten):
+
+1. Klicke in der Tabelle auf **„Bearbeiten"** ✏️ bei dem Tag, den du ändern möchtest.
+2. Der Eintrag wird ins Formular geladen – **alles** lässt sich korrigieren (Datum, Art, Zeiten, Notiz).
+3. Nimm die gewünschten Änderungen vor.
+4. Klicke auf **„Speichern"** oder **„Abbrechen"**, um die Bearbeitung zu verwerfen.
+
+Alle Korrekturen werden **GoBD-konform im Audit-Log** protokolliert.
+
+### Tabelle der Arbeitstage
 
 In der Tabelle darunter siehst du je Tag:
 
-- **Kommen – Gehen**
+- **Datum**
+- **Art** (farbiges Etikett mit Symbol; „· ½" bei Halbtagen)
+- **Kommen – Gehen** (bei Ganztags-Abwesenheiten: „—")
 - **Pausenzeit**
 - **Bruttozeit** (Anwesenheit gesamt)
 - **Nettoarbeitszeit** (Bruttozeit abzüglich Pause)
-- **Notiz** und **Status**
+- **Notiz**
+- **Aktionen** (Bearbeiten-Button)
 
 ---
 

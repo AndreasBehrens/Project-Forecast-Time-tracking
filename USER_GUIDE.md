@@ -96,22 +96,77 @@ This view is for the **legally required working time recording (ArbZG)**. It is 
 - **do not work on a project** (e.g. general tasks, meetings, administration), or
 - **are not assigned to a project full-time** and need to document your daily attendance.
 
+### Day Types and Absences
+
+Each day can now be assigned to one of **five types**:
+
+| Type | Icon | Description | Time fields |
+|---|---|---|---|
+| **Regular Working Time** | grey | Normal working day | Clock in, clock out, break required |
+| **Vacation** | 🌴 blue | Vacation day | Optional: only for half-day |
+| **Sick Leave** | 🩺 orange | Sick day | Optional: only for half-day |
+| **Special Leave** | 💼 purple | Special leave (e.g. moving, wedding) | Optional: only for half-day |
+| **Parental Leave** | 👶 green | Parental leave | No time fields |
+
+#### Full-day absence vs. half-day
+
+- **Full-day absence:** Select the appropriate day type (e.g. "Vacation") – the time fields (clock in/out/break) are automatically hidden. The day counts as fully absent.
+- **Half-day:** Activate the **"Half Day"** checkbox – the time fields remain visible so you can record the worked half-day (e.g. vacation in the morning, worked in the afternoon).
+
+#### Target time calculation: crediting vs. neutralization
+
+The day type affects how the day is included in the **monthly target hours**:
+
+- **Regular Working Time:** Counts towards target hours, worked hours are recorded.
+- **Vacation / Sick Leave / Special Leave:** The day is **credited** – it counts towards the target AND is considered fulfilled (credited to your time account). Your balance remains neutral.
+  - **Full day:** full daily target hours (e.g. 8 hours) are credited
+  - **Half day:** half of daily target hours (e.g. 4 hours) are credited, worked hours are additionally recorded
+- **Parental Leave:** The day is **neutralized** – it is completely removed from the target hours (neither target nor actual). The monthly target hours are reduced accordingly.
+
+**Example:** 20 target workdays in the month, including 3 days vacation and 2 days parental leave:
+- Target hours remain at 20 days (vacation counts)
+- Vacation is credited with 3 × 8h = 24h
+- Effective target hours are reduced to 18 days (−2 days parental leave)
+
+The **metric cards** at the top show you:
+- **Target Hours Month** – including number of credited days and parental leave days
+- **Actual Hours Month** – including credited hours
+- **Overtime Balance**
+
+### Recording a working day
+
 How to record a working day:
 
 1. Choose the **date**.
-2. Enter **Clock In** (start time).
-3. Enter **Clock Out** (end time).
-4. Enter the **break (min)**.
+2. Select the **type** of day (default: "Regular Working Time").
+3. For absences: optionally activate **"Half Day"**.
+4. For regular work or half-day: enter **Clock In** (start time), **Clock Out** (end time), **Break (min)**.
 5. Optional: add a **note** (e.g. "Home Office" or location).
-6. Click **➕** to save the day.
+6. Click **➕ Save** to save the day.
+
+### Editing daily entries
+
+Each saved day can be **edited** retrospectively (except in locked periods):
+
+1. In the table, click **"Edit"** ✏️ for the day you want to change.
+2. The entry is loaded into the form – **everything** can be corrected (date, type, times, note).
+3. Make the desired changes.
+4. Click **"Save"** or **"Cancel"** to discard the edit.
+
+All corrections are logged in the **GoBD-compliant audit log**.
+
+### Working days table
 
 In the table below you see for each day:
 
-- **Clock In – Clock Out**
+- **Date**
+- **Type** (colored badge with icon; "· ½" for half-days)
+- **Clock In – Clock Out** (for full-day absences: "—")
 - **Break Time**
 - **Gross Time** (total attendance)
 - **Net Working Time** (gross time minus break)
-- **Note** and **Status**
+- **Note**
+- **Actions** (Edit button)
 
 ---
 
