@@ -1,13 +1,13 @@
-# User Guide – Time Tracking & General Working Hours
+# User Guide – Time Tracking
 
 > 🇩🇪 Deutsche Version: [ANLEITUNG.md](./ANLEITUNG.md)
 
 **Access link:** 👉 **https://timetracking.insightarcs.com**
 
-This quick guide is aimed at **employees**. It explains the two core functions for daily use:
+This quick guide is aimed at **employees**. It explains the daily use of the **"Time Tracking"** menu item, which brings two areas together under one roof:
 
-1. **Time Tracking** – project-related recording of work performed
-2. **General Working Hours** – legally required attendance tracking (clock in / clock out)
+1. **Project Time Tracking** – project-related recording of work performed
+2. **General Working Hours** – legally required attendance tracking incl. absences
 
 > ℹ️ Additional functions for **project managers** and **administrators** will follow in upcoming releases and will be added here.
 
@@ -28,18 +28,22 @@ All data is stored **GDPR-compliant in Germany** and archived in an **audit-proo
 
 1. Open **https://timetracking.insightarcs.com** in your browser.
 2. Log in with your credentials.
-3. Use the main menu (sidebar on desktop, navigation bar at the bottom on mobile) to reach:
-   - **"Time Tracker"** → project-based recording
-   - **"Working Hours"** → attendance / clock in–clock out
-4. The **language** (German/English) can be switched at the top right of the header – the setting is saved.
+3. Click **"Time Tracking"** in the sidebar (desktop) or the bottom navigation bar (mobile).
+4. Inside "Time Tracking", switch between the two areas using the **tabs** at the top:
+   - **"Project Time"** → book time on projects and tasks
+   - **"Working Hours"** → attendance, absences, clock in–clock out
+
+   > 💡 **External users** (freelancers / partners) only see the Project Time tab – no tab switching needed.
+
+5. The **language** (German/English) can be switched at the top right of the header – the setting is saved.
 
 ---
 
-## 1. Time Tracking (project-based)
+## 1. Project Time Tracking
 
-Menu item: **"Time Tracker"**
+Tab: **"Project Time"** (inside the "Time Tracking" menu item)
 
-There are **two recording methods**. Switch between them at the top of the view:
+There are **two recording methods**. Switch between them at the top of the tab:
 
 ### a) Live Timer ⏱️ (for ongoing activities)
 
@@ -89,9 +93,9 @@ If no approval requirement is set, entries are booked directly as approved.
 
 ## 2. General Working Hours (attendance)
 
-Menu item: **"Working Hours"**
+Tab: **"Working Hours"** (inside the "Time Tracking" menu item)
 
-This view is for the **legally required working time recording (ArbZG)**. It is **independent of project bookings** and relevant whenever you
+This tab is for the **legally required working time recording (ArbZG)**. It is **independent of project bookings** and relevant whenever you
 
 - **do not work on a project** (e.g. general tasks, meetings, administration), or
 - **are not assigned to a project full-time** and need to document your daily attendance.
@@ -170,17 +174,20 @@ In the table below you see for each day:
 
 ---
 
-## Time Tracking vs. General Working Hours – the difference
+## Project Time vs. General Working Hours – the difference
 
-| | **Time Tracking** | **General Working Hours** |
+Both areas are found under the **"Time Tracking"** menu item – separated by tabs.
+
+| | **Tab: Project Time** | **Tab: Working Hours** |
 |---|---|---|
 | **Purpose** | What did I work on? | When was I present? |
 | **Reference** | Project + task | No project reference |
 | **Basis for** | Reporting, invoicing, forecast | Legal obligation (ArbZG) |
 | **Billable?** | Yes (€ billable / non-billable) | Not relevant |
-| **When to use?** | For project work | When not (fully) on a project |
+| **Visible for** | All users | Internal employees only |
+| **When to use?** | For project work | Daily – including absences |
 
-> 💡 **Tip:** The two levels complement each other. Project times show the *content* of your work, general working hours document your *attendance* – together they form a complete, legally compliant record.
+> 💡 **Tip:** Both tabs complement each other. Project times show the *content* of your work, general working hours document your *attendance* – together they form a complete, legally compliant record.
 
 ---
 

@@ -1,13 +1,13 @@
-# Anleitung – Zeiterfassung & Allgemeine Arbeitszeit
+# Anleitung – Zeiterfassung
 
 > 🇬🇧 English version: [USER_GUIDE.md](./USER_GUIDE.md)
 
 **Aufruflink:** 👉 **https://timetracking.insightarcs.com**
 
-Diese Kurzanleitung richtet sich an **Mitarbeiterinnen und Mitarbeiter**. Sie erklärt die beiden zentralen Funktionen für die tägliche Nutzung:
+Diese Kurzanleitung richtet sich an **Mitarbeiterinnen und Mitarbeiter**. Sie erklärt die tägliche Nutzung des Menüpunkts **„Zeiterfassung"**, der zwei Bereiche unter einem Dach vereint:
 
-1. **Zeiterfassung** – projektbezogene Buchung von Arbeitsleistung
-2. **Allgemeine Arbeitszeit** – gesetzliche Anwesenheitserfassung (Kommen/Gehen)
+1. **Projektzeiterfassung** – projektbezogene Buchung von Arbeitsleistung
+2. **Allgemeine Arbeitszeit** – gesetzliche Anwesenheitserfassung inkl. Abwesenheiten
 
 > ℹ️ Weitere Funktionen für **Projektleiter** und **Administratoren** folgen in kommenden Releases und werden dann hier ergänzt.
 
@@ -28,18 +28,22 @@ Alle Daten werden **DSGVO-konform in Deutschland** gespeichert und **GoBD-konfor
 
 1. Öffne **https://timetracking.insightarcs.com** im Browser.
 2. Melde dich mit deinen Zugangsdaten an.
-3. Über das Hauptmenü (Seitenleiste am Desktop, Navigationsleiste unten am Smartphone) erreichst du:
-   - **„Zeiterfassung"** → projektbezogene Buchung
-   - **„Allgemeine Arbeitszeit"** → Anwesenheit / Kommen–Gehen
-4. Die **Sprache** (Deutsch/Englisch) lässt sich oben rechts im Kopfbereich umstellen – die Einstellung bleibt gespeichert.
+3. Klicke in der Seitenleiste (Desktop) bzw. der unteren Navigationsleiste (Smartphone) auf **„Zeiterfassung"**.
+4. Innerhalb von „Zeiterfassung" wechselst du über die **Tabs** oben zwischen den zwei Bereichen:
+   - **„Projektzeiterfassung"** → Buchung auf Projekte und Aufgaben
+   - **„Allg. Arbeitszeit"** → Anwesenheit, Abwesenheiten, Kommen–Gehen
+
+   > 💡 **Externe Mitarbeiter** (Freelancer / Partner) sehen nur die Projektzeiterfassung – kein Tab-Wechsel nötig.
+
+5. Die **Sprache** (Deutsch/Englisch) lässt sich oben rechts im Kopfbereich umstellen – die Einstellung bleibt gespeichert.
 
 ---
 
-## 1. Zeiterfassung (projektbezogen)
+## 1. Projektzeiterfassung
 
-Menüpunkt: **„Zeiterfassung"**
+Tab: **„Projektzeiterfassung"** (innerhalb des Menüpunkts „Zeiterfassung")
 
-Es gibt **zwei Erfassungsmethoden**. Oben in der Ansicht wechselst du zwischen ihnen:
+Es gibt **zwei Erfassungsmethoden**. Oben im Tab wechselst du zwischen ihnen:
 
 ### a) Live-Timer ⏱️ (für laufende Tätigkeiten)
 
@@ -89,9 +93,9 @@ Ist keine Freigabepflicht hinterlegt, werden Einträge direkt als freigegeben ve
 
 ## 2. Allgemeine Arbeitszeit (Anwesenheit)
 
-Menüpunkt: **„Allgemeine Arbeitszeit"**
+Tab: **„Allg. Arbeitszeit"** (innerhalb des Menüpunkts „Zeiterfassung")
 
-Diese Ansicht dient der **gesetzlich vorgeschriebenen Arbeitszeiterfassung (ArbZG)**. Sie ist **unabhängig von Projektbuchungen** und immer dann relevant, wenn du
+Dieser Tab dient der **gesetzlich vorgeschriebenen Arbeitszeiterfassung (ArbZG)**. Er ist **unabhängig von Projektbuchungen** und immer dann relevant, wenn du
 
 - **nicht auf einem Projekt** arbeitest (z. B. allgemeine Aufgaben, Besprechungen, Verwaltung), oder
 - **nicht in Vollzeit einem Projekt zugeordnet** bist und deine tägliche Anwesenheit dokumentieren musst.
@@ -170,17 +174,20 @@ In der Tabelle darunter siehst du je Tag:
 
 ---
 
-## Zeiterfassung vs. Allgemeine Arbeitszeit – der Unterschied
+## Projektzeiterfassung vs. Allgemeine Arbeitszeit – der Unterschied
 
-| | **Zeiterfassung** | **Allgemeine Arbeitszeit** |
+Beide Bereiche findest du unter dem Menüpunkt **„Zeiterfassung"** – getrennt durch Tabs.
+
+| | **Tab: Projektzeiterfassung** | **Tab: Allg. Arbeitszeit** |
 |---|---|---|
 | **Zweck** | Was habe ich woran gearbeitet? | Wann war ich anwesend? |
 | **Bezug** | Projekt + Aufgabe | Kein Projektbezug |
 | **Grundlage** | Auswertung, Abrechnung, Forecast | Gesetzliche Pflicht (ArbZG) |
 | **Abrechenbar?** | Ja (€ abrechenbar / nicht abrechenbar) | Nicht relevant |
-| **Wann nutzen?** | Bei Projektarbeit | Wenn nicht (voll) im Projekt |
+| **Sichtbar für** | Alle Nutzer | Nur interne Mitarbeiter |
+| **Wann nutzen?** | Bei Projektarbeit | Täglich – auch bei Abwesenheit |
 
-> 💡 **Tipp:** Beide Ebenen ergänzen sich. Projektzeiten zeigen den *Inhalt* deiner Arbeit, die allgemeine Arbeitszeit dokumentiert deine *Anwesenheit* – gemeinsam ergeben sie eine vollständige, rechtssichere Erfassung.
+> 💡 **Tipp:** Beide Tabs ergänzen sich. Projektzeiten zeigen den *Inhalt* deiner Arbeit, die allgemeine Arbeitszeit dokumentiert deine *Anwesenheit* – gemeinsam ergeben sie eine vollständige, rechtssichere Erfassung.
 
 ---
 
