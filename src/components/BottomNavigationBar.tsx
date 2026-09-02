@@ -67,23 +67,16 @@ export const BottomNavigationBar: React.FC<BottomNavigationBarProps> = ({
       icon: Clock,
       badge: null
     },
-    ...(isAdmin || isInternal
+    ...(isAdmin || isPM
       ? [
-          {
-            id: 'workingTime' as NavViewId,
-            label: t.navWorkingTime || 'Arbeitszeit',
-            icon: Calendar,
-            badge: null
-          }
-        ]
-      : [
           {
             id: 'projectsClients' as NavViewId,
             label: isPM ? t.navMyProjectsTeam : t.navProjectsClients,
             icon: FolderKanban,
             badge: null
           }
-        ]),
+        ]
+      : []),
     ...(isAdmin || isPM
       ? [
           {
@@ -120,13 +113,6 @@ export const BottomNavigationBar: React.FC<BottomNavigationBarProps> = ({
       icon: Clock,
       badge: null,
       visible: true
-    },
-    {
-      id: 'workingTime',
-      label: t.navWorkingTime || 'Allgemeine Arbeitszeit',
-      icon: Calendar,
-      badge: null,
-      visible: isAdmin || isInternal
     },
     {
       id: 'approvalsAudit',

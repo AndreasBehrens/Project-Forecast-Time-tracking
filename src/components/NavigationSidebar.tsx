@@ -98,13 +98,6 @@ export const NavigationSidebar: React.FC<NavigationSidebarProps> = ({
           icon: Clock,
           badge: null,
           visible: true
-        },
-        {
-          id: 'workingTime' as const,
-          label: t.navWorkingTime,
-          icon: Calendar,
-          badge: null,
-          visible: isAdmin || isInternal
         }
       ]
     },

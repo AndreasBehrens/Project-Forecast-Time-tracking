@@ -18,6 +18,7 @@ import { Server } from 'lucide-react';
 const MainLayout: React.FC = () => {
   const { t, timeEntries, projects, organization, currentUser } = useApp();
   const [activeNav, setActiveNav] = useState<NavViewId>('timeTracker');
+  const [activeTab, setActiveTab] = useState<'project' | 'working'>('project');
 
   const isSuperAdmin = currentUser?.role === 'SUPERADMIN' || currentUser?.id === 'u-1';
   const isAdmin = isSuperAdmin || currentUser?.role === 'ADMIN';
@@ -52,8 +53,39 @@ const MainLayout: React.FC = () => {
         {/* Dynamic Viewport Container */}
         <main className="flex-1 max-w-7xl w-full mx-auto px-3.5 sm:px-6 lg:px-8 py-5 sm:py-6 space-y-6 pb-24 md:pb-10">
           <div className="animate-in fade-in duration-150">
-            {activeNav === 'timeTracker' && <TimeTrackerView />}
-            {activeNav === 'workingTime' && isInternal && <WorkingTimeView />}
+            {activeNav === 'timeTracker' && (
+              (isAdmin || isInternal) ? (
+                <div>
+                  {/* Interne Nutzer & Admins: Tabs für Projekt- und allg. Arbeitszeit */}
+                  <div className="flex gap-1 border-b border-slate-200 mb-6">
+                    <button
+                      onClick={() => setActiveTab('project')}
+                      className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
+                        activeTab === 'project'
+                          ? 'border-emerald-500 text-emerald-700'
+                          : 'border-transparent text-slate-500 hover:text-slate-700'
+                      }`}
+                    >
+                      {t.tabProjectTime}
+                    </button>
+                    <button
+                      onClick={() => setActiveTab('working')}
+                      className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
+                        activeTab === 'working'
+                          ? 'border-emerald-500 text-emerald-700'
+                          : 'border-transparent text-slate-500 hover:text-slate-700'
+                      }`}
+                    >
+                      {t.tabWorkingTime}
+                    </button>
+                  </div>
+                  {activeTab === 'project' ? <TimeTrackerView /> : <WorkingTimeView />}
+                </div>
+              ) : (
+                /* Externe Nutzer (Freelancer/Partner): nur Projektzeiterfassung, keine Tabs */
+                <TimeTrackerView />
+              )
+            )}
             {activeNav === 'approvalsAudit' && (isAdmin || isPM) && <ApprovalsAuditView />}
             {activeNav === 'projectsClients' && (isAdmin || isPM) && <ProjectsClientsView />}
             {activeNav === 'ratesTeam' && isAdmin && <RateHierarchyView />}

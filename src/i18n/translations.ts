@@ -18,6 +18,8 @@ export const translations = {
     // Navigation
     navTimeTracker: 'Zeiterfassung',
     navWorkingTime: 'Allgemeine Arbeitszeit',
+    tabProjectTime: 'Projektzeiterfassung',
+    tabWorkingTime: 'Allg. Arbeitszeit',
     navApprovalsAudit: 'Freigaben & Audit-Log',
     navProjectsClients: 'Kunden & Projekte',
     navMyProjectsTeam: 'Meine Projekte & Team',
@@ -730,6 +732,8 @@ export const translations = {
     // Navigation
     navTimeTracker: 'Time Tracker',
     navWorkingTime: 'Working Hours',
+    tabProjectTime: 'Project Time',
+    tabWorkingTime: 'Working Hours',
     navApprovalsAudit: 'Approvals & Audit Log',
     navProjectsClients: 'Clients & Projects',
     navMyProjectsTeam: 'My Projects & Team',
