@@ -23,6 +23,8 @@ import {
   Clock,
   UserX,
   Lock,
+  Unlock,
+  KeyRound,
   Building2,
   Laptop,
   MapPin,
@@ -55,7 +57,8 @@ export const RateHierarchyView: React.FC = () => {
     deleteJobRole,
     formatRate,
     formatCurrency,
-    currentUser
+    currentUser,
+    refreshAllData
   } = useApp();
 
   const isSuperAdmin = currentUser?.role === 'SUPERADMIN' || currentUser?.id === 'u-1';
@@ -142,6 +145,80 @@ export const RateHierarchyView: React.FC = () => {
   // Delete Role Confirmation
   const [roleToDelete, setRoleToDelete] = useState<EmployeeJobRole | null>(null);
   const [roleDeleteError, setRoleDeleteError] = useState<string | null>(null);
+
+  // Password Management Modal (Superadmin only)
+  const [passwordUser, setPasswordUser] = useState<User | null>(null);
+  const [pwNew, setPwNew] = useState('');
+  const [pwConfirm, setPwConfirm] = useState('');
+  const [pwError, setPwError] = useState<string | null>(null);
+  const [pwSaving, setPwSaving] = useState(false);
+  const [pwRemoveUser, setPwRemoveUser] = useState<User | null>(null);
+  const [pwRemoveError, setPwRemoveError] = useState<string | null>(null);
+  const [pwRemoving, setPwRemoving] = useState(false);
+
+  const openPasswordModal = (user: User) => {
+    setPasswordUser(user);
+    setPwNew('');
+    setPwConfirm('');
+    setPwError(null);
+  };
+
+  const handleSetPassword = async (userId: string, password: string) => {
+    const res = await fetch(`/api/users/${userId}/set-password`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-user-id': currentUser?.id || '' },
+      body: JSON.stringify({ password })
+    });
+    if (!res.ok) throw new Error((await res.json()).error || 'Fehler');
+  };
+
+  const handleRemovePassword = async (userId: string) => {
+    const res = await fetch(`/api/users/${userId}/password`, {
+      method: 'DELETE',
+      headers: { 'x-user-id': currentUser?.id || '' }
+    });
+    if (!res.ok) throw new Error((await res.json()).error || 'Fehler');
+  };
+
+  const handleSubmitPassword = async () => {
+    setPwError(null);
+    if (pwNew.length < 8) {
+      setPwError('Das Passwort muss mindestens 8 Zeichen lang sein.');
+      return;
+    }
+    if (pwNew !== pwConfirm) {
+      setPwError('Die Passwörter stimmen nicht überein.');
+      return;
+    }
+    if (!passwordUser) return;
+    setPwSaving(true);
+    try {
+      await handleSetPassword(passwordUser.id, pwNew);
+      await refreshAllData();
+      setPasswordUser(null);
+      setPwNew('');
+      setPwConfirm('');
+    } catch (err: any) {
+      setPwError(err?.message || 'Passwort konnte nicht gesetzt werden.');
+    } finally {
+      setPwSaving(false);
+    }
+  };
+
+  const handleConfirmRemovePassword = async () => {
+    if (!pwRemoveUser) return;
+    setPwRemoveError(null);
+    setPwRemoving(true);
+    try {
+      await handleRemovePassword(pwRemoveUser.id);
+      await refreshAllData();
+      setPwRemoveUser(null);
+    } catch (err: any) {
+      setPwRemoveError(err?.message || 'Passwort konnte nicht entfernt werden.');
+    } finally {
+      setPwRemoving(false);
+    }
+  };
 
   useEffect(() => {
     if (testUserId) {
@@ -729,7 +806,20 @@ export const RateHierarchyView: React.FC = () => {
                 return (
                   <tr key={u.id} className="hover:bg-slate-50/60">
                     <td className="px-4 py-3">
-                      <div className="font-semibold text-slate-900">{u.name}</div>
+                      <div className="font-semibold text-slate-900 flex items-center gap-1.5">
+                        <span>{u.name}</span>
+                        {isSuperAdmin && (
+                          u.hasPassword ? (
+                            <Lock className="w-3 h-3 text-emerald-600 shrink-0" aria-label="Passwort-Pflicht aktiv">
+                              <title>Passwort-Pflicht aktiv</title>
+                            </Lock>
+                          ) : (
+                            <Unlock className="w-3 h-3 text-slate-400 shrink-0" aria-label="Kein Passwort gesetzt">
+                              <title>Kein Passwort gesetzt</title>
+                            </Unlock>
+                          )
+                        )}
+                      </div>
                       <div className="text-[10px] text-slate-400">{u.email}</div>
                       {isFreelancer && (u.billingEmail || u.contactEmail || u.contactPhone) && (
                         <div className="text-[10px] text-purple-700 font-medium mt-0.5 flex items-center gap-1.5">
@@ -838,6 +928,40 @@ export const RateHierarchyView: React.FC = () => {
                           <Edit2 className="w-3 h-3 text-slate-500" />
                           <span>Bearbeiten</span>
                         </button>
+                        {isSuperAdmin && (
+                          !u.hasPassword ? (
+                            <button
+                              id={`btn-set-password-${u.id}`}
+                              onClick={() => openPasswordModal(u)}
+                              title="Temporäres Passwort setzen"
+                              className="px-2.5 py-1 rounded-lg text-xs font-semibold flex items-center gap-1 border border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 transition-colors"
+                            >
+                              <KeyRound className="w-3 h-3" />
+                              <span>Passwort setzen</span>
+                            </button>
+                          ) : (
+                            <>
+                              <button
+                                id={`btn-change-password-${u.id}`}
+                                onClick={() => openPasswordModal(u)}
+                                title="Passwort ändern"
+                                className="px-2.5 py-1 rounded-lg text-xs font-semibold flex items-center gap-1 border border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 transition-colors"
+                              >
+                                <KeyRound className="w-3 h-3" />
+                                <span>Passwort ändern</span>
+                              </button>
+                              <button
+                                id={`btn-remove-password-${u.id}`}
+                                onClick={() => { setPwRemoveUser(u); setPwRemoveError(null); }}
+                                title="Passwort entfernen"
+                                className="px-2.5 py-1 rounded-lg text-xs font-semibold flex items-center gap-1 border border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100 transition-colors"
+                              >
+                                <Unlock className="w-3 h-3" />
+                                <span>Passwort entfernen</span>
+                              </button>
+                            </>
+                          )
+                        )}
                         <button
                           id={`btn-del-user-${u.id}`}
                           onClick={() => handleOpenDeleteUser(u)}
@@ -1928,6 +2052,122 @@ export const RateHierarchyView: React.FC = () => {
               </div>
             </div>
           )}
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* MODAL: SET / CHANGE PASSWORD (Superadmin only) */}
+      {/* ========================================================================= */}
+      {passwordUser && (
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 space-y-4 shadow-xl border border-slate-200">
+            <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
+              <KeyRound className="w-5 h-5 text-emerald-600" />
+              <span>Temporäres Passwort setzen für {passwordUser.name}</span>
+            </h3>
+
+            <p className="text-xs text-slate-500 leading-relaxed">
+              Teilen Sie das Passwort sicher mit dem Nutzer. Der Nutzer wird beim nächsten Login aufgefordert, das Passwort zu ändern.
+            </p>
+
+            {pwError && (
+              <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs flex items-center gap-2">
+                <AlertTriangle className="w-4 h-4 shrink-0" />
+                <span>{pwError}</span>
+              </div>
+            )}
+
+            <div className="space-y-3 text-xs text-left">
+              <div>
+                <label className="font-semibold text-slate-700 block mb-1">Neues Passwort *</label>
+                <input
+                  id="input-new-password"
+                  type="password"
+                  autoComplete="new-password"
+                  minLength={8}
+                  placeholder="Mindestens 8 Zeichen"
+                  value={pwNew}
+                  onChange={e => setPwNew(e.target.value)}
+                  className="w-full border border-slate-200 rounded-xl px-3 py-2 text-xs"
+                />
+              </div>
+              <div>
+                <label className="font-semibold text-slate-700 block mb-1">Passwort bestätigen *</label>
+                <input
+                  id="input-confirm-password"
+                  type="password"
+                  autoComplete="new-password"
+                  minLength={8}
+                  placeholder="Passwort wiederholen"
+                  value={pwConfirm}
+                  onChange={e => setPwConfirm(e.target.value)}
+                  className="w-full border border-slate-200 rounded-xl px-3 py-2 text-xs"
+                />
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setPasswordUser(null)}
+                disabled={pwSaving}
+                className="px-4 py-2 rounded-xl border border-slate-200 text-slate-700 text-xs font-semibold hover:bg-slate-100 transition-colors disabled:opacity-60"
+              >
+                Abbrechen
+              </button>
+              <button
+                type="button"
+                onClick={handleSubmitPassword}
+                disabled={pwSaving}
+                className="px-4 py-2 rounded-xl bg-emerald-500 text-slate-950 text-xs font-bold hover:bg-emerald-400 transition-colors disabled:opacity-60"
+              >
+                {pwSaving ? 'Speichert…' : 'Speichern'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* MODAL: REMOVE PASSWORD CONFIRMATION (Superadmin only) */}
+      {/* ========================================================================= */}
+      {pwRemoveUser && (
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 space-y-4 shadow-xl border border-slate-200">
+            <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
+              <Unlock className="w-5 h-5 text-amber-600" />
+              <span>Passwort entfernen für {pwRemoveUser.name}</span>
+            </h3>
+            <p className="text-xs text-slate-500 leading-relaxed">
+              Die Passwort-Pflicht für <strong>{pwRemoveUser.name}</strong> wird aufgehoben. Der Nutzer kann sich anschließend ohne Passwort anmelden. Möchten Sie fortfahren?
+            </p>
+
+            {pwRemoveError && (
+              <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs flex items-center gap-2">
+                <AlertTriangle className="w-4 h-4 shrink-0" />
+                <span>{pwRemoveError}</span>
+              </div>
+            )}
+
+            <div className="flex justify-end gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setPwRemoveUser(null)}
+                disabled={pwRemoving}
+                className="px-4 py-2 rounded-xl border border-slate-200 text-slate-700 text-xs font-semibold hover:bg-slate-100 transition-colors disabled:opacity-60"
+              >
+                Abbrechen
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmRemovePassword}
+                disabled={pwRemoving}
+                className="px-4 py-2 rounded-xl bg-amber-500 text-slate-950 text-xs font-bold hover:bg-amber-400 transition-colors disabled:opacity-60"
+              >
+                {pwRemoving ? 'Entfernt…' : 'Passwort entfernen'}
+              </button>
+            </div>
           </div>
         </div>
       )}

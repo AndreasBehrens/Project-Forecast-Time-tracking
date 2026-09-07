@@ -1,6 +1,7 @@
 import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import path from 'path';
+import bcrypt from 'bcrypt';
 import { createServer as createViteServer } from 'vite';
 import { storage } from './storage.js';
 import { GERMAN_STATES, getGermanHolidays, getWorkingDaysInRange, resolveUserHolidayState } from './holidays.js';
@@ -72,6 +73,19 @@ export async function createApp(options: CreateAppOptions = {}): Promise<express
   const session = createSessionContext('u-1');
   const { getActorId, requireApiKey, requireAdminAuth } = session;
 
+  // Entfernt sicherheitsrelevante Felder (passwordHash) aus User-Objekten,
+  // bevor sie in API-Responses zurückgegeben werden. passwordHash darf NIE
+  // den Server verlassen.
+  const stripSensitive = <T extends { passwordHash?: string } | null | undefined>(user: T): T => {
+    if (!user) return user;
+    const { passwordHash, ...rest } = user as { passwordHash?: string };
+    // passwordHash selbst verlässt den Server nie; stattdessen ein boolesches
+    // Flag hasPassword, damit das Frontend eine gesetzte Passwort-Pflicht anzeigen kann.
+    return { ...rest, hasPassword: !!passwordHash } as unknown as T;
+  };
+  const stripSensitiveList = <T extends { passwordHash?: string }>(users: T[]): T[] =>
+    users.map(u => stripSensitive(u));
+
   // Admin-Routenschutz vor allen /admin- und /api/admin-Routen aktivieren.
   app.use('/admin', requireAdminAuth);
   app.use('/api/admin', requireAdminAuth);
@@ -128,7 +142,7 @@ export async function createApp(options: CreateAppOptions = {}): Promise<express
     }
     
     res.json({
-      user,
+      user: stripSensitive(user),
       organization: org,
       organizations: storage.getOrganizations(),
       activeOrgId: storage.getActiveOrgId(),
@@ -156,6 +170,18 @@ export async function createApp(options: CreateAppOptions = {}): Promise<express
       });
     }
 
+    // Passwort-Prüfung: nur wenn für diesen Nutzer ein Passwort gesetzt ist.
+    // Ohne passwordHash bleibt der Login ohne Passwort erlaubt (Rückwärtskompatibilität).
+    if (user.passwordHash) {
+      const { password } = req.body;
+      if (!password || !bcrypt.compareSync(String(password), user.passwordHash)) {
+        return res.status(401).json({
+          success: false,
+          error: 'Ungültiges Passwort.'
+        });
+      }
+    }
+
     session.setCurrentUserId(user.id);
 
     // Switch org if specified, or pick user's active org
@@ -176,11 +202,61 @@ export async function createApp(options: CreateAppOptions = {}): Promise<express
 
     res.json({
       success: true,
-      user,
+      user: stripSensitive(user),
       organization: org,
       activeOrgId: storage.getActiveOrgId(),
       token: tokenData.token,
       expiresAt: tokenData.payload.exp
+    });
+  });
+
+  // Passwort für einen Nutzer setzen (nur Superadmin). Der Superadmin
+  // verteilt temporäre Passwörter manuell; der Nutzer muss es beim
+  // nächsten Login ändern (requirePasswordChange).
+  app.post('/api/users/:id/set-password', (req, res) => {
+    const actorId = getActorId(req);
+    const actor = storage.getUsers(true).find(u => u.id === actorId);
+    if (!actor || actor.role !== 'SUPERADMIN') {
+      return res.status(403).json({ success: false, error: 'Nur der Superadmin darf Passwörter setzen.' });
+    }
+
+    const target = storage.getUsers(true).find(u => u.id === req.params.id);
+    if (!target) {
+      return res.status(404).json({ success: false, error: 'Benutzer nicht gefunden.' });
+    }
+
+    const { password } = req.body as { password?: string };
+    if (!password || String(password).length < 8) {
+      return res.status(400).json({ success: false, error: 'Das Passwort muss mindestens 8 Zeichen lang sein.' });
+    }
+
+    const hash = bcrypt.hashSync(String(password), 12);
+    storage.updateUser(target.id, { passwordHash: hash, requirePasswordChange: true }, actorId as string);
+
+    res.json({
+      success: true,
+      message: 'Passwort wurde gesetzt. Der Nutzer muss es beim nächsten Login ändern.'
+    });
+  });
+
+  // Passwort-Pflicht für einen Nutzer entfernen (nur Superadmin).
+  app.delete('/api/users/:id/password', (req, res) => {
+    const actorId = getActorId(req);
+    const actor = storage.getUsers(true).find(u => u.id === actorId);
+    if (!actor || actor.role !== 'SUPERADMIN') {
+      return res.status(403).json({ success: false, error: 'Nur der Superadmin darf die Passwort-Pflicht entfernen.' });
+    }
+
+    const target = storage.getUsers(true).find(u => u.id === req.params.id);
+    if (!target) {
+      return res.status(404).json({ success: false, error: 'Benutzer nicht gefunden.' });
+    }
+
+    storage.updateUser(target.id, { passwordHash: undefined, requirePasswordChange: false }, actorId as string);
+
+    res.json({
+      success: true,
+      message: 'Passwort-Pflicht für diesen Nutzer entfernt.'
     });
   });
 
@@ -197,7 +273,7 @@ export async function createApp(options: CreateAppOptions = {}): Promise<express
 
   app.get('/api/auth/available-users', (req, res) => {
     const allUsers = storage.getUsers(true);
-    res.json(allUsers);
+    res.json(stripSensitiveList(allUsers));
   });
 
   app.post('/api/auth/switch-user', (req, res) => {
@@ -218,7 +294,7 @@ export async function createApp(options: CreateAppOptions = {}): Promise<express
     }
     res.json({ 
       success: true, 
-      activeUser: user, 
+      activeUser: stripSensitive(user), 
       organization: storage.getOrganization(),
       activeOrgId: storage.getActiveOrgId()
     });
@@ -288,7 +364,7 @@ export async function createApp(options: CreateAppOptions = {}): Promise<express
   // Users & Invitations (Section 4)
   app.get('/api/users', (req, res) => {
     const { allOrgs } = req.query as { allOrgs?: string };
-    res.json(storage.getUsers(allOrgs === 'true'));
+    res.json(stripSensitiveList(storage.getUsers(allOrgs === 'true')));
   });
 
   app.post('/api/users/invite', (req, res) => {
@@ -307,7 +383,7 @@ export async function createApp(options: CreateAppOptions = {}): Promise<express
     const actorId = getActorId(req);
     const updated = storage.updateUser(req.params.id, req.body, actorId);
     if (!updated) return res.status(404).json({ error: 'User not found' });
-    res.json(updated);
+    res.json(stripSensitive(updated));
   });
 
   app.delete('/api/users/:id', (req, res) => {

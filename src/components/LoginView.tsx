@@ -25,7 +25,9 @@ import { User, Organization } from '../types';
 export const LoginView: React.FC = () => {
   const { login, users, organizations, jobRoles, organization } = useApp();
 
-  const [activeTab, setActiveTab] = useState<'quick' | 'manual'>('quick');
+  // Schnellanmeldung (Quick-Login) nur im Admin-Modus (?mode=admin) sichtbar
+  const showAdminMode = new URLSearchParams(window.location.search).get('mode') === 'admin';
+  const [activeTab, setActiveTab] = useState<'quick' | 'manual'>(showAdminMode ? 'quick' : 'manual');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [selectedOrgId, setSelectedOrgId] = useState<string>(organizations[0]?.id || 'org-insight-arcs-01');
@@ -134,7 +136,8 @@ export const LoginView: React.FC = () => {
               </p>
             </div>
 
-            {/* Mode Switcher Tabs */}
+            {/* Mode Switcher Tabs — nur im Admin-Modus (?mode=admin) sichtbar */}
+            {showAdminMode && (
             <div className="flex items-center bg-slate-950/80 p-1 rounded-xl border border-slate-800 self-start sm:self-auto">
               <button
                 id="tab-quick-login"
@@ -169,6 +172,7 @@ export const LoginView: React.FC = () => {
                 <span>E-Mail & Passwort</span>
               </button>
             </div>
+            )}
           </div>
 
           {/* Error Banner */}
@@ -179,8 +183,8 @@ export const LoginView: React.FC = () => {
             </div>
           )}
 
-          {/* TAB 1: Schnellanmeldung / Benutzerverzeichnis */}
-          {activeTab === 'quick' && (
+          {/* TAB 1: Schnellanmeldung / Benutzerverzeichnis — nur im Admin-Modus */}
+          {showAdminMode && activeTab === 'quick' && (
             <div className="p-6 space-y-5">
               {/* Search and Role Filter */}
               <div className="flex flex-col md:flex-row gap-3 items-stretch md:items-center justify-between">
@@ -456,19 +460,13 @@ export const LoginView: React.FC = () => {
               </div>
               <div>
                 <h3 className="font-bold text-sm text-white">Passwort zurücksetzen</h3>
-                <p className="text-xs text-slate-400">Demo-Modus & Unternehmenszugang</p>
+                <p className="text-xs text-slate-400">Unternehmenszugang</p>
               </div>
             </div>
 
             <p className="text-xs text-slate-300 leading-relaxed">
-              In dieser Instanz ist der Direkt-Login für alle 20 Mitarbeiterkonten aktiv. Sie können sich im Tab <strong>&quot;Schnellanmeldung&quot;</strong> sofort mit jedem beliebigen Profil (Administrator, Projektleiter, Consultant oder externer Freelancer) ohne Kennworteingabe anmelden.
+              Wenden Sie sich an Ihren Administrator, um Ihr Passwort zurückzusetzen.
             </p>
-
-            <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 text-xs text-slate-400 space-y-1">
-              <div><strong>Admin-Konto:</strong> andreas.behrens@insightarcs.de</div>
-              <div><strong>PM-Konto:</strong> laura.klein@insightarcs.de</div>
-              <div><strong>Extern-Konto:</strong> felix.bauer@freelance-tech.de</div>
-            </div>
 
             <div className="flex justify-end pt-2">
               <button

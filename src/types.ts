@@ -101,6 +101,9 @@ export interface User {
   invitationToken?: string;
   invitationExpiresAt?: string;
   memberships?: UserOrganizationMembership[];
+  passwordHash?: string; // bcrypt-Hash des Passworts; fehlt = kein Passwort gesetzt. Verlässt NIE den Server.
+  hasPassword?: boolean; // vom Server abgeleitetes Flag (aus passwordHash) für das Frontend
+  requirePasswordChange?: boolean; // bei true muss Nutzer beim nächsten Login das Passwort ändern
   createdAt: string;
 }
 
