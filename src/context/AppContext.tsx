@@ -595,7 +595,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   };
 
   const saveWorkingTime = async (entry: Partial<WorkingTimeEntry>) => {
-    await fetch('/api/working-time', {
+    const response = await fetch('/api/working-time', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -603,6 +603,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       },
       body: JSON.stringify(entry)
     });
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ message: 'Unbekannter Fehler' }));
+      throw new Error(error.message || `HTTP ${response.status}: ${response.statusText}`);
+    }
     await refreshAllData();
   };
 

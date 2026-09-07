@@ -123,8 +123,13 @@ export const WorkingTimeView: React.FC = () => {
       payload.endTime = endTime;
       payload.breakMinutes = breakMinutes;
     }
-    await saveWorkingTime(payload);
-    resetForm();
+    try {
+      await saveWorkingTime(payload);
+      resetForm();
+    } catch (err) {
+      console.error('Fehler beim Speichern:', err);
+      alert('Fehler beim Speichern der Arbeitszeit. Bitte versuche es erneut.');
+    }
   };
 
   const filteredEntries = workingTimeEntries.filter(
