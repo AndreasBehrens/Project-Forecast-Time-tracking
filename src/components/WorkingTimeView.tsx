@@ -37,7 +37,7 @@ export const WorkingTimeView: React.FC = () => {
     }
   }, [currentUser?.id, isAdmin]);
 
-  const [selectedMonth, setSelectedMonth] = useState('2026-08');
+  const [selectedMonth, setSelectedMonth] = useState(new Date().toISOString().substring(0, 7));
   const [selectedUserId, setSelectedUserId] = useState(currentUser?.id || 'u-1');
 
   // New / edit entry form
