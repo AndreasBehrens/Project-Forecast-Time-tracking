@@ -3099,9 +3099,10 @@ export class StorageService {
       netHours = Math.round((netMinutes / 60) * 100) / 100;
     }
 
-    const existingIdx = this.workingTimeEntries.findIndex(
-      w => w.userId === (user?.id || actorId) && w.date === entryData.date
-    );
+    // Bearbeitungs-Modus: gezielter Update per id. Neu-Erstellen (kein id): immer neuen Eintrag anlegen (mehrere pro Tag erlaubt)
+    const existingIdx = entryData.id
+      ? this.workingTimeEntries.findIndex(w => w.id === entryData.id)
+      : -1;
 
     if (existingIdx !== -1) {
       const previous = this.workingTimeEntries[existingIdx];

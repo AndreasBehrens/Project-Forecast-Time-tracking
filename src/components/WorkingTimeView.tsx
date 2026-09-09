@@ -112,6 +112,7 @@ export const WorkingTimeView: React.FC = () => {
   const handleSaveWorkingDay = async (e: React.FormEvent) => {
     e.preventDefault();
     const payload: any = {
+      ...(editingId ? { id: editingId } : {}),
       userId: selectedUserId,
       date: entryDate,
       dayType,

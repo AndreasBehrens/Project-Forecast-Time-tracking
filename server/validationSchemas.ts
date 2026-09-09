@@ -27,6 +27,7 @@ export const UpdateTimeEntrySchema = CreateTimeEntrySchema.partial().extend({
 
 // Working Time Schema (ArbZG Anwesenheit)
 export const CreateWorkingTimeSchema = z.object({
+  id: z.string().optional(),
   userId: z.string().optional(),
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Datum muss im Format YYYY-MM-DD vorliegen'),
   dayType: z.enum(['REGULAR', 'VACATION', 'SICK', 'SPECIAL_LEAVE', 'PARENTAL_LEAVE']).optional().default('REGULAR'),
