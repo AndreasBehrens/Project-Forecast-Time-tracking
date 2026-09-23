@@ -696,6 +696,17 @@ export async function createApp(options: CreateAppOptions = {}): Promise<express
     }
   });
 
+  app.delete('/api/working-time/:id', (req, res, next) => {
+    try {
+      const actorId = getActorId(req);
+      const ok = storage.deleteWorkingTimeEntry(req.params.id, actorId);
+      if (!ok) throw new NotFoundError('Arbeitszeit-Eintrag nicht gefunden');
+      res.json({ success: true });
+    } catch (err: any) {
+      next(err instanceof NotFoundError ? err : new BadRequestError(err.message || 'Fehler beim Löschen des Arbeitszeit-Eintrags'));
+    }
+  });
+
   app.get('/api/working-time/summary', (req, res) => {
     const { userId, month } = req.query as { userId: string; month: string };
     const targetUserId = userId || getActorId(req);

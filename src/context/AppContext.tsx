@@ -83,6 +83,7 @@ interface AppContextType {
   batchUpdateTimeEntries: (ids: string[], updates: Partial<TimeEntry>) => Promise<void>;
   approveTimeEntries: (ids: string[], status: 'APPROVED' | 'REJECTED') => Promise<void>;
   saveWorkingTime: (entry: Partial<WorkingTimeEntry>) => Promise<void>;
+  deleteWorkingTime: (id: string) => Promise<void>;
   saveForecast: (entry: Partial<ForecastEntry>) => Promise<void>;
   // GoBD & Revisionssicherheit Actions
   lockPeriod: (periodKey: string, reason?: string) => Promise<{ success: boolean; error?: string }>;
@@ -610,6 +611,18 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     await refreshAllData();
   };
 
+  const deleteWorkingTime = async (id: string) => {
+    const response = await fetch(`/api/working-time/${id}`, {
+      method: 'DELETE',
+      headers: { 'x-user-id': currentUser?.id || 'u-1' }
+    });
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ message: 'Unbekannter Fehler' }));
+      throw new Error(error.message || `HTTP ${response.status}`);
+    }
+    await refreshAllData();
+  };
+
   const saveForecast = async (entry: Partial<ForecastEntry>) => {
     await fetch('/api/forecasts', {
       method: 'POST',
@@ -1118,6 +1131,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         batchUpdateTimeEntries,
         approveTimeEntries,
         saveWorkingTime,
+        deleteWorkingTime,
         saveForecast,
         lockPeriod,
         unlockPeriod,

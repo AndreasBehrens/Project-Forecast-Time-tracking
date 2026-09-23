@@ -3170,6 +3170,29 @@ export class StorageService {
     }
   }
 
+  public deleteWorkingTimeEntry(entryId: string, actorId: string): boolean {
+    const idx = this.workingTimeEntries.findIndex(e => e.id === entryId);
+    if (idx === -1) return false;
+    const deleted = this.workingTimeEntries[idx];
+
+    const periodCheck = this.isPeriodLocked(deleted.date);
+    if (periodCheck.isLocked) {
+      throw new Error(`GoBD-Revisionsschutz: Der Eintrag liegt im gesperrten Abrechnungsmonat ${deleted.date.slice(0, 7)} und darf nicht gelöscht werden.`);
+    }
+
+    this.workingTimeEntries.splice(idx, 1);
+    this.logAudit({
+      entityType: 'WORKING_TIME',
+      entityId: entryId,
+      action: 'DELETE',
+      userId: actorId,
+      userName: this.users.find(u => u.id === actorId)?.name || 'User',
+      changes: [{ field: 'entry', oldValue: `${deleted.date} ${deleted.dayType}`, newValue: null }]
+    });
+    this.saveToFile();
+    return true;
+  }
+
   // --- Working Time Summary & Sanity Check (Section 20) ---
   public getWorkingTimeSummary(userId: string, month: string) {
     const user = this.users.find(u => u.id === userId);

@@ -13,6 +13,7 @@ import {
   Coffee,
   Info,
   Pencil,
+  Trash2,
   X,
   Baby,
   Palmtree,
@@ -26,6 +27,7 @@ export const WorkingTimeView: React.FC = () => {
     currentUser,
     workingTimeEntries,
     saveWorkingTime,
+    deleteWorkingTime,
     users
   } = useApp();
 
@@ -107,6 +109,16 @@ export const WorkingTimeView: React.FC = () => {
     setEndTime(entry.endTime || '17:00');
     setBreakMinutes(entry.breakMinutes ?? 45);
     setNote(entry.note || '');
+  };
+
+  const handleDelete = async (entry: any) => {
+    if (!confirm(`Eintrag vom ${entry.date} wirklich löschen?`)) return;
+    try {
+      await deleteWorkingTime(entry.id);
+    } catch (err) {
+      console.error('Fehler beim Löschen:', err);
+      alert('Fehler beim Löschen des Eintrags. Bitte versuche es erneut.');
+    }
   };
 
   const handleSaveWorkingDay = async (e: React.FormEvent) => {
@@ -482,6 +494,14 @@ export const WorkingTimeView: React.FC = () => {
                         className="inline-flex items-center gap-1 text-[11px] font-semibold text-slate-600 hover:text-emerald-700 bg-slate-50 hover:bg-emerald-50 px-2.5 py-1 rounded-lg border border-slate-200/70 hover:border-emerald-200 transition-colors"
                       >
                         <Pencil className="w-3 h-3" /> {t.editEntry}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleDelete(entry)}
+                        className="inline-flex items-center text-red-500 hover:text-red-700 p-1 ml-2 rounded transition-colors"
+                        title="Eintrag löschen"
+                      >
+                        <Trash2 className="w-4 h-4" />
                       </button>
                     </td>
                   </tr>
