@@ -18,6 +18,9 @@ import { asyncHandler } from './http/asyncHandler.js';
 import { validateBody } from './http/validate.js';
 import { BadRequestError, NotFoundError } from './http/errors.js';
 import { createSessionContext } from './http/session.js';
+import multer from 'multer';
+import pdfParse from 'pdf-parse';
+import { parseClockifyPdfText, mapDayType } from './clockifyPdfParser.js';
 
 export interface CreateAppOptions {
   /**
@@ -704,6 +707,111 @@ export async function createApp(options: CreateAppOptions = {}): Promise<express
       res.json({ success: true });
     } catch (err: any) {
       next(err instanceof NotFoundError ? err : new BadRequestError(err.message || 'Fehler beim Löschen des Arbeitszeit-Eintrags'));
+    }
+  });
+
+  // --- Clockify PDF Import (Section 22) ---
+  const uploadMemory = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } });
+
+  // 1. PDF parsen -> Vorschau zurückgeben
+  app.post('/api/import/clockify-pdf/parse', uploadMemory.single('pdf'), async (req, res, next) => {
+    try {
+      if (!req.file) {
+        return next(new BadRequestError('Keine PDF-Datei hochgeladen'));
+      }
+      const pdfData = await pdfParse(req.file.buffer);
+      const entries = parseClockifyPdfText(pdfData.text);
+      const users = [...new Set(entries.map(e => e.userName))].sort();
+      const projects = [...new Set(entries.map(e => e.projectTask).filter(Boolean))].sort();
+      res.json({ entries, users, projects, totalEntries: entries.length });
+    } catch (err: any) {
+      next(new BadRequestError('Fehler beim Parsen der PDF: ' + (err?.message || 'Unbekannter Fehler')));
+    }
+  });
+
+  // 2. Import ausführen
+  app.post('/api/import/clockify-pdf/execute', (req, res, next) => {
+    try {
+      const actorId = getActorId(req);
+      const {
+        entries = [],
+        importType,
+        userMapping = {},
+        projectMapping = {},
+        skipDuplicates = true
+      } = req.body as {
+        entries: any[];
+        importType: 'working-time' | 'time-entries';
+        userMapping: Record<string, string>;
+        projectMapping: Record<string, { projectId: string; clientId: string }>;
+        skipDuplicates: boolean;
+      };
+
+      let imported = 0;
+      let skipped = 0;
+      const errors: string[] = [];
+
+      for (const entry of entries) {
+        try {
+          const userId = userMapping[entry.userName];
+          if (!userId) { skipped++; continue; }
+
+          if (importType === 'working-time') {
+            const dayType = mapDayType(entry.projectTask);
+            if (skipDuplicates) {
+              const existing = storage.getWorkingTimeEntries({ from: entry.date, to: entry.date, userId }, actorId);
+              if (existing.some(e => e.date === entry.date && e.startTime === entry.startTime)) {
+                skipped++; continue;
+              }
+            }
+            storage.createOrUpdateWorkingTime({
+              userId,
+              date: entry.date,
+              dayType: dayType as any,
+              halfDay: false,
+              startTime: entry.startTime || undefined,
+              endTime: entry.endTime || undefined,
+              breakMinutes: 0,
+              note: entry.description + (entry.projectTask ? ` (${entry.projectTask})` : '')
+            }, actorId);
+            imported++;
+          } else {
+            // time-entries
+            const mapping = projectMapping?.[entry.projectTask];
+            if (!mapping?.projectId) { skipped++; continue; }
+            const project = storage.getProjects(actorId).find(p => p.id === mapping.projectId);
+            if (!project) { skipped++; continue; }
+            const [startH, startM] = (entry.startTime || '09:00').split(':').map(Number);
+            const [endH, endM] = (entry.endTime || '17:00').split(':').map(Number);
+            const durationMinutes = Math.max(0, (endH * 60 + endM) - (startH * 60 + startM));
+            if (skipDuplicates) {
+              const existing = storage.getTimeEntries({ from: entry.date, to: entry.date, userId }, actorId);
+              if (existing.data.some(e => e.userId === userId && e.date === entry.date && e.startTime === entry.startTime)) {
+                skipped++; continue;
+              }
+            }
+            storage.createTimeEntry({
+              userId,
+              projectId: mapping.projectId,
+              clientId: mapping.clientId || project.clientId,
+              date: entry.date,
+              startTime: entry.startTime,
+              endTime: entry.endTime,
+              durationMinutes,
+              description: entry.description,
+              isBillable: entry.isBillable,
+              breakMinutes: 0
+            }, actorId);
+            imported++;
+          }
+        } catch (e: any) {
+          errors.push(`${entry.date} ${entry.userName}: ${e?.message || 'Fehler'}`);
+        }
+      }
+
+      res.json({ imported, skipped, errors });
+    } catch (err: any) {
+      next(new BadRequestError('Fehler beim Import: ' + (err?.message || 'Unbekannter Fehler')));
     }
   });
 

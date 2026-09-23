@@ -84,6 +84,8 @@ interface AppContextType {
   approveTimeEntries: (ids: string[], status: 'APPROVED' | 'REJECTED') => Promise<void>;
   saveWorkingTime: (entry: Partial<WorkingTimeEntry>) => Promise<void>;
   deleteWorkingTime: (id: string) => Promise<void>;
+  parseClockifyPdf: (file: File) => Promise<{ entries: any[]; users: string[]; projects: string[]; totalEntries: number }>;
+  executeClockifyPdfImport: (params: { entries: any[]; importType: string; userMapping: Record<string, string>; projectMapping: Record<string, { projectId: string; clientId: string }>; skipDuplicates: boolean }) => Promise<{ imported: number; skipped: number; errors: string[] }>;
   saveForecast: (entry: Partial<ForecastEntry>) => Promise<void>;
   // GoBD & Revisionssicherheit Actions
   lockPeriod: (periodKey: string, reason?: string) => Promise<{ success: boolean; error?: string }>;
@@ -623,6 +625,36 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     await refreshAllData();
   };
 
+  const parseClockifyPdf = async (file: File) => {
+    const formData = new FormData();
+    formData.append('pdf', file);
+    const response = await fetch('/api/import/clockify-pdf/parse', {
+      method: 'POST',
+      headers: { 'x-user-id': currentUser?.id || 'u-1' },
+      body: formData
+    });
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ message: 'Fehler beim Parsen der PDF' }));
+      throw new Error(error.message || error.error || `HTTP ${response.status}`);
+    }
+    return response.json();
+  };
+
+  const executeClockifyPdfImport = async (params: { entries: any[]; importType: string; userMapping: Record<string, string>; projectMapping: Record<string, { projectId: string; clientId: string }>; skipDuplicates: boolean }) => {
+    const response = await fetch('/api/import/clockify-pdf/execute', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-user-id': currentUser?.id || 'u-1' },
+      body: JSON.stringify(params)
+    });
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ message: 'Fehler beim Import' }));
+      throw new Error(error.message || error.error || `HTTP ${response.status}`);
+    }
+    const result = await response.json();
+    await refreshAllData();
+    return result;
+  };
+
   const saveForecast = async (entry: Partial<ForecastEntry>) => {
     await fetch('/api/forecasts', {
       method: 'POST',
@@ -1132,6 +1164,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         approveTimeEntries,
         saveWorkingTime,
         deleteWorkingTime,
+        parseClockifyPdf,
+        executeClockifyPdfImport,
         saveForecast,
         lockPeriod,
         unlockPeriod,
