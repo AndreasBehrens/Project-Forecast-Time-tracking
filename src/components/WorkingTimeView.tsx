@@ -49,7 +49,7 @@ export const WorkingTimeView: React.FC = () => {
   const [startTime, setStartTime] = useState('08:30');
   const [endTime, setEndTime] = useState('17:00');
   const [breakMinutes, setBreakMinutes] = useState(45);
-  const [note, setNote] = useState('Büro München');
+  const [note, setNote] = useState('');
   const [editingId, setEditingId] = useState<string | null>(null);
 
   // Zeitraum-Filter für die Tabelle "Protokollierte Tagesarbeitszeiten"
@@ -102,7 +102,7 @@ export const WorkingTimeView: React.FC = () => {
     setStartTime('08:30');
     setEndTime('17:00');
     setBreakMinutes(45);
-    setNote('Büro München');
+    setNote('');
   };
 
   const handleEdit = (entry: any) => {
@@ -188,6 +188,16 @@ export const WorkingTimeView: React.FC = () => {
   });
 
   const selectedUserObj = users.find(u => u.id === selectedUserId);
+
+  // Maximal erlaubtes Eintragsdatum: letzter Tag des nächsten Monats
+  const maxAllowedDate = (() => {
+    const d = new Date();
+    return new Date(d.getFullYear(), d.getMonth() + 2, 0).toISOString().split('T')[0];
+  })();
+
+  // Warnung, wenn das Eintragsdatum im nächsten Monat (nach dem aktuellen Monat) liegt
+  const currentMonthStr = new Date().toISOString().substring(0, 7); // YYYY-MM
+  const isNextMonth = entryDate > `${currentMonthStr}-31`;
 
   return (
     <div className="space-y-6">
@@ -378,8 +388,15 @@ export const WorkingTimeView: React.FC = () => {
               type="date"
               value={entryDate}
               onChange={e => setEntryDate(e.target.value)}
+              max={maxAllowedDate}
               className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold"
             />
+            {isNextMonth && (
+              <p className="text-[10px] text-amber-600 font-semibold mt-1 flex items-center gap-1">
+                <AlertTriangle className="w-3 h-3 shrink-0" />
+                Eintrag liegt im nächsten Monat
+              </p>
+            )}
           </div>
 
           {/* Halbtags-Checkbox nur bei Abwesenheiten */}
