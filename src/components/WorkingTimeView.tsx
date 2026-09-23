@@ -52,6 +52,11 @@ export const WorkingTimeView: React.FC = () => {
   const [note, setNote] = useState('Büro München');
   const [editingId, setEditingId] = useState<string | null>(null);
 
+  // Zeitraum-Filter für die Tabelle "Protokollierte Tagesarbeitszeiten"
+  const [tableFilter, setTableFilter] = useState<'month' | 'lastMonth' | 'quarter' | 'halfYear' | 'year' | 'all' | 'custom'>('month');
+  const [customFrom, setCustomFrom] = useState('');
+  const [customTo, setCustomTo] = useState('');
+
   // Summary data from API
   const [summary, setSummary] = useState<any>(null);
 
@@ -145,9 +150,42 @@ export const WorkingTimeView: React.FC = () => {
     }
   };
 
-  const filteredEntries = workingTimeEntries.filter(
-    w => w.userId === selectedUserId && w.date.startsWith(selectedMonth)
-  );
+  const getTableDateRange = (): { from: string; to: string } | null => {
+    const today = new Date();
+    const yyyy = today.getFullYear();
+    const mm = String(today.getMonth() + 1).padStart(2, '0');
+
+    if (tableFilter === 'month') {
+      return { from: `${selectedMonth}-01`, to: `${selectedMonth}-31` };
+    }
+    if (tableFilter === 'lastMonth') {
+      const d = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+      const y = d.getFullYear(); const m = String(d.getMonth() + 1).padStart(2, '0');
+      return { from: `${y}-${m}-01`, to: `${y}-${m}-31` };
+    }
+    if (tableFilter === 'quarter') {
+      const d = new Date(today.getFullYear(), today.getMonth() - 3, 1);
+      return { from: d.toISOString().split('T')[0], to: `${yyyy}-${mm}-31` };
+    }
+    if (tableFilter === 'halfYear') {
+      const d = new Date(today.getFullYear(), today.getMonth() - 6, 1);
+      return { from: d.toISOString().split('T')[0], to: `${yyyy}-${mm}-31` };
+    }
+    if (tableFilter === 'year') {
+      return { from: `${yyyy}-01-01`, to: `${yyyy}-12-31` };
+    }
+    if (tableFilter === 'custom') {
+      return customFrom && customTo ? { from: customFrom, to: customTo } : null;
+    }
+    return null; // 'all'
+  };
+
+  const filteredEntries = workingTimeEntries.filter(w => {
+    if (w.userId !== selectedUserId) return false;
+    const range = getTableDateRange();
+    if (!range) return true; // 'all'
+    return w.date >= range.from && w.date <= range.to;
+  });
 
   const selectedUserObj = users.find(u => u.id === selectedUserId);
 
@@ -440,8 +478,44 @@ export const WorkingTimeView: React.FC = () => {
 
       {/* Working Time Entries Table */}
       <div className="bg-white rounded-2xl border border-slate-200/90 shadow-xs overflow-hidden">
-        <div className="px-5 py-3 border-b border-slate-200/80 font-bold text-xs text-slate-700 bg-slate-50/50">
-          {t.loggedDailyWorkingHours} ({filteredEntries.length} {filteredEntries.length === 1 ? t.day : t.days})
+        <div className="px-5 py-3 border-b border-slate-200/80 bg-slate-50/50 flex flex-wrap items-center justify-between gap-3">
+          <span className="font-bold text-xs text-slate-700">
+            {t.loggedDailyWorkingHours} ({filteredEntries.length} {filteredEntries.length === 1 ? t.day : t.days})
+          </span>
+          <div className="flex flex-wrap items-center gap-2">
+            <select
+              value={tableFilter}
+              onChange={e => setTableFilter(e.target.value as any)}
+              className="border border-slate-200 rounded-lg px-2.5 py-1 text-xs font-semibold text-slate-700 bg-white focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+            >
+              <option value="month">Aktueller Monat</option>
+              <option value="lastMonth">Letzter Monat</option>
+              <option value="quarter">Letztes Quartal</option>
+              <option value="halfYear">Letztes Halbjahr</option>
+              <option value="year">Aktuelles Jahr</option>
+              <option value="all">Alle Einträge</option>
+              <option value="custom">Benutzerdefiniert</option>
+            </select>
+            {tableFilter === 'custom' && (
+              <>
+                <input
+                  type="date"
+                  value={customFrom}
+                  onChange={e => setCustomFrom(e.target.value)}
+                  className="border border-slate-200 rounded-lg px-2 py-1 text-xs text-slate-700 bg-white focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                  placeholder="Von"
+                />
+                <span className="text-xs text-slate-400">–</span>
+                <input
+                  type="date"
+                  value={customTo}
+                  onChange={e => setCustomTo(e.target.value)}
+                  className="border border-slate-200 rounded-lg px-2 py-1 text-xs text-slate-700 bg-white focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                  placeholder="Bis"
+                />
+              </>
+            )}
+          </div>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs">
