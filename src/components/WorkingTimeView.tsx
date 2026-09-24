@@ -39,7 +39,6 @@ export const WorkingTimeView: React.FC = () => {
     }
   }, [currentUser?.id, isAdmin]);
 
-  const [selectedMonth, setSelectedMonth] = useState(new Date().toISOString().substring(0, 7));
   const [selectedUserId, setSelectedUserId] = useState(currentUser?.id || 'u-1');
 
   // New / edit entry form
@@ -57,6 +56,22 @@ export const WorkingTimeView: React.FC = () => {
   const [customFrom, setCustomFrom] = useState('');
   const [customTo, setCustomTo] = useState('');
   const [tableTypeFilter, setTableTypeFilter] = useState('');
+
+  // Der referenzierte Monat wird aus dem Zeitraum-Filter abgeleitet
+  // (es gibt keinen separaten Monats-Picker mehr).
+  const computeSelectedMonth = (): string => {
+    const today = new Date();
+    if (tableFilter === 'lastMonth') {
+      const d = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+    }
+    if (tableFilter === 'custom' && customFrom) {
+      return customFrom.substring(0, 7);
+    }
+    // Für alle anderen Filter (month, quarter, halfYear, year, all): aktueller Monat
+    return today.toISOString().substring(0, 7);
+  };
+  const selectedMonth = computeSelectedMonth();
 
   // Summary data from API
   const [summary, setSummary] = useState<any>(null);
@@ -242,16 +257,6 @@ export const WorkingTimeView: React.FC = () => {
               <span className="truncate">{currentUser?.name} ({currentUser?.weeklyTargetHours || 40} {t.hoursPerWeek})</span>
             </div>
           )}
-
-          <div className="relative flex items-center w-full sm:w-auto">
-            <input
-              id="input-worktime-month"
-              type="month"
-              value={selectedMonth}
-              onChange={e => setSelectedMonth(e.target.value)}
-              className="bg-slate-50 hover:bg-slate-100/80 focus:bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 w-full sm:w-auto min-w-[140px] focus:ring-2 focus:ring-emerald-500 focus:outline-hidden transition-colors"
-            />
-          </div>
         </div>
       </div>
 
