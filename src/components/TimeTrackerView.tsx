@@ -65,6 +65,12 @@ export const TimeTrackerView: React.FC = () => {
   // Multi-select / Batch
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
 
+  // --- Filter für die Zeiteinträge-Liste ---
+  const [filterPeriod, setFilterPeriod] = useState<'thisWeek' | 'thisMonth' | 'lastMonth' | 'thisQuarter' | 'thisYear' | 'all'>('thisMonth');
+  const [filterUserId, setFilterUserId] = useState<string>('all');
+  const [filterProjectId, setFilterProjectId] = useState<string>('all');
+  const [filterSearch, setFilterSearch] = useState('');
+
   // Split Modal State
   const [splitModalEntry, setSplitModalEntry] = useState<TimeEntry | null>(null);
   const [splitParts, setSplitParts] = useState<Array<{ durationMinutes: number; description: string; taskId?: string }>>([]);
@@ -201,8 +207,54 @@ export const TimeTrackerView: React.FC = () => {
     }
   };
 
+  // Zeitraum-Grenzen für den Listen-Filter berechnen
+  const getFilterDateRange = (): { from: string; to: string } | null => {
+    const today = new Date();
+    const toISO = (d: Date) => d.toISOString().split('T')[0];
+    if (filterPeriod === 'thisWeek') {
+      const day = today.getDay(); // 0 = So
+      const diffToMonday = day === 0 ? 6 : day - 1;
+      const monday = new Date(today); monday.setDate(today.getDate() - diffToMonday);
+      const sunday = new Date(monday); sunday.setDate(monday.getDate() + 6);
+      return { from: toISO(monday), to: toISO(sunday) };
+    }
+    if (filterPeriod === 'thisMonth') {
+      const m = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
+      return { from: `${m}-01`, to: `${m}-31` };
+    }
+    if (filterPeriod === 'lastMonth') {
+      const d = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+      const m = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+      return { from: `${m}-01`, to: `${m}-31` };
+    }
+    if (filterPeriod === 'thisQuarter') {
+      const q = Math.floor(today.getMonth() / 3);
+      const from = new Date(today.getFullYear(), q * 3, 1);
+      const to = new Date(today.getFullYear(), q * 3 + 3, 0);
+      return { from: toISO(from), to: toISO(to) };
+    }
+    if (filterPeriod === 'thisYear') {
+      return { from: `${today.getFullYear()}-01-01`, to: `${today.getFullYear()}-12-31` };
+    }
+    return null; // 'all'
+  };
+
+  const filterRange = getFilterDateRange();
+  const searchLower = filterSearch.trim().toLowerCase();
+
+  const filteredEntries = timeEntries.filter(entry => {
+    if (filterRange && !(entry.date >= filterRange.from && entry.date <= filterRange.to)) return false;
+    if (filterUserId !== 'all' && entry.userId !== filterUserId) return false;
+    if (filterProjectId !== 'all' && entry.projectId !== filterProjectId) return false;
+    if (searchLower) {
+      const haystack = `${entry.description || ''} ${entry.projectName || ''} ${entry.clientName || ''} ${entry.taskName || ''} ${entry.userName || ''}`.toLowerCase();
+      if (!haystack.includes(searchLower)) return false;
+    }
+    return true;
+  });
+
   // Group entries by date
-  const groupedEntries = timeEntries.reduce((acc, entry) => {
+  const groupedEntries = filteredEntries.reduce((acc, entry) => {
     if (!acc[entry.date]) acc[entry.date] = [];
     acc[entry.date].push(entry);
     return acc;
@@ -743,6 +795,71 @@ export const TimeTrackerView: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Filter-Leiste für die Zeiteinträge */}
+      <div className="bg-white rounded-2xl border border-slate-200/90 shadow-xs p-3 flex flex-wrap items-center gap-2">
+        <span className="flex items-center gap-1.5 text-xs font-bold text-slate-700 mr-1">
+          <Filter className="w-3.5 h-3.5 text-slate-500" /> {t.filter}:
+        </span>
+        <select
+          value={filterPeriod}
+          onChange={e => setFilterPeriod(e.target.value as any)}
+          className="bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-slate-700 focus:bg-white focus:ring-2 focus:ring-slate-900 focus:outline-none"
+        >
+          <option value="thisWeek">Diese Woche</option>
+          <option value="thisMonth">Dieser Monat</option>
+          <option value="lastMonth">Letzter Monat</option>
+          <option value="thisQuarter">Dieses Quartal</option>
+          <option value="thisYear">Dieses Jahr</option>
+          <option value="all">Alle Einträge</option>
+        </select>
+
+        {isPrivilegedUser && (
+          <select
+            value={filterUserId}
+            onChange={e => setFilterUserId(e.target.value)}
+            className="bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-slate-700 focus:bg-white focus:ring-2 focus:ring-slate-900 focus:outline-none"
+          >
+            <option value="all">Alle Mitarbeiter</option>
+            {users.map(u => (
+              <option key={u.id} value={u.id}>{u.name}</option>
+            ))}
+          </select>
+        )}
+
+        <select
+          value={filterProjectId}
+          onChange={e => setFilterProjectId(e.target.value)}
+          className="bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-slate-700 focus:bg-white focus:ring-2 focus:ring-slate-900 focus:outline-none max-w-[200px]"
+        >
+          <option value="all">Alle Projekte</option>
+          {projects.map(p => (
+            <option key={p.id} value={p.id}>{p.name}</option>
+          ))}
+        </select>
+
+        <input
+          type="text"
+          value={filterSearch}
+          onChange={e => setFilterSearch(e.target.value)}
+          placeholder="Beschreibung / Notiz suchen…"
+          className="flex-1 min-w-[160px] bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 text-xs text-slate-700 placeholder:text-slate-400 focus:bg-white focus:ring-2 focus:ring-slate-900 focus:outline-none"
+        />
+
+        {(filterPeriod !== 'thisMonth' || filterUserId !== 'all' || filterProjectId !== 'all' || filterSearch) && (
+          <button
+            type="button"
+            onClick={() => { setFilterPeriod('thisMonth'); setFilterUserId('all'); setFilterProjectId('all'); setFilterSearch(''); }}
+            className="text-xs font-semibold text-slate-500 hover:text-slate-900 px-2 py-1.5"
+          >
+            Zurücksetzen
+          </button>
+        )}
+
+        <span className="text-xs text-slate-400 font-medium ml-auto">
+          {filteredEntries.length} {filteredEntries.length === 1 ? 'Eintrag' : 'Einträge'}
+        </span>
+      </div>
 
       {/* Time Entries Grouped by Day */}
       <div className="space-y-4">

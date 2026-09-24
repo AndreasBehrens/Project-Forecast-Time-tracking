@@ -70,6 +70,7 @@ export const ProjectsClientsView: React.FC = () => {
   // Search & Filters
   const [projectSearch, setProjectSearch] = useState('');
   const [clientSearch, setClientSearch] = useState('');
+  const [clientStatusFilter, setClientStatusFilter] = useState<'ALL' | 'ACTIVE' | 'INACTIVE'>('ALL');
   const [projectBillingFilter, setProjectBillingFilter] = useState<'ALL' | 'TIME_AND_MATERIAL' | 'FIXED_PRICE'>('ALL');
   const [projectStatusFilter, setProjectStatusFilter] = useState<'ALL' | 'ACTIVE' | 'ON_HOLD' | 'COMPLETED' | 'ARCHIVED'>('ALL');
 
@@ -557,10 +558,12 @@ export const ProjectsClientsView: React.FC = () => {
   }, [filteredProjects, selectedProjectId]);
 
   const filteredClients = clients.filter(c => {
-    return c.name.toLowerCase().includes(clientSearch.toLowerCase()) ||
+    const matchesSearch = c.name.toLowerCase().includes(clientSearch.toLowerCase()) ||
            (c.contactPerson && c.contactPerson.toLowerCase().includes(clientSearch.toLowerCase())) ||
            (c.email && c.email.toLowerCase().includes(clientSearch.toLowerCase())) ||
            (c.clientNumber && c.clientNumber.toLowerCase().includes(clientSearch.toLowerCase()));
+    const matchesStatus = clientStatusFilter === 'ALL' || ((c.status as any) || 'ACTIVE') === clientStatusFilter;
+    return matchesSearch && matchesStatus;
   });
 
   // Filtered users for project assignment
@@ -1578,8 +1581,19 @@ export const ProjectsClientsView: React.FC = () => {
                 className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs placeholder:text-slate-400 focus:outline-hidden focus:ring-1 focus:ring-slate-900"
               />
             </div>
-            <div className="text-xs text-slate-500 font-medium">
-              Gesamt: <strong className="text-slate-900">{clients.length} Kunden</strong> ({filteredClients.length} gefiltert)
+            <div className="flex items-center gap-3">
+              <select
+                value={clientStatusFilter}
+                onChange={e => setClientStatusFilter(e.target.value as any)}
+                className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-700 focus:outline-hidden focus:ring-1 focus:ring-slate-900"
+              >
+                <option value="ALL">Alle Status</option>
+                <option value="ACTIVE">Aktiv</option>
+                <option value="INACTIVE">Inaktiv</option>
+              </select>
+              <div className="text-xs text-slate-500 font-medium">
+                Gesamt: <strong className="text-slate-900">{clients.length} Kunden</strong> ({filteredClients.length} gefiltert)
+              </div>
             </div>
           </div>
 
