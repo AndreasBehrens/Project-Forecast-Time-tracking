@@ -56,6 +56,7 @@ export const WorkingTimeView: React.FC = () => {
   const [tableFilter, setTableFilter] = useState<'month' | 'lastMonth' | 'quarter' | 'halfYear' | 'year' | 'all' | 'custom'>('month');
   const [customFrom, setCustomFrom] = useState('');
   const [customTo, setCustomTo] = useState('');
+  const [tableTypeFilter, setTableTypeFilter] = useState('');
 
   // Summary data from API
   const [summary, setSummary] = useState<any>(null);
@@ -182,6 +183,7 @@ export const WorkingTimeView: React.FC = () => {
 
   const filteredEntries = workingTimeEntries.filter(w => {
     if (w.userId !== selectedUserId) return false;
+    if (tableTypeFilter !== '' && (w.dayType || 'REGULAR') !== tableTypeFilter) return false;
     const range = getTableDateRange();
     if (!range) return true; // 'all'
     return w.date >= range.from && w.date <= range.to;
@@ -189,15 +191,22 @@ export const WorkingTimeView: React.FC = () => {
 
   const selectedUserObj = users.find(u => u.id === selectedUserId);
 
+  // Urlaub und Elternzeit dürfen ganzjährig (auch weit in der Zukunft) eingetragen werden
+  const allowFuture = dayType === 'VACATION' || dayType === 'PARENTAL_LEAVE';
+
   // Maximal erlaubtes Eintragsdatum: letzter Tag des nächsten Monats
-  const maxAllowedDate = (() => {
-    const d = new Date();
-    return new Date(d.getFullYear(), d.getMonth() + 2, 0).toISOString().split('T')[0];
-  })();
+  // (bei Urlaub/Elternzeit keine Begrenzung)
+  const maxAllowedDate = allowFuture
+    ? '9999-12-31'
+    : (() => {
+        const d = new Date();
+        return new Date(d.getFullYear(), d.getMonth() + 2, 0).toISOString().split('T')[0];
+      })();
 
   // Warnung, wenn das Eintragsdatum im nächsten Monat (nach dem aktuellen Monat) liegt
+  // (nicht bei Urlaub/Elternzeit, da dort Zukunftsdaten ausdrücklich erlaubt sind)
   const currentMonthStr = new Date().toISOString().substring(0, 7); // YYYY-MM
-  const isNextMonth = entryDate > `${currentMonthStr}-31`;
+  const isNextMonth = !allowFuture && entryDate > `${currentMonthStr}-31`;
 
   return (
     <div className="space-y-6">
@@ -512,6 +521,18 @@ export const WorkingTimeView: React.FC = () => {
               <option value="year">Aktuelles Jahr</option>
               <option value="all">Alle Einträge</option>
               <option value="custom">Benutzerdefiniert</option>
+            </select>
+            <select
+              value={tableTypeFilter}
+              onChange={e => setTableTypeFilter(e.target.value)}
+              className="border border-slate-200 rounded-lg px-2.5 py-1 text-xs font-semibold text-slate-700 bg-white focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+            >
+              <option value="">Alle Typen</option>
+              <option value="REGULAR">Reguläre Arbeitszeit</option>
+              <option value="VACATION">Urlaub</option>
+              <option value="SICK">Krankheit</option>
+              <option value="SPECIAL_LEAVE">Sonderurlaub</option>
+              <option value="PARENTAL_LEAVE">Elternzeit</option>
             </select>
             {tableFilter === 'custom' && (
               <>
