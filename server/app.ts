@@ -280,7 +280,12 @@ export async function createApp(options: CreateAppOptions = {}): Promise<express
   });
 
   app.post('/api/auth/switch-user', (req, res) => {
-    // Nur Admins dürfen in andere Accounts wechseln
+    // Nur Admins dürfen in andere Accounts wechseln.
+    // Der Aufrufer muss sich explizit ausweisen (JWT oder x-user-id) – kein Fallback
+    // auf die globale Server-Session, sonst könnten anonyme Requests durchrutschen.
+    if (!req.headers['authorization'] && !req.headers['x-user-id']) {
+      return res.status(401).json({ error: 'Nicht authentifiziert.' });
+    }
     const actorId = getActorId(req);
     const actor = storage.getUsers(true).find(u => u.id === actorId);
     if (!actor || (actor.role !== 'SUPERADMIN' && actor.role !== 'ADMIN')) {

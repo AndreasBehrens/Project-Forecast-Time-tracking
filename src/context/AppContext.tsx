@@ -432,12 +432,22 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   // Switch Simulated User
   const switchUser = async (userId: string) => {
+    const token = localStorage.getItem('insight_arcs_auth_jwt_token');
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      'x-user-id': currentUser?.id || ''
+    };
+    if (token) headers['Authorization'] = `Bearer ${token}`;
     const res = await fetch('/api/auth/switch-user', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers,
       body: JSON.stringify({ userId })
     });
     const data = await res.json();
+    if (!res.ok) {
+      alert(data.error || 'Nutzerwechsel nicht erlaubt.');
+      return;
+    }
     if (data.success && data.activeUser) {
       setCurrentUser(data.activeUser);
       localStorage.setItem('insight_arcs_logged_in_user', data.activeUser.id);
