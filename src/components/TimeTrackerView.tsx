@@ -19,7 +19,8 @@ import {
   Filter,
   Users,
   AlertCircle,
-  Lock
+  Lock,
+  Download
 } from 'lucide-react';
 
 export const TimeTrackerView: React.FC = () => {
@@ -261,6 +262,40 @@ export const TimeTrackerView: React.FC = () => {
   }, {} as Record<string, TimeEntry[]>);
 
   const sortedDates = Object.keys(groupedEntries).sort((a, b) => b.localeCompare(a));
+
+  // CSV-Export der aktuell gefilterten Projektzeiten (Semikolon, UTF-8 mit BOM für Excel)
+  const exportToCsv = () => {
+    const headers = ['Datum', 'Mitarbeiter', 'Projekt', 'Aufgabe', 'Beschreibung', 'Dauer (h)', 'Abrechenbar', 'Notiz'];
+    const rows = [...filteredEntries]
+      .sort((a, b) => a.date.localeCompare(b.date))
+      .map(e => {
+        const user = users.find(u => u.id === e.userId);
+        const project = projects.find(p => p.id === e.projectId);
+        const task = tasks.find(tk => tk.id === e.taskId);
+        return [
+          e.date,
+          user?.name || e.userName || e.userId,
+          project?.name || e.projectName || e.projectId,
+          task?.name || e.taskName || '',
+          e.description || '',
+          (e.durationHoursDecimal ?? 0).toFixed(2).replace('.', ','),
+          e.isBillable ? 'Ja' : 'Nein',
+          e.correctionNote || ''
+        ];
+      });
+    const csv = '\uFEFF' + [headers, ...rows]
+      .map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(';'))
+      .join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filterRange ? `projektzeiten_${filterRange.from}-${filterRange.to}.csv` : 'projektzeiten_export.csv';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
 
   return (
     <div className="space-y-6 animate-in fade-in duration-150">
@@ -856,9 +891,21 @@ export const TimeTrackerView: React.FC = () => {
           </button>
         )}
 
-        <span className="text-xs text-slate-400 font-medium ml-auto">
-          {filteredEntries.length} {filteredEntries.length === 1 ? 'Eintrag' : 'Einträge'}
-        </span>
+        <div className="flex items-center gap-2 ml-auto">
+          <span className="text-xs text-slate-400 font-medium">
+            {filteredEntries.length} {filteredEntries.length === 1 ? 'Eintrag' : 'Einträge'}
+          </span>
+          <button
+            type="button"
+            onClick={exportToCsv}
+            disabled={filteredEntries.length === 0}
+            title="Gefilterte Einträge als CSV exportieren"
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-600 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <Download className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">Export CSV</span>
+          </button>
+        </div>
       </div>
 
       {/* Time Entries Grouped by Day */}
