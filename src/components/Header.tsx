@@ -31,6 +31,9 @@ export const Header: React.FC = () => {
     activeOrgId
   } = useApp();
 
+  // Nur Admins dürfen den Nutzer wechseln (Impersonation)
+  const isAdmin = currentUser?.role === 'SUPERADMIN' || currentUser?.role === 'ADMIN';
+
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [showLocationModal, setShowLocationModal] = useState(false);
 
@@ -245,6 +248,7 @@ export const Header: React.FC = () => {
                     </button>
                   </div>
 
+                  {isAdmin && (<>
                   {/* Switch user header */}
                   <div className="px-4 py-2 border-b border-slate-100">
                     <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
@@ -298,6 +302,7 @@ export const Header: React.FC = () => {
                       );
                     })}
                   </div>
+                  </>)}
                 </div>
               )}
             </div>

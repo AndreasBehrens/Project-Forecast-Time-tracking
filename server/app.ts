@@ -280,6 +280,12 @@ export async function createApp(options: CreateAppOptions = {}): Promise<express
   });
 
   app.post('/api/auth/switch-user', (req, res) => {
+    // Nur Admins dürfen in andere Accounts wechseln
+    const actorId = getActorId(req);
+    const actor = storage.getUsers(true).find(u => u.id === actorId);
+    if (!actor || (actor.role !== 'SUPERADMIN' && actor.role !== 'ADMIN')) {
+      return res.status(403).json({ error: 'Nur Admins dürfen Nutzer wechseln.' });
+    }
     const { userId } = req.body;
     const allUsers = storage.getUsers(true);
     const user = allUsers.find(u => u.id === userId);

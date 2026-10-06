@@ -18,7 +18,8 @@ import {
   Baby,
   Palmtree,
   Stethoscope,
-  Briefcase
+  Briefcase,
+  Download
 } from 'lucide-react';
 
 export const WorkingTimeView: React.FC = () => {
@@ -205,6 +206,30 @@ export const WorkingTimeView: React.FC = () => {
   });
 
   const selectedUserObj = users.find(u => u.id === selectedUserId);
+
+  // CSV-Export der aktuell gefilterten Tagesarbeitszeiten (Semikolon, UTF-8 mit BOM für Excel)
+  const exportToCsv = () => {
+    const headers = ['Datum', 'Art', 'Halbtag', 'Beginn', 'Ende', 'Pause (min)', 'Nettozeit (h)', 'Notiz'];
+    const rows = [...filteredEntries].sort((a, b) => a.date.localeCompare(b.date)).map(e => {
+      const label = dayTypeLabels[(e.dayType || 'REGULAR') as DayType] || e.dayType;
+      const net = e.startTime && e.endTime
+        ? ((new Date(`1970-01-01T${e.endTime}`).getTime() - new Date(`1970-01-01T${e.startTime}`).getTime()) / 3600000 - (e.breakMinutes || 0) / 60).toFixed(2).replace('.', ',')
+        : '';
+      return [e.date, label, e.halfDay ? 'Ja' : 'Nein', e.startTime || '', e.endTime || '', e.breakMinutes ?? '', net, e.note || ''];
+    });
+    const csv = '\uFEFF' + [headers, ...rows].map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(';')).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    const userName = selectedUserObj?.name?.replace(/\s+/g, '_') || 'export';
+    const range = getTableDateRange();
+    a.href = url;
+    a.download = range ? `arbeitszeit_${userName}_${range.from}-${range.to}.csv` : `arbeitszeit_${userName}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
 
   // Urlaub und Elternzeit dürfen ganzjährig (auch weit in der Zukunft) eingetragen werden
   const allowFuture = dayType === 'VACATION' || dayType === 'PARENTAL_LEAVE';
@@ -558,6 +583,16 @@ export const WorkingTimeView: React.FC = () => {
                 />
               </>
             )}
+            <button
+              type="button"
+              onClick={exportToCsv}
+              disabled={filteredEntries.length === 0}
+              title="Als CSV exportieren"
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-600 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <Download className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Export CSV</span>
+            </button>
           </div>
         </div>
         <div className="overflow-x-auto">
