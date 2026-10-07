@@ -19,7 +19,8 @@ import {
   ChevronRight,
   Globe,
   MapPin,
-  Sparkles
+  Sparkles,
+  FileDown
 } from 'lucide-react';
 import { CompanyLocationModal } from './CompanyLocationModal';
 
@@ -140,6 +141,13 @@ export const BottomNavigationBar: React.FC<BottomNavigationBarProps> = ({
       label: isPM ? (t.navProjectForecast || 'Projekt-Forecast') : (t.navForecast || 'Forecast (Plan vs. Ist)'),
       icon: TrendingUp,
       badge: null,
+      visible: isAdmin || isPM
+    },
+    {
+      id: 'export',
+      label: t.navExport || 'Exporte',
+      icon: FileDown,
+      badge: 'XLSX',
       visible: isAdmin || isPM
     },
     {

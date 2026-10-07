@@ -16,7 +16,8 @@ import {
   User as UserIcon,
   Sparkles,
   Zap,
-  CheckCircle2
+  CheckCircle2,
+  FileDown
 } from 'lucide-react';
 
 export type NavViewId =
@@ -26,6 +27,7 @@ export type NavViewId =
   | 'projectsClients'
   | 'ratesTeam'
   | 'forecast'
+  | 'export'
   | 'clockifyMigration'
   | 'apiDocs'
   | 'organizations';
@@ -123,6 +125,13 @@ export const NavigationSidebar: React.FC<NavigationSidebarProps> = ({
           id: 'forecast' as const,
           label: isPM ? t.navProjectForecast : t.navForecast,
           icon: TrendingUp,
+          badge: null,
+          visible: isAdmin || isPM
+        },
+        {
+          id: 'export' as const,
+          label: t.navExport || 'Exporte',
+          icon: FileDown,
           badge: null,
           visible: isAdmin || isPM
         }

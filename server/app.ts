@@ -21,6 +21,7 @@ import { createSessionContext } from './http/session.js';
 import multer from 'multer';
 import pdfParse from 'pdf-parse';
 import { parseClockifyPdfText, mapDayType } from './clockifyPdfParser.js';
+import { buildClockifyXlsx, buildTimesheetXlsx, aggregateByTask, safeFilePart, XLSX_MIME } from './xlsxExports.js';
 
 export interface CreateAppOptions {
   /**
@@ -957,6 +958,74 @@ export async function createApp(options: CreateAppOptions = {}): Promise<express
 
     res.json(data);
   });
+
+  // --- XLSX-Exporte (nur Admin/Superadmin/Projektmanager, explizit identifiziert) ---
+  const resolveExportActor = (req: Request, res: Response): string | null => {
+    if (!req.headers['authorization'] && !req.headers['x-user-id']) {
+      res.status(401).json({ error: 'Nicht authentifiziert.' });
+      return null;
+    }
+    const actorId = getActorId(req);
+    const info = storage.getActorRoleInfo(actorId);
+    if (!info.user || !(info.isSuperAdmin || info.isAdmin || info.isProjectManager)) {
+      res.status(403).json({ error: 'Keine Berechtigung für Exporte.' });
+      return null;
+    }
+    return actorId;
+  };
+  const isIsoDate = (s: unknown): s is string => typeof s === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s);
+  const sendXlsx = (res: Response, buf: Buffer, filename: string) => {
+    res.setHeader('Content-Type', XLSX_MIME);
+    res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(filename)}"; filename*=UTF-8''${encodeURIComponent(filename)}`);
+    res.setHeader('Access-Control-Expose-Headers', 'Content-Disposition');
+    res.send(buf);
+  };
+
+  // Format 1: Abrechnungsexport im Clockify-Format
+  app.get('/api/export/clockify-xlsx', asyncHandler(async (req, res) => {
+    const actorId = resolveExportActor(req, res);
+    if (!actorId) return;
+    const { from, to, projectId, userId, clientId } = req.query as Record<string, string | undefined>;
+    if (!isIsoDate(from) || !isIsoDate(to) || from > to) {
+      return res.status(400).json({ error: 'Ungültiger Zeitraum (from/to im Format YYYY-MM-DD).' });
+    }
+    const { data } = storage.getTimeEntries({
+      from, to,
+      projectId: projectId || undefined,
+      userId: userId || undefined,
+      clientId: clientId || undefined,
+      limit: 100000
+    }, actorId);
+
+    const buf = await buildClockifyXlsx(data);
+    const project = projectId ? storage.getProjects().find(p => p.id === projectId) : undefined;
+    const clientName = project?.clientName
+      || (clientId ? storage.getClients().find(c => c.id === clientId)?.name : undefined)
+      || 'alle_Kunden';
+    const projectName = project?.name || 'alle_Projekte';
+    const period = from.slice(0, 7) === to.slice(0, 7) ? from.slice(0, 7) : `${from}_${to}`;
+    sendXlsx(res, buf, `Clockify_Export_${safeFilePart(clientName)}_${safeFilePart(projectName)}_${period}.xlsx`);
+  }));
+
+  // Format 2: Bi-Weekly Timesheet pro Mitarbeiter
+  app.get('/api/export/timesheet-xlsx', asyncHandler(async (req, res) => {
+    const actorId = resolveExportActor(req, res);
+    if (!actorId) return;
+    const { from, to, userId, label, projectId } = req.query as Record<string, string | undefined>;
+    if (!isIsoDate(from) || !isIsoDate(to) || from > to) {
+      return res.status(400).json({ error: 'Ungültiger Zeitraum (from/to im Format YYYY-MM-DD).' });
+    }
+    if (!userId) return res.status(400).json({ error: 'Bitte einen Mitarbeiter auswählen.' });
+    const user = storage.getUsers(true).find(u => u.id === userId);
+    if (!user) return res.status(404).json({ error: 'Mitarbeiter nicht gefunden.' });
+
+    const { data } = storage.getTimeEntries({
+      from, to, userId, projectId: projectId || undefined, limit: 100000
+    }, actorId);
+    const sprintLabel = (label || '').trim() || from.slice(0, 7);
+    const buf = await buildTimesheetXlsx({ userName: user.name, label: sprintLabel, rows: aggregateByTask(data) });
+    sendXlsx(res, buf, `Bi_weekly_Time_Report_${safeFilePart(user.name).replace(/_/g, '')}_Sprint_${safeFilePart(sprintLabel)}.xlsx`);
+  }));
 
   // Billable vs. Non-Billable Stundensummen Export / API (Anforderung: reiner Datenexport/API)
   app.get('/api/export/billable-summary', (req, res) => {

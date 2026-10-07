@@ -10,6 +10,7 @@ import { ApprovalsAuditView } from './components/ApprovalsAuditView';
 import { RateHierarchyView } from './components/RateHierarchyView';
 import { ProjectsClientsView } from './components/ProjectsClientsView';
 import { ForecastView } from './components/ForecastView';
+import { ExportView } from './components/ExportView';
 import { ClockifyMigrationView } from './components/ClockifyMigrationView';
 import { ApiDocsView } from './components/ApiDocsView';
 import { OrganizationsManagementView } from './components/OrganizationsManagementView';
@@ -90,6 +91,7 @@ const MainLayout: React.FC = () => {
             {activeNav === 'projectsClients' && (isAdmin || isPM) && <ProjectsClientsView />}
             {activeNav === 'ratesTeam' && isAdmin && <RateHierarchyView />}
             {activeNav === 'forecast' && (isAdmin || isPM) && <ForecastView />}
+            {activeNav === 'export' && (isAdmin || isPM) && <ExportView />}
             {activeNav === 'clockifyMigration' && isAdmin && <ClockifyMigrationView />}
             {activeNav === 'apiDocs' && isAdmin && <ApiDocsView />}
             {activeNav === 'organizations' && isSuperAdmin && <OrganizationsManagementView />}
