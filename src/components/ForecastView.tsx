@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useApp } from '../context/AppContext';
 import { ForecastComparisonItem, ForecastEntry } from '../types';
 import {
@@ -62,12 +62,36 @@ export const ForecastView: React.FC = () => {
   const [fcChangeReason, setFcChangeReason] = useState<string>('INITIAL_PLANNING');
   const [fcChangeNote, setFcChangeNote] = useState('');
 
+  // Nur Mitarbeiter, die auf das gewählte Projekt buchen dürfen (gleiche Regel wie TimeTrackerView)
+  const allowedUsersForProject = useMemo(() => {
+    const selectedProject = projects.find(p => p.id === fcProjectId);
+    if (!selectedProject) return users;
+    return users.filter(u => {
+      if (selectedProject.excludedUserIds?.includes(u.id)) return false;
+      if (!selectedProject.restrictToAssignedMembers) return true;
+      return selectedProject.assignedUserIds?.includes(u.id) ?? false;
+    });
+  }, [fcProjectId, projects, users]);
+
+  // Gewählten Mitarbeiter zurücksetzen, wenn er für das neue Projekt nicht erlaubt ist
+  useEffect(() => {
+    if (allowedUsersForProject.length === 0) {
+      if (fcUserId !== '') setFcUserId('');
+    } else if (!allowedUsersForProject.some(u => u.id === fcUserId)) {
+      setFcUserId(allowedUsersForProject[0].id);
+    }
+  }, [allowedUsersForProject, fcUserId]);
+
   useEffect(() => {
     getPlanVsActual(selectedMonth).then(data => setComparisonList(data));
   }, [selectedMonth, forecasts]);
 
   const handleSaveForecast = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!fcUserId || !allowedUsersForProject.some(u => u.id === fcUserId)) {
+      alert('Für dieses Projekt ist kein buchungsberechtigter Mitarbeiter ausgewählt.');
+      return;
+    }
     await saveForecast({
       projectId: fcProjectId,
       userId: fcUserId,
@@ -380,9 +404,13 @@ export const ForecastView: React.FC = () => {
                       onChange={e => setFcUserId(e.target.value)}
                       className="w-full border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800"
                     >
-                      {users.map(u => (
-                        <option key={u.id} value={u.id}>{u.name} ({u.role})</option>
-                      ))}
+                      {allowedUsersForProject.length === 0 ? (
+                        <option value="">— Kein Team zugewiesen —</option>
+                      ) : (
+                        allowedUsersForProject.map(u => (
+                          <option key={u.id} value={u.id}>{u.name} ({u.role})</option>
+                        ))
+                      )}
                     </select>
                   </div>
 
