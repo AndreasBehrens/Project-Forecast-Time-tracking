@@ -1041,7 +1041,7 @@ export const RateHierarchyView: React.FC = () => {
                     type="number"
                     required
                     min="0"
-                    step="5"
+                    step="0.01"
                     value={roleBillingRate}
                     onChange={e => setRoleBillingRate(e.target.value)}
                     className="w-full border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-emerald-700"
@@ -1055,7 +1055,7 @@ export const RateHierarchyView: React.FC = () => {
                     type="number"
                     required
                     min="0"
-                    step="5"
+                    step="0.01"
                     value={roleCostRate}
                     onChange={e => setRoleCostRate(e.target.value)}
                     className="w-full border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-purple-700"
@@ -1466,7 +1466,7 @@ export const RateHierarchyView: React.FC = () => {
                   <label className="font-semibold text-slate-700 block mb-1">Kostensatz pro Mitarbeiter (€/h)</label>
                   <input
                     type="number"
-                    step="5"
+                    step="0.01"
                     placeholder="Leer = Rolle"
                     value={editCostRate}
                     onChange={e => setEditCostRate(e.target.value)}
@@ -1479,7 +1479,7 @@ export const RateHierarchyView: React.FC = () => {
                   <label className="font-semibold text-slate-700 block mb-1">Indiv. Kundensatz (€/h Override)</label>
                   <input
                     type="number"
-                    step="5"
+                    step="0.01"
                     placeholder="Leer = Rolle"
                     value={editBillingRate}
                     onChange={e => setEditBillingRate(e.target.value)}
@@ -1980,7 +1980,7 @@ export const RateHierarchyView: React.FC = () => {
                     <label className="font-semibold text-slate-700 block mb-1">Kostensatz pro MA (€/h)</label>
                     <input
                       type="number"
-                      step="5"
+                      step="0.01"
                       value={inviteCostRate}
                       onChange={e => setInviteCostRate(e.target.value)}
                       className="w-full border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-purple-700"
