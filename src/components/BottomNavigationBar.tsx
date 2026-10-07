@@ -148,7 +148,7 @@ export const BottomNavigationBar: React.FC<BottomNavigationBarProps> = ({
       label: t.navExport || 'Exporte',
       icon: FileDown,
       badge: 'XLSX',
-      visible: isAdmin || isPM
+      visible: (isAdmin || isPM) && isInternal
     },
     {
       id: 'clockifyMigration',

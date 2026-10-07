@@ -133,7 +133,7 @@ export const NavigationSidebar: React.FC<NavigationSidebarProps> = ({
           label: t.navExport || 'Exporte',
           icon: FileDown,
           badge: null,
-          visible: isAdmin || isPM
+          visible: (isAdmin || isPM) && isInternal
         }
       ]
     },

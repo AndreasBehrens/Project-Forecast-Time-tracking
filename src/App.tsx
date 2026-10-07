@@ -91,7 +91,7 @@ const MainLayout: React.FC = () => {
             {activeNav === 'projectsClients' && (isAdmin || isPM) && <ProjectsClientsView />}
             {activeNav === 'ratesTeam' && isAdmin && <RateHierarchyView />}
             {activeNav === 'forecast' && (isAdmin || isPM) && <ForecastView />}
-            {activeNav === 'export' && (isAdmin || isPM) && <ExportView />}
+            {activeNav === 'export' && (isAdmin || isPM) && isInternal && <ExportView />}
             {activeNav === 'clockifyMigration' && isAdmin && <ClockifyMigrationView />}
             {activeNav === 'apiDocs' && isAdmin && <ApiDocsView />}
             {activeNav === 'organizations' && isSuperAdmin && <OrganizationsManagementView />}
