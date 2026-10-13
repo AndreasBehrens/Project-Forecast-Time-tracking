@@ -684,8 +684,8 @@ export const TimeTrackerView: React.FC = () => {
                   <input
                     id="input-manual-duration"
                     type="number"
-                    step="0.25"
-                    min="0.1"
+                    step="any"
+                    min="0"
                     value={manualDurationHours}
                     onChange={e => setManualDurationHours(e.target.value)}
                     className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-sm font-bold text-slate-900 focus:ring-2 focus:ring-slate-900"
