@@ -21,7 +21,7 @@ import { createSessionContext } from './http/session.js';
 import multer from 'multer';
 import pdfParse from 'pdf-parse';
 import { parseClockifyPdfText, mapDayType } from './clockifyPdfParser.js';
-import { buildClockifyXlsx, buildTimesheetXlsx, aggregateByTask, safeFilePart, XLSX_MIME } from './xlsxExports.js';
+import { buildClockifyXlsx, buildTimesheetXlsx, aggregateByTask, safeFilePart, XLSX_MIME, generateDetailedTimeReport, normalizeDateParam } from './xlsxExports.js';
 
 export interface CreateAppOptions {
   /**
@@ -1174,6 +1174,37 @@ export async function createApp(options: CreateAppOptions = {}): Promise<express
         updatedAt: d.updatedAt
       }))
     });
+  });
+
+  // XLSX-Report aller Zeiteinträge im Zeitraum (Format wie Clockify-Detailreport)
+  app.get('/api/v1/report/time-entries', requireApiKey, async (req, res) => {
+    const { userId, projectId, clientId, approvalStatus, isBillable } = req.query as any;
+    const from = normalizeDateParam(req.query.from as string | undefined);
+    const to = normalizeDateParam(req.query.to as string | undefined);
+    if (!from || !to) {
+      return res.status(400).json({
+        error: 'Bad Request',
+        message: 'Query parameters "from" and "to" are required (YYYY-MM-DD).'
+      });
+    }
+    try {
+      const { data } = storage.getTimeEntries({
+        from,
+        to,
+        userId,
+        projectId,
+        clientId,
+        approvalStatus,
+        isBillable: isBillable !== undefined ? isBillable === 'true' : undefined,
+        page: 1,
+        limit: 1_000_000
+      });
+      const buf = await generateDetailedTimeReport(data);
+      sendXlsx(res, buf, `time-report-${from}-${to}.xlsx`);
+    } catch (err: any) {
+      console.error('[report/time-entries] XLSX-Export fehlgeschlagen:', err);
+      res.status(500).json({ error: 'Report generation failed', message: err?.message || String(err) });
+    }
   });
 
   app.get('/api/v1/working-time', requireApiKey, (req, res) => {

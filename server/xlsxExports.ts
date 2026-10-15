@@ -135,3 +135,99 @@ export async function buildTimesheetXlsx(opts: {
 
   return Buffer.from(await wb.xlsx.writeBuffer());
 }
+
+
+// ---------------------------------------------------------------------------
+// Format 3: Detaillierter Zeit-Report (externe API /api/v1/report/time-entries)
+// ---------------------------------------------------------------------------
+
+/** Schneidet einen evtl. Timestamp-Anteil ab ("2026-09-01T00:00:00Z" → "2026-09-01"). */
+export const normalizeDateParam = (value?: string): string | undefined => {
+  if (typeof value !== 'string') return undefined;
+  const trimmed = value.trim();
+  const m = /^(\d{4}-\d{2}-\d{2})/.exec(trimmed);
+  return m ? m[1] : (trimmed || undefined);
+};
+
+/** "HH:MM" bzw. "HH:MM:SS" → "HH:MM:SS" (leer bleibt leer). */
+const toHms = (t?: string): string => {
+  if (!t || !/^\d{1,2}:\d{2}/.test(t)) return '';
+  const [h, m, s = '00'] = t.split(':');
+  return `${h.padStart(2, '0')}:${m.padStart(2, '0')}:${s.padStart(2, '0').slice(0, 2)}`;
+};
+
+/** Minuten → "HH:MM" (z. B. 480 → "08:00"). */
+const minutesToHhMm = (minutes: number): string => {
+  const total = Math.max(0, Math.round(minutes));
+  return `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`;
+};
+
+/** "YYYY-MM-DD" → "DD.MM.YYYY". */
+const formatDateDePadded = (iso: string): string => {
+  const [y, m, d] = (iso || '').slice(0, 10).split('-');
+  return y && m && d ? `${d}.${m}.${y}` : iso || '';
+};
+
+export async function generateDetailedTimeReport(entries: TimeEntry[]): Promise<Buffer> {
+  const wb = new ExcelJS.Workbook();
+  const ws = wb.addWorksheet('Time Report', { views: [{ state: 'frozen', ySplit: 1 }] });
+  ws.columns = [
+    { header: 'Description', key: 'description' },
+    { header: 'Project Name', key: 'project' },
+    { header: 'Client', key: 'client' },
+    { header: 'User', key: 'user' },
+    { header: 'Billable', key: 'billable' },
+    { header: 'Start Date', key: 'date' },
+    { header: 'Start Time', key: 'start' },
+    { header: 'End Time', key: 'end' },
+    { header: 'Duration (h)', key: 'durH' },
+    { header: 'Duration (Decimal)', key: 'durDec', style: { numFmt: '0.##' } }
+  ];
+  const header = ws.getRow(1);
+  header.font = { bold: true };
+  header.eachCell(cell => {
+    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFBFBFBF' } };
+  });
+  ws.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: 10 } };
+
+  // Neueste zuerst, innerhalb eines Tages nach Startzeit absteigend
+  const sorted = [...entries].sort((a, b) =>
+    (b.date || '').localeCompare(a.date || '') || (b.startTime || '').localeCompare(a.startTime || ''));
+
+  let totalDecimal = 0;
+  for (const e of sorted) {
+    const minutes = e.durationMinutes ?? Math.round((e.durationHoursDecimal || 0) * 60);
+    const decimal = Math.round((e.durationHoursDecimal ?? minutes / 60) * 100) / 100;
+    totalDecimal += decimal;
+    const row = ws.addRow({
+      description: numericOrText(e.description || ''),
+      project: e.projectName || '',
+      client: e.clientName || '',
+      user: e.userName || '',
+      billable: e.isBillable ? 'WAHR' : 'FALSCH',
+      date: formatDateDePadded(e.date),
+      start: toHms(e.startTime),
+      end: toHms(e.endTime),
+      durH: minutesToHhMm(minutes),
+      durDec: decimal
+    });
+    for (const key of ['billable', 'date', 'start', 'end', 'durH']) {
+      row.getCell(key).alignment = { horizontal: 'right' };
+    }
+  }
+
+  const totalRow = ws.addRow({ end: 'Gesamt:', durDec: Math.round(totalDecimal * 100) / 100 });
+  totalRow.getCell('durDec').font = { bold: true };
+
+  // Spaltenbreiten an den längsten Inhalt anpassen (min. 10, max. 60 Zeichen)
+  ws.columns.forEach(col => {
+    let max = 10;
+    col.eachCell?.({ includeEmpty: false }, cell => {
+      const len = String(cell.value ?? '').length + 2;
+      if (len > max) max = len;
+    });
+    col.width = Math.min(max, 60);
+  });
+
+  return Buffer.from(await wb.xlsx.writeBuffer());
+}
