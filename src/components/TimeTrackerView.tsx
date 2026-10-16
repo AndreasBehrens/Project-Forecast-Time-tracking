@@ -28,6 +28,7 @@ export const TimeTrackerView: React.FC = () => {
   const {
     t,
     projects,
+    clients,
     tasks,
     users,
     currentUser,
@@ -70,6 +71,7 @@ export const TimeTrackerView: React.FC = () => {
   // --- Filter für die Zeiteinträge-Liste ---
   const [filterPeriod, setFilterPeriod] = useState<DateRangeValue>(() => presetValue('thisMonth'));
   const [filterUserId, setFilterUserId] = useState<string>('all');
+  const [filterClientId, setFilterClientId] = useState<string>('all');
   const [filterProjectId, setFilterProjectId] = useState<string>('all');
   const [filterSearch, setFilterSearch] = useState('');
 
@@ -86,8 +88,8 @@ export const TimeTrackerView: React.FC = () => {
 
   // Effective user for booking & permission checking
   const effectiveUserId = targetUserId || currentUser?.id || 'u-1';
-  const isPrivilegedUser = currentUser?.role === 'ADMIN' || currentUser?.role === 'PROJECT_MANAGER';
-  const canViewFinancials = currentUser?.role === 'ADMIN' || currentUser?.role === 'SUPER_ADMIN' || currentUser?.role === 'PROJECT_MANAGER';
+  const isPrivilegedUser = currentUser?.role === 'SUPERADMIN' || currentUser?.role === 'ADMIN' || currentUser?.role === 'PROJECT_MANAGER';
+  const canViewFinancials = isPrivilegedUser;
 
   // Allowed projects for booking (filters out archived/completed projects, excluded members, and restricted projects where user is not assigned)
   const allowedProjects = useMemo(() => {
@@ -216,6 +218,7 @@ export const TimeTrackerView: React.FC = () => {
   const filteredEntries = timeEntries.filter(entry => {
     if (filterRange && !(entry.date >= filterRange.from && entry.date <= filterRange.to)) return false;
     if (filterUserId !== 'all' && entry.userId !== filterUserId) return false;
+    if (filterClientId !== 'all' && (entry.clientId || projects.find(p => p.id === entry.projectId)?.clientId) !== filterClientId) return false;
     if (filterProjectId !== 'all' && entry.projectId !== filterProjectId) return false;
     if (searchLower) {
       const haystack = `${entry.description || ''} ${entry.projectName || ''} ${entry.clientName || ''} ${entry.taskName || ''} ${entry.userName || ''}`.toLowerCase();
@@ -313,7 +316,7 @@ export const TimeTrackerView: React.FC = () => {
 
           <div className="flex items-center gap-3">
             {/* Deputy Mode for Managers/Admins */}
-            {(currentUser?.role === 'ADMIN' || currentUser?.role === 'PROJECT_MANAGER') && (
+            {isPrivilegedUser && (
               <div className="flex items-center gap-2 text-xs bg-amber-50 border border-amber-200/70 text-amber-900 px-2.5 py-1 rounded-lg">
                 <Users className="w-3.5 h-3.5 text-amber-700" />
                 <span className="font-medium">{t.logForColleague}:</span>
@@ -822,12 +825,23 @@ export const TimeTrackerView: React.FC = () => {
         )}
 
         <select
+          value={filterClientId}
+          onChange={e => { setFilterClientId(e.target.value); setFilterProjectId('all'); }}
+          className="bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-slate-700 focus:bg-white focus:ring-2 focus:ring-slate-900 focus:outline-none max-w-[200px]"
+        >
+          <option value="all">Alle Kunden</option>
+          {[...clients].sort((a, b) => a.name.localeCompare(b.name)).map(c => (
+            <option key={c.id} value={c.id}>{c.name}</option>
+          ))}
+        </select>
+
+        <select
           value={filterProjectId}
           onChange={e => setFilterProjectId(e.target.value)}
           className="bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-slate-700 focus:bg-white focus:ring-2 focus:ring-slate-900 focus:outline-none max-w-[200px]"
         >
           <option value="all">Alle Projekte</option>
-          {projects.map(p => (
+          {projects.filter(p => filterClientId === 'all' || p.clientId === filterClientId).map(p => (
             <option key={p.id} value={p.id}>{p.name}</option>
           ))}
         </select>
@@ -840,10 +854,10 @@ export const TimeTrackerView: React.FC = () => {
           className="flex-1 min-w-[160px] bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 text-xs text-slate-700 placeholder:text-slate-400 focus:bg-white focus:ring-2 focus:ring-slate-900 focus:outline-none"
         />
 
-        {(filterPeriod.preset !== 'thisMonth' || filterUserId !== 'all' || filterProjectId !== 'all' || filterSearch) && (
+        {(filterPeriod.preset !== 'thisMonth' || filterUserId !== 'all' || filterClientId !== 'all' || filterProjectId !== 'all' || filterSearch) && (
           <button
             type="button"
-            onClick={() => { setFilterPeriod(presetValue('thisMonth')); setFilterUserId('all'); setFilterProjectId('all'); setFilterSearch(''); }}
+            onClick={() => { setFilterPeriod(presetValue('thisMonth')); setFilterUserId('all'); setFilterClientId('all'); setFilterProjectId('all'); setFilterSearch(''); }}
             className="text-xs font-semibold text-slate-500 hover:text-slate-900 px-2 py-1.5"
           >
             Zurücksetzen

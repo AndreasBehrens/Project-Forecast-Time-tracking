@@ -60,7 +60,7 @@ export const QuickTimeLogCard: React.FC<QuickTimeLogCardProps> = ({ onEntryCreat
 
   // Available bookable projects for the user
   const effectiveUserId = currentUser?.id || 'u-1';
-  const isPrivilegedUser = currentUser?.role === 'ADMIN' || currentUser?.role === 'PROJECT_MANAGER';
+  const isPrivilegedUser = currentUser?.role === 'SUPERADMIN' || currentUser?.role === 'ADMIN' || currentUser?.role === 'PROJECT_MANAGER';
 
   const allowedProjects = useMemo(() => {
     return projects.filter(p => {
