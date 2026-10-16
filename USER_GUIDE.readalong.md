@@ -1,5 +1,7 @@
 **User Guide – Time Tracking**
 
+> **Note:** This quick guide still describes the former separate tabs. Time tracking is now unified on **one page** (stopwatch, time range, absences, list). The current reference is **USER_GUIDE.md** / **USER_GUIDE.pdf**.
+
 *Employee Quick Guide*
 
 **Access link: https://timetracking.insightarcs.com**

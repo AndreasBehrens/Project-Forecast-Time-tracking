@@ -809,6 +809,7 @@ export const translations = {
     zfEntriesTitle: 'Einträge',
     zfFilterTitle: 'Filter',
     zfDateTooLate: 'Datum liegt zu weit in der Zukunft (max. Ende des nächsten Monats).',
+    zfLockedMonth: 'Der Monat {month} ist abgeschlossen und gesperrt. Der Eintrag kann nicht geändert werden.',
   },
   en: {
     appName: 'Insight Arcs Time Tracking',
@@ -1620,5 +1621,6 @@ export const translations = {
     zfEntriesTitle: 'Entries',
     zfFilterTitle: 'Filter',
     zfDateTooLate: 'Date is too far in the future (max. end of next month).',
+    zfLockedMonth: 'The month {month} is closed and locked. This entry cannot be changed.',
   }
 };

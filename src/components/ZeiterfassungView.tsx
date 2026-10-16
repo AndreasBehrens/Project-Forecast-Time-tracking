@@ -126,7 +126,8 @@ export const ZeiterfassungView: React.FC = () => {
     deleteTimeEntry,
     approveTimeEntries,
     saveWorkingTime,
-    deleteWorkingTime
+    deleteWorkingTime,
+    periodLocks
   } = useApp();
 
   // --- Rollen & Beschäftigungsart ---
@@ -312,6 +313,15 @@ export const ZeiterfassungView: React.FC = () => {
     else throw new Error(t.zfProjectRequired);
 
     const sameStore = editing && editing.kind === targetKind;
+
+    // Typwechsel = Neuanlage + Löschen des Originals. Liegt das Original in einem gesperrten Monat,
+    // würde das Löschen scheitern und ein Duplikat zurückbleiben → vorab abbrechen.
+    if (editing && !sameStore) {
+      const month = editing.date.slice(0, 7);
+      if (periodLocks.some(l => l.periodKey === month && l.status === 'LOCKED')) {
+        throw new Error(t.zfLockedMonth.replace('{month}', month));
+      }
+    }
 
     if (targetKind === 'time') {
       const payload: Partial<TimeEntry> = {
@@ -1042,7 +1052,7 @@ export const ZeiterfassungView: React.FC = () => {
 
       {/* 3. Filterleiste (ohne Zurücksetzen-Button) */}
       <div className="bg-white rounded-2xl border border-slate-200/90 shadow-sm p-4 flex flex-wrap items-center gap-2.5">
-        <DateRangePicker value={filterPeriod} onChange={setFilterPeriod} />
+        <DateRangePicker value={filterPeriod} onChange={setFilterPeriod} language={language} />
         {isPrivileged && (
           <select id="zf-filter-user" value={filterUserId} onChange={e => setFilterUserId(e.target.value)} className={`${inputCls} w-auto`}>
             <option value="all">{t.zfAllEmployees}</option>

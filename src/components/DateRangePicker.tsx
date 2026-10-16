@@ -116,6 +116,27 @@ export function getValueRange(value: DateRangeValue, presets?: DateRangePreset[]
 // ---------------------------------------------------------------------------
 const MONTHS_DE = ['Januar', 'Februar', 'März', 'April', 'Mai', 'Juni', 'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember'];
 const WEEKDAYS_DE = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'];
+const MONTHS_EN = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+const WEEKDAYS_EN = ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'];
+
+/** Englische Bezeichnungen der Standard-Presets (deutsche Labels stehen in PRESET_DEFINITIONS). */
+export const PRESET_LABELS_EN: Record<string, string> = {
+  today: 'Today', yesterday: 'Yesterday', thisWeek: 'This week', lastWeek: 'Last week',
+  lastTwoWeeks: 'Last two weeks', thisMonth: 'This month', lastMonth: 'Last month',
+  thisQuarter: 'This quarter', lastQuarter: 'Last quarter', thisYear: 'This year',
+  lastYear: 'Last year', all: 'All entries'
+};
+
+const UI_TEXT = {
+  de: {
+    choose: 'Zeitraum wählen', dialog: 'Zeitraum auswählen', prev: 'Vorheriger Monat', next: 'Nächster Monat',
+    pickEnd: (d: string) => `Start: ${d} – Enddatum wählen`, pickStart: 'Startdatum wählen, um einen eigenen Zeitraum festzulegen'
+  },
+  en: {
+    choose: 'Select period', dialog: 'Select period', prev: 'Previous month', next: 'Next month',
+    pickEnd: (d: string) => `Start: ${d} – select end date`, pickStart: 'Select a start date to define a custom period'
+  }
+};
 
 interface DateRangePickerProps {
   value: DateRangeValue;
@@ -124,11 +145,17 @@ interface DateRangePickerProps {
   className?: string;
   /** Tailwind-Klassen für den Trigger-Button (zur Anpassung an die jeweilige Filterleiste). */
   buttonClassName?: string;
+  /** Oberflächensprache (Standard: Deutsch). */
+  language?: 'de' | 'en';
 }
 
 export const DateRangePicker: React.FC<DateRangePickerProps> = ({
-  value, onChange, presets = DEFAULT_PRESETS, className = '', buttonClassName
+  value, onChange, presets = DEFAULT_PRESETS, className = '', buttonClassName, language = 'de'
 }) => {
+  const ui = UI_TEXT[language] || UI_TEXT.de;
+  const months = language === 'en' ? MONTHS_EN : MONTHS_DE;
+  const weekdays = language === 'en' ? WEEKDAYS_EN : WEEKDAYS_DE;
+  const presetLabel = (p: DateRangePreset) => (language === 'en' && PRESET_LABELS_EN[p.key]) || p.label;
   const [open, setOpen] = useState(false);
   const [viewYear, setViewYear] = useState(() => new Date().getFullYear());
   const [viewMonth, setViewMonth] = useState(() => new Date().getMonth());
@@ -211,10 +238,10 @@ export const DateRangePicker: React.FC<DateRangePickerProps> = ({
   const triggerLabel = (() => {
     if (value.preset) {
       const p = presets.find(x => x.key === value.preset) || PRESET_DEFINITIONS[value.preset];
-      if (p) return p.label;
+      if (p) return presetLabel(p);
     }
     if (value.from && value.to) return `${formatDateDE(value.from)} – ${formatDateDE(value.to)}`;
-    return 'Zeitraum wählen';
+    return ui.choose;
   })();
 
   const renderMonth = (year: number, month: number, nav: 'left' | 'right' | null, extraClass = '') => {
@@ -226,21 +253,21 @@ export const DateRangePicker: React.FC<DateRangePickerProps> = ({
       <div className={`w-[252px] ${extraClass}`}>
         <div className="flex items-center justify-between h-8 mb-1">
           {nav === 'left' ? (
-            <button type="button" onClick={() => shiftMonth(-1)} aria-label="Vorheriger Monat"
+            <button type="button" onClick={() => shiftMonth(-1)} aria-label={ui.prev}
               className="p-1 rounded-md text-slate-600 hover:bg-slate-100 hover:text-slate-900">
               <ChevronLeft className="w-4 h-4" />
             </button>
           ) : <span className="w-6" />}
-          <span className="text-sm font-bold text-slate-800">{MONTHS_DE[month]} {year}</span>
+          <span className="text-sm font-bold text-slate-800">{months[month]} {year}</span>
           {nav === 'right' ? (
-            <button type="button" onClick={() => shiftMonth(1)} aria-label="Nächster Monat"
+            <button type="button" onClick={() => shiftMonth(1)} aria-label={ui.next}
               className="p-1 rounded-md text-slate-600 hover:bg-slate-100 hover:text-slate-900">
               <ChevronRight className="w-4 h-4" />
             </button>
           ) : <span className="w-6" />}
         </div>
         <div className="grid grid-cols-7">
-          {WEEKDAYS_DE.map(w => (
+          {weekdays.map(w => (
             <div key={w} className="h-8 flex items-center justify-center text-[11px] font-bold text-slate-500">{w}</div>
           ))}
           {days.map(d => {
@@ -297,7 +324,7 @@ export const DateRangePicker: React.FC<DateRangePickerProps> = ({
       {open && (
         <div
           role="dialog"
-          aria-label="Zeitraum auswählen"
+          aria-label={ui.dialog}
           className="absolute left-0 top-full mt-1.5 z-50 flex flex-col sm:flex-row bg-white border border-slate-200 rounded-xl shadow-xl overflow-hidden max-w-[calc(100vw-2rem)]"
         >
           <ul className="sm:w-44 py-1.5 border-b sm:border-b-0 sm:border-r border-slate-200 max-h-48 sm:max-h-none overflow-y-auto">
@@ -310,7 +337,7 @@ export const DateRangePicker: React.FC<DateRangePickerProps> = ({
                     onClick={() => applyPreset(p)}
                     className={`w-full text-left px-4 py-2 text-sm transition-colors ${selected ? 'bg-blue-600 text-white font-semibold' : 'text-slate-700 hover:bg-slate-100'}`}
                   >
-                    {p.label}
+                    {presetLabel(p)}
                   </button>
                 </li>
               );
@@ -323,15 +350,15 @@ export const DateRangePicker: React.FC<DateRangePickerProps> = ({
             </div>
             {/* Auf kleinen Bildschirmen ist nur ein Monat sichtbar → dort auch "weiter" anbieten */}
             <div className="md:hidden flex justify-end -mt-1">
-              <button type="button" onClick={() => shiftMonth(1)} aria-label="Nächster Monat"
+              <button type="button" onClick={() => shiftMonth(1)} aria-label={ui.next}
                 className="p-1 rounded-md text-slate-600 hover:bg-slate-100">
                 <ChevronRight className="w-4 h-4" />
               </button>
             </div>
             <p className="mt-2 text-[11px] text-slate-500 h-4">
               {pendingStart
-                ? `Start: ${formatDateDE(pendingStart)} – Enddatum wählen`
-                : 'Startdatum wählen, um einen eigenen Zeitraum festzulegen'}
+                ? ui.pickEnd(formatDateDE(pendingStart))
+                : ui.pickStart}
             </p>
           </div>
         </div>

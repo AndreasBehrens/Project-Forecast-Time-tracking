@@ -1,5 +1,7 @@
 **Anleitung – Zeiterfassung**
 
+> **Hinweis:** Diese Kurzfassung beschreibt noch die frühere Aufteilung in getrennte Reiter. Die Zeiterfassung ist jetzt auf **einer Seite** zusammengeführt (Stoppuhr, Zeitraum, Abwesenheiten, Liste). Maßgeblich ist die aktuelle **ANLEITUNG.md** bzw. **ANLEITUNG.pdf**.
+
 Kurzanleitung für Mitarbeiterinnen und Mitarbeiter
 
 **Aufruflink: https://timetracking.insightarcs.com**
