@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useApp } from '../context/AppContext';
 import { TimeEntry } from '../types';
 import { QuickTimeLogCard } from './QuickTimeLogCard';
+import { DateRangePicker, DateRangeValue, presetValue, getValueRange } from './DateRangePicker';
 import {
   Play,
   Pause,
@@ -67,7 +68,7 @@ export const TimeTrackerView: React.FC = () => {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
 
   // --- Filter für die Zeiteinträge-Liste ---
-  const [filterPeriod, setFilterPeriod] = useState<'thisWeek' | 'thisMonth' | 'lastMonth' | 'thisQuarter' | 'thisYear' | 'all'>('thisMonth');
+  const [filterPeriod, setFilterPeriod] = useState<DateRangeValue>(() => presetValue('thisMonth'));
   const [filterUserId, setFilterUserId] = useState<string>('all');
   const [filterProjectId, setFilterProjectId] = useState<string>('all');
   const [filterSearch, setFilterSearch] = useState('');
@@ -208,39 +209,8 @@ export const TimeTrackerView: React.FC = () => {
     }
   };
 
-  // Zeitraum-Grenzen für den Listen-Filter berechnen
-  const getFilterDateRange = (): { from: string; to: string } | null => {
-    const today = new Date();
-    const toISO = (d: Date) => d.toISOString().split('T')[0];
-    if (filterPeriod === 'thisWeek') {
-      const day = today.getDay(); // 0 = So
-      const diffToMonday = day === 0 ? 6 : day - 1;
-      const monday = new Date(today); monday.setDate(today.getDate() - diffToMonday);
-      const sunday = new Date(monday); sunday.setDate(monday.getDate() + 6);
-      return { from: toISO(monday), to: toISO(sunday) };
-    }
-    if (filterPeriod === 'thisMonth') {
-      const m = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
-      return { from: `${m}-01`, to: `${m}-31` };
-    }
-    if (filterPeriod === 'lastMonth') {
-      const d = new Date(today.getFullYear(), today.getMonth() - 1, 1);
-      const m = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-      return { from: `${m}-01`, to: `${m}-31` };
-    }
-    if (filterPeriod === 'thisQuarter') {
-      const q = Math.floor(today.getMonth() / 3);
-      const from = new Date(today.getFullYear(), q * 3, 1);
-      const to = new Date(today.getFullYear(), q * 3 + 3, 0);
-      return { from: toISO(from), to: toISO(to) };
-    }
-    if (filterPeriod === 'thisYear') {
-      return { from: `${today.getFullYear()}-01-01`, to: `${today.getFullYear()}-12-31` };
-    }
-    return null; // 'all'
-  };
-
-  const filterRange = getFilterDateRange();
+  // Zeitraum-Grenzen für den Listen-Filter (null = "Alle Einträge")
+  const filterRange = getValueRange(filterPeriod);
   const searchLower = filterSearch.trim().toLowerCase();
 
   const filteredEntries = timeEntries.filter(entry => {
@@ -836,18 +806,7 @@ export const TimeTrackerView: React.FC = () => {
         <span className="flex items-center gap-1.5 text-xs font-bold text-slate-700 mr-1">
           <Filter className="w-3.5 h-3.5 text-slate-500" /> {t.filter}:
         </span>
-        <select
-          value={filterPeriod}
-          onChange={e => setFilterPeriod(e.target.value as any)}
-          className="bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-slate-700 focus:bg-white focus:ring-2 focus:ring-slate-900 focus:outline-none"
-        >
-          <option value="thisWeek">Diese Woche</option>
-          <option value="thisMonth">Dieser Monat</option>
-          <option value="lastMonth">Letzter Monat</option>
-          <option value="thisQuarter">Dieses Quartal</option>
-          <option value="thisYear">Dieses Jahr</option>
-          <option value="all">Alle Einträge</option>
-        </select>
+        <DateRangePicker value={filterPeriod} onChange={setFilterPeriod} />
 
         {isPrivilegedUser && (
           <select
@@ -881,10 +840,10 @@ export const TimeTrackerView: React.FC = () => {
           className="flex-1 min-w-[160px] bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 text-xs text-slate-700 placeholder:text-slate-400 focus:bg-white focus:ring-2 focus:ring-slate-900 focus:outline-none"
         />
 
-        {(filterPeriod !== 'thisMonth' || filterUserId !== 'all' || filterProjectId !== 'all' || filterSearch) && (
+        {(filterPeriod.preset !== 'thisMonth' || filterUserId !== 'all' || filterProjectId !== 'all' || filterSearch) && (
           <button
             type="button"
-            onClick={() => { setFilterPeriod('thisMonth'); setFilterUserId('all'); setFilterProjectId('all'); setFilterSearch(''); }}
+            onClick={() => { setFilterPeriod(presetValue('thisMonth')); setFilterUserId('all'); setFilterProjectId('all'); setFilterSearch(''); }}
             className="text-xs font-semibold text-slate-500 hover:text-slate-900 px-2 py-1.5"
           >
             Zurücksetzen

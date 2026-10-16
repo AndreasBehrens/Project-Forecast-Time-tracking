@@ -2,6 +2,15 @@ import React, { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
 import { DayType } from '../types';
 import {
+  DateRangePicker,
+  DateRangePreset,
+  DateRangeValue,
+  PRESET_DEFINITIONS,
+  presetValue,
+  getValueRange,
+  toLocalISODate
+} from './DateRangePicker';
+import {
   Calendar,
   Clock,
   AlertTriangle,
@@ -21,6 +30,23 @@ import {
   Briefcase,
   Download
 } from 'lucide-react';
+
+const addLocalMonths = (d: Date, n: number) => new Date(d.getFullYear(), d.getMonth() + n, 1);
+const endOfCurrentMonth = (t: Date) => toLocalISODate(new Date(t.getFullYear(), t.getMonth() + 1, 0));
+
+/**
+ * Presets der Arbeitszeit-Tabelle (bisherige Auswahl beibehalten):
+ * "Letztes Quartal"/"Letztes Halbjahr" sind wie bisher rollierend
+ * (1. des Monats vor 3 bzw. 6 Monaten bis Ende des aktuellen Monats).
+ */
+const WORKING_TIME_PRESETS: DateRangePreset[] = [
+  { ...PRESET_DEFINITIONS.thisMonth, label: 'Aktueller Monat' },
+  PRESET_DEFINITIONS.lastMonth,
+  { key: 'last3Months', label: 'Letztes Quartal', getRange: t => ({ from: toLocalISODate(addLocalMonths(t, -3)), to: endOfCurrentMonth(t) }) },
+  { key: 'last6Months', label: 'Letztes Halbjahr', getRange: t => ({ from: toLocalISODate(addLocalMonths(t, -6)), to: endOfCurrentMonth(t) }) },
+  { ...PRESET_DEFINITIONS.thisYear, label: 'Aktuelles Jahr' },
+  PRESET_DEFINITIONS.all
+];
 
 export const WorkingTimeView: React.FC = () => {
   const {
@@ -53,24 +79,23 @@ export const WorkingTimeView: React.FC = () => {
   const [editingId, setEditingId] = useState<string | null>(null);
 
   // Zeitraum-Filter für die Tabelle "Protokollierte Tagesarbeitszeiten"
-  const [tableFilter, setTableFilter] = useState<'month' | 'lastMonth' | 'quarter' | 'halfYear' | 'year' | 'all' | 'custom'>('month');
-  const [customFrom, setCustomFrom] = useState('');
-  const [customTo, setCustomTo] = useState('');
+  const [tableFilter, setTableFilter] = useState<DateRangeValue>(() => presetValue('thisMonth', WORKING_TIME_PRESETS));
   const [tableTypeFilter, setTableTypeFilter] = useState('');
 
   // Der referenzierte Monat wird aus dem Zeitraum-Filter abgeleitet
   // (es gibt keinen separaten Monats-Picker mehr).
   const computeSelectedMonth = (): string => {
     const today = new Date();
-    if (tableFilter === 'lastMonth') {
+    if (tableFilter.preset === 'lastMonth') {
       const d = new Date(today.getFullYear(), today.getMonth() - 1, 1);
       return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
     }
-    if (tableFilter === 'custom' && customFrom) {
-      return customFrom.substring(0, 7);
+    if (!tableFilter.preset && tableFilter.from) {
+      // Benutzerdefinierter Zeitraum: Monat des Startdatums
+      return tableFilter.from.substring(0, 7);
     }
-    // Für alle anderen Filter (month, quarter, halfYear, year, all): aktueller Monat
-    return today.toISOString().substring(0, 7);
+    // Für alle anderen Presets (Monat, Quartal, Halbjahr, Jahr, Alle): aktueller Monat
+    return toLocalISODate(today).substring(0, 7);
   };
   const selectedMonth = computeSelectedMonth();
 
@@ -167,35 +192,7 @@ export const WorkingTimeView: React.FC = () => {
     }
   };
 
-  const getTableDateRange = (): { from: string; to: string } | null => {
-    const today = new Date();
-    const yyyy = today.getFullYear();
-    const mm = String(today.getMonth() + 1).padStart(2, '0');
-
-    if (tableFilter === 'month') {
-      return { from: `${selectedMonth}-01`, to: `${selectedMonth}-31` };
-    }
-    if (tableFilter === 'lastMonth') {
-      const d = new Date(today.getFullYear(), today.getMonth() - 1, 1);
-      const y = d.getFullYear(); const m = String(d.getMonth() + 1).padStart(2, '0');
-      return { from: `${y}-${m}-01`, to: `${y}-${m}-31` };
-    }
-    if (tableFilter === 'quarter') {
-      const d = new Date(today.getFullYear(), today.getMonth() - 3, 1);
-      return { from: d.toISOString().split('T')[0], to: `${yyyy}-${mm}-31` };
-    }
-    if (tableFilter === 'halfYear') {
-      const d = new Date(today.getFullYear(), today.getMonth() - 6, 1);
-      return { from: d.toISOString().split('T')[0], to: `${yyyy}-${mm}-31` };
-    }
-    if (tableFilter === 'year') {
-      return { from: `${yyyy}-01-01`, to: `${yyyy}-12-31` };
-    }
-    if (tableFilter === 'custom') {
-      return customFrom && customTo ? { from: customFrom, to: customTo } : null;
-    }
-    return null; // 'all'
-  };
+  const getTableDateRange = () => getValueRange(tableFilter, WORKING_TIME_PRESETS);
 
   const filteredEntries = workingTimeEntries.filter(w => {
     if (w.userId !== selectedUserId) return false;
@@ -539,19 +536,12 @@ export const WorkingTimeView: React.FC = () => {
             {t.loggedDailyWorkingHours} ({filteredEntries.length} {filteredEntries.length === 1 ? t.day : t.days})
           </span>
           <div className="flex flex-wrap items-center gap-2">
-            <select
+            <DateRangePicker
               value={tableFilter}
-              onChange={e => setTableFilter(e.target.value as any)}
-              className="border border-slate-200 rounded-lg px-2.5 py-1 text-xs font-semibold text-slate-700 bg-white focus:ring-2 focus:ring-emerald-500 focus:outline-none"
-            >
-              <option value="month">Aktueller Monat</option>
-              <option value="lastMonth">Letzter Monat</option>
-              <option value="quarter">Letztes Quartal</option>
-              <option value="halfYear">Letztes Halbjahr</option>
-              <option value="year">Aktuelles Jahr</option>
-              <option value="all">Alle Einträge</option>
-              <option value="custom">Benutzerdefiniert</option>
-            </select>
+              onChange={setTableFilter}
+              presets={WORKING_TIME_PRESETS}
+              buttonClassName="flex items-center gap-1.5 border border-slate-200 rounded-lg px-2.5 py-1 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+            />
             <select
               value={tableTypeFilter}
               onChange={e => setTableTypeFilter(e.target.value)}
@@ -564,25 +554,6 @@ export const WorkingTimeView: React.FC = () => {
               <option value="SPECIAL_LEAVE">Sonderurlaub</option>
               <option value="PARENTAL_LEAVE">Elternzeit</option>
             </select>
-            {tableFilter === 'custom' && (
-              <>
-                <input
-                  type="date"
-                  value={customFrom}
-                  onChange={e => setCustomFrom(e.target.value)}
-                  className="border border-slate-200 rounded-lg px-2 py-1 text-xs text-slate-700 bg-white focus:ring-2 focus:ring-emerald-500 focus:outline-none"
-                  placeholder="Von"
-                />
-                <span className="text-xs text-slate-400">–</span>
-                <input
-                  type="date"
-                  value={customTo}
-                  onChange={e => setCustomTo(e.target.value)}
-                  className="border border-slate-200 rounded-lg px-2 py-1 text-xs text-slate-700 bg-white focus:ring-2 focus:ring-emerald-500 focus:outline-none"
-                  placeholder="Bis"
-                />
-              </>
-            )}
             <button
               type="button"
               onClick={exportToCsv}
