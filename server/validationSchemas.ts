@@ -8,6 +8,8 @@ export const ProjectTypeSchema = z.enum(['CUSTOMER_PROJECT', 'INTERNAL_PROJECT']
 
 // Time Entry Schema
 export const CreateTimeEntrySchema = z.object({
+  // Ziel-Mitarbeiter ("Für Mitarbeiter erfassen"); ohne Angabe wird der handelnde Benutzer gebucht
+  userId: z.string().optional(),
   projectId: z.string().min(1, 'Projekt ist erforderlich'),
   taskId: z.string().optional(),
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Datum muss im Format YYYY-MM-DD vorliegen'),
@@ -32,6 +34,8 @@ export const CreateWorkingTimeSchema = z.object({
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Datum muss im Format YYYY-MM-DD vorliegen'),
   dayType: z.enum(['REGULAR', 'VACATION', 'SICK', 'SPECIAL_LEAVE', 'PARENTAL_LEAVE']).optional().default('REGULAR'),
   halfDay: z.boolean().optional().default(false),
+  // Teilzeitige Abwesenheit: Start/Ende beschreiben die Abwesenheit selbst (angerechnet, nicht gearbeitet)
+  partialAbsence: z.boolean().optional(),
   // Zeitfelder sind bei Ganztags-Abwesenheiten nicht erforderlich, daher optional
   startTime: z.string().regex(/^([01]\d|2[0-3]):([0-5]\d)$/, 'Startzeit muss im Format HH:MM sein').optional(),
   endTime: z.string().regex(/^([01]\d|2[0-3]):([0-5]\d)$/, 'Endzeit muss im Format HH:MM sein').optional(),

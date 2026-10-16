@@ -16,7 +16,7 @@ import {
 import { apiNotFoundHandler, errorHandler } from './http/errorHandler.js';
 import { asyncHandler } from './http/asyncHandler.js';
 import { validateBody } from './http/validate.js';
-import { BadRequestError, NotFoundError } from './http/errors.js';
+import { BadRequestError, ForbiddenError, NotFoundError } from './http/errors.js';
 import { createSessionContext } from './http/session.js';
 import multer from 'multer';
 import pdfParse from 'pdf-parse';
@@ -586,13 +586,23 @@ export async function createApp(options: CreateAppOptions = {}): Promise<express
     res.json(result);
   });
 
+  // Buchen für andere Mitarbeiter ist nur ADMIN / SUPERADMIN / PROJECT_MANAGER erlaubt
+  const assertMayBookFor = (actorId: string, targetUserId?: string) => {
+    if (!targetUserId || targetUserId === actorId) return;
+    const roleInfo = storage.getActorRoleInfo(actorId);
+    if (!roleInfo.isSuperAdmin && !roleInfo.isAdmin && !roleInfo.isProjectManager) {
+      throw new ForbiddenError('Keine Berechtigung, Zeiten für andere Mitarbeiter zu erfassen.');
+    }
+  };
+
   app.post('/api/time-entries', validateBody(CreateTimeEntrySchema), (req, res, next) => {
     try {
       const actorId = getActorId(req);
+      assertMayBookFor(actorId, req.body.userId);
       const entry = storage.createTimeEntry(req.body, actorId);
       res.status(201).json(entry);
     } catch (err: any) {
-      next(new BadRequestError(err.message || 'Fehler beim Erstellen der Zeiterfassung'));
+      next(err instanceof ForbiddenError ? err : new BadRequestError(err.message || 'Fehler beim Erstellen der Zeiterfassung'));
     }
   });
 
@@ -704,10 +714,11 @@ export async function createApp(options: CreateAppOptions = {}): Promise<express
   app.post('/api/working-time', validateBody(CreateWorkingTimeSchema), (req, res, next) => {
     try {
       const actorId = getActorId(req);
+      assertMayBookFor(actorId, req.body.userId);
       const entry = storage.createOrUpdateWorkingTime(req.body, actorId);
       res.json(entry);
     } catch (err: any) {
-      next(new BadRequestError(err.message || 'Fehler beim Speichern der Arbeitszeit'));
+      next(err instanceof ForbiddenError ? err : new BadRequestError(err.message || 'Fehler beim Speichern der Arbeitszeit'));
     }
   });
 
@@ -828,10 +839,13 @@ export async function createApp(options: CreateAppOptions = {}): Promise<express
   });
 
   app.get('/api/working-time/summary', (req, res) => {
-    const { userId, month } = req.query as { userId: string; month: string };
+    const { userId, month, from, to } = req.query as { userId: string; month: string; from?: string; to?: string };
     const targetUserId = userId || getActorId(req);
     const targetMonth = month || new Date().toISOString().substring(0, 7);
-    const summary = storage.getWorkingTimeSummary(targetUserId, targetMonth);
+    // Optional: beliebiger Zeitraum (from/to, YYYY-MM-DD) statt Kalendermonat
+    const isoDate = /^\d{4}-\d{2}-\d{2}$/;
+    const range = from && to && isoDate.test(from) && isoDate.test(to) && from <= to ? { from, to } : undefined;
+    const summary = storage.getWorkingTimeSummary(targetUserId, targetMonth, range);
     res.json(summary);
   });
 

@@ -3117,6 +3117,7 @@ export class StorageService {
         totalGrossMinutes: grossMinutes,
         totalNetMinutes: netMinutes,
         totalNetHoursDecimal: netHours,
+        partialAbsence: dayType !== 'REGULAR' && halfDay && entryData.partialAbsence === true ? true : undefined,
         updatedAt: new Date().toISOString()
       };
       // GoBD-Nachvollziehbarkeit: Korrektur eines bestehenden Tageseintrags protokollieren
@@ -3148,6 +3149,7 @@ export class StorageService {
         totalGrossMinutes: grossMinutes,
         totalNetMinutes: netMinutes,
         totalNetHoursDecimal: netHours,
+        partialAbsence: dayType !== 'REGULAR' && halfDay && entryData.partialAbsence === true ? true : undefined,
         note: entryData.note,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString()
@@ -3194,10 +3196,10 @@ export class StorageService {
   }
 
   // --- Working Time Summary & Sanity Check (Section 20) ---
-  public getWorkingTimeSummary(userId: string, month: string) {
+  public getWorkingTimeSummary(userId: string, month: string, range?: { from: string; to: string }) {
     const user = this.users.find(u => u.id === userId);
-    const from = `${month}-01`;
-    const to = `${month}-31`;
+    const from = range ? range.from : `${month}-01`;
+    const to = range ? range.to : `${month}-31`;
 
     const workingEntries = this.workingTimeEntries.filter(w => w.userId === userId && w.date >= from && w.date <= to);
     const projectEntries = this.timeEntries.filter(t => t.userId === userId && t.date >= from && t.date <= to);
@@ -3209,8 +3211,8 @@ export class StorageService {
     const year = parseInt(yearStr, 10);
     const m = parseInt(monthStr, 10) - 1;
     const daysInMonth = new Date(year, m + 1, 0).getDate();
-    const startDate = `${month}-01`;
-    const endDate = `${month}-${String(daysInMonth).padStart(2, '0')}`;
+    const startDate = range ? range.from : `${month}-01`;
+    const endDate = range ? range.to : `${month}-${String(daysInMonth).padStart(2, '0')}`;
     const userWorkDays = user?.workDays || [1, 2, 3, 4, 5];
     const stateCode = this.organization.stateLocation || 'DE-BE';
     const dailyTargetHours = user?.dailyTargetHours || 8.0;
@@ -3226,10 +3228,21 @@ export class StorageService {
     let creditedHours = 0;       // Angerechnete Stunden aus Urlaub/Krankheit/Sonderurlaub
     let creditedDays = 0;        // Anzahl angerechneter Abwesenheitstage (Halbtag zählt 0,5)
     let parentalLeaveDays = 0;   // Anzahl Elternzeit-Tage auf regulären Arbeitstagen (neutralisiert)
+    let partialParentalHours = 0; // Teilzeitige Elternzeit (Stunden) reduziert die Sollzeit
 
     workingEntries.forEach(w => {
       const dt: DayType = w.dayType || 'REGULAR';
       const isHalf = w.halfDay === true;
+      if (dt !== 'REGULAR' && w.partialAbsence) {
+        // Teilzeitige Abwesenheit: Start/Ende beschreiben die Abwesenheit selbst
+        if (dt === 'PARENTAL_LEAVE') {
+          partialParentalHours += w.totalNetHoursDecimal;
+        } else {
+          creditedHours += w.totalNetHoursDecimal;
+          creditedDays += dailyTargetHours > 0 ? w.totalNetHoursDecimal / dailyTargetHours : 0;
+        }
+        return;
+      }
       if (dt === 'REGULAR') {
         actualWorkedHours += w.totalNetHoursDecimal;
       } else if (dt === 'PARENTAL_LEAVE') {
@@ -3256,14 +3269,18 @@ export class StorageService {
 
     // Elternzeit reduziert die effektive Sollzeit (halbtägige Elternzeit = halber Tag Soll).
     const parentalHalfDays = workingEntries.filter(
-      w => (w.dayType === 'PARENTAL_LEAVE') && w.halfDay === true && workdayDatesSet.has(w.date)
+      w => (w.dayType === 'PARENTAL_LEAVE') && w.halfDay === true && !w.partialAbsence && workdayDatesSet.has(w.date)
     ).length;
     const parentalReductionDays = parentalLeaveDays - (parentalHalfDays * 0.5);
     const effectiveTargetDays = Math.max(0, targetWorkDays - parentalReductionDays);
 
-    const targetHoursTotal = Math.round(effectiveTargetDays * dailyTargetHours * 100) / 100;
+    const targetHoursTotal = Math.round(Math.max(0, effectiveTargetDays * dailyTargetHours - partialParentalHours) * 100) / 100;
     const actualWorkingHours = actualWorkedHours + creditedHours;
     const balanceHours = Math.round((actualWorkingHours - targetHoursTotal) * 100) / 100;
+
+    // Gesamt-Ist für die einheitliche Zeiterfassung: Projektzeiten + Arbeitszeit ohne Projekt + angerechnete Abwesenheiten
+    const totalActualHours = Math.round((actualProjectHours + actualWorkingHours) * 100) / 100;
+    const totalBalanceHours = Math.round((totalActualHours - targetHoursTotal) * 100) / 100;
 
     // Daily Sanity Check: Warn if project time > working time
     const daysMap = new Map<string, { workH: number; projectH: number }>();
@@ -3294,6 +3311,8 @@ export class StorageService {
       userId,
       userName: user?.name,
       month,
+      from: startDate,
+      to: endDate,
       stateLocation: stateCode,
       holidaysInMonth: workdaysData.holidaysInRange,
       targetWorkDays,
@@ -3307,6 +3326,9 @@ export class StorageService {
       actualProjectHours: Math.round(actualProjectHours * 100) / 100,
       balanceHours,
       isOvertime: balanceHours > 0,
+      dailyTargetHours,
+      totalActualHours,
+      totalBalanceHours,
       sanityDiscrepancies
     };
   }
