@@ -4,6 +4,7 @@ import path from 'path';
 import bcrypt from 'bcrypt';
 import { createServer as createViteServer } from 'vite';
 import { storage, localISODate } from './storage.js';
+import { isValidTimeZone } from '../src/utils/timeZone.js';
 import { GERMAN_STATES, getGermanHolidays, getWorkingDaysInRange, resolveUserHolidayState } from './holidays.js';
 import { generateJwtToken, verifyJwtToken } from './authService.js';
 import {
@@ -76,6 +77,11 @@ export async function createApp(options: CreateAppOptions = {}): Promise<express
   // abgegrenzten Einheit (Trennung der Belange).
   const session = createSessionContext('u-1');
   const { getActorId, requireApiKey, requireAdminAuth } = session;
+  // Gerätezeitzone des Browsers (Header X-Time-Zone) – nur Fallback, wenn im Profil keine Zeitzone steht
+  const clientTimeZone = (req: express.Request): string | undefined => {
+    const tz = req.header('x-time-zone');
+    return isValidTimeZone(tz) ? tz : undefined;
+  };
 
   // Entfernt sicherheitsrelevante Felder (passwordHash) aus User-Objekten,
   // bevor sie in API-Responses zurückgegeben werden. passwordHash darf NIE
@@ -396,9 +402,13 @@ export async function createApp(options: CreateAppOptions = {}): Promise<express
 
   app.put('/api/users/:id', (req, res) => {
     const actorId = getActorId(req);
-    const updated = storage.updateUser(req.params.id, req.body, actorId);
-    if (!updated) return res.status(404).json({ error: 'User not found' });
-    res.json(stripSensitive(updated));
+    try {
+      const updated = storage.updateUser(req.params.id, req.body, actorId);
+      if (!updated) return res.status(404).json({ error: 'User not found' });
+      res.json(stripSensitive(updated));
+    } catch (err: any) {
+      res.status(400).json({ error: err?.message || 'Update failed' });
+    }
   });
 
   app.delete('/api/users/:id', (req, res) => {
@@ -599,7 +609,7 @@ export async function createApp(options: CreateAppOptions = {}): Promise<express
     try {
       const actorId = getActorId(req);
       assertMayBookFor(actorId, req.body.userId);
-      const entry = storage.createTimeEntry(req.body, actorId);
+      const entry = storage.createTimeEntry(req.body, actorId, clientTimeZone(req));
       res.status(201).json(entry);
     } catch (err: any) {
       next(err instanceof ForbiddenError ? err : new BadRequestError(err.message || 'Fehler beim Erstellen der Zeiterfassung'));
@@ -610,7 +620,7 @@ export async function createApp(options: CreateAppOptions = {}): Promise<express
     try {
       const actorId = getActorId(req);
       const { reason, ...updates } = req.body;
-      const entry = storage.updateTimeEntry(req.params.id, updates, actorId, reason);
+      const entry = storage.updateTimeEntry(req.params.id, updates, actorId, reason, clientTimeZone(req));
       if (!entry) throw new NotFoundError('Zeiteintrag nicht gefunden');
       res.json(entry);
     } catch (err: any) {
@@ -715,7 +725,7 @@ export async function createApp(options: CreateAppOptions = {}): Promise<express
     try {
       const actorId = getActorId(req);
       assertMayBookFor(actorId, req.body.userId);
-      const entry = storage.createOrUpdateWorkingTime(req.body, actorId);
+      const entry = storage.createOrUpdateWorkingTime(req.body, actorId, clientTimeZone(req));
       res.json(entry);
     } catch (err: any) {
       next(err instanceof ForbiddenError ? err : new BadRequestError(err.message || 'Fehler beim Speichern der Arbeitszeit'));
@@ -841,7 +851,7 @@ export async function createApp(options: CreateAppOptions = {}): Promise<express
   app.get('/api/working-time/summary', (req, res) => {
     const { userId, month, from, to } = req.query as { userId: string; month: string; from?: string; to?: string };
     const targetUserId = userId || getActorId(req);
-    const targetMonth = month || localISODate().substring(0, 7);
+    const targetMonth = month || localISODate(new Date(), storage.timeZoneFor(targetUserId, getActorId(req), clientTimeZone(req))).substring(0, 7);
     // Optional: beliebiger Zeitraum (from/to, YYYY-MM-DD) statt Kalendermonat
     const isoDate = /^\d{4}-\d{2}-\d{2}$/;
     const range = from && to && isoDate.test(from) && isoDate.test(to) && from <= to ? { from, to } : undefined;
@@ -867,7 +877,7 @@ export async function createApp(options: CreateAppOptions = {}): Promise<express
   });
 
   app.get('/api/forecasts/plan-vs-actual', (req, res) => {
-    const month = (req.query.month as string) || new Date().toISOString().substring(0, 7);
+    const month = (req.query.month as string) || localISODate().substring(0, 7);
     const comparison = storage.getForecastPlanVsActual(month);
     res.json({ month, comparison });
   });
@@ -1232,7 +1242,7 @@ export async function createApp(options: CreateAppOptions = {}): Promise<express
 
   app.get('/api/v1/forecasts', requireApiKey, (req, res) => {
     const { month } = req.query as any;
-    const targetMonth = month || new Date().toISOString().substring(0, 7);
+    const targetMonth = month || localISODate().substring(0, 7);
     const comparison = storage.getForecastPlanVsActual(targetMonth);
     res.json({
       month: targetMonth,

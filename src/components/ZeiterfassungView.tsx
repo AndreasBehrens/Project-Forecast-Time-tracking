@@ -1,7 +1,8 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { ApprovalStatus, DayType, TimeEntry, User, WorkingTimeEntry } from '../types';
-import { DateRangePicker, DateRangeValue, getValueRange, presetValue, toLocalISODate } from './DateRangePicker';
+import { DateRangePicker, DateRangeValue, getValueRange, presetValue } from './DateRangePicker';
+import { DEFAULT_TIME_ZONE, endOfNextMonth, todayInZone, todayInZoneAsDate, userTimeZone, zonedParts } from '../utils/timeZone';
 import {
   Briefcase,
   CalendarDays,
@@ -110,6 +111,7 @@ export const ZeiterfassungView: React.FC = () => {
   const {
     t,
     language,
+    timeZone,
     currentUser,
     users,
     projects,
@@ -168,6 +170,9 @@ export const ZeiterfassungView: React.FC = () => {
     ? selfInternal
     : (isInternalByEmployment(targetUser) || isPrivilegedRole(targetUser));
   const targetDailyHours = targetUser?.dailyTargetHours || 8;
+  // Zeitzone des Ziel-Mitarbeiters: bestimmt "heute", Stoppuhr-Datum und Zukunftsgrenze
+  const bookingTimeZone = isSelfTarget ? timeZone : userTimeZone(targetUser, DEFAULT_TIME_ZONE);
+  const viewerToday = todayInZoneAsDate(timeZone);
 
   // --- Formular ---
   const [editing, setEditing] = useState<EditingRef | null>(null);
@@ -176,7 +181,7 @@ export const ZeiterfassungView: React.FC = () => {
   const [projectId, setProjectId] = useState('');
   const [description, setDescription] = useState('');
   const [isBillable, setIsBillable] = useState(true);
-  const [entryDate, setEntryDate] = useState(() => toLocalISODate(new Date()));
+  const [entryDate, setEntryDate] = useState(() => todayInZone(timeZone));
   const [startTime, setStartTime] = useState('09:00');
   const [endTime, setEndTime] = useState('17:00');
   const [breakMinutes, setBreakMinutes] = useState(0);
@@ -236,9 +241,8 @@ export const ZeiterfassungView: React.FC = () => {
   const allowFuture = isAbsence && (dayType === 'VACATION' || dayType === 'PARENTAL_LEAVE');
   const maxAllowedDate = useMemo(() => {
     if (allowFuture) return undefined;
-    const d = new Date();
-    return toLocalISODate(new Date(d.getFullYear(), d.getMonth() + 2, 0));
-  }, [allowFuture]);
+    return endOfNextMonth(todayInZone(bookingTimeZone));
+  }, [allowFuture, bookingTimeZone]);
 
   // --- Autovervollständigung "Aufgabe" (eigene frühere Einträge im gewählten Projekt) ---
   const taskSuggestions = useMemo(() => {
@@ -411,14 +415,14 @@ export const ZeiterfassungView: React.FC = () => {
     if (!activeTimer.isRunning) return;
     const durationMinutes = Math.max(1, Math.round(activeTimer.elapsedSeconds / 60));
     const now = new Date();
-    const startAt = new Date(now.getTime() - durationMinutes * 60000);
-    const endStr = fromMinutes(now.getHours() * 60 + now.getMinutes());
-    const startStr = fromMinutes(startAt.getHours() * 60 + startAt.getMinutes());
+    const startParts = zonedParts(new Date(now.getTime() - durationMinutes * 60000), bookingTimeZone);
+    const endStr = fromMinutes(zonedParts(now, bookingTimeZone).minutes);
+    const startStr = fromMinutes(startParts.minutes);
     setIsSaving(true);
     setErrorMsg(null);
     try {
       // Buchungsdatum = Starttag (wie im Modus Zeitraum), auch wenn die Stoppuhr über Mitternacht lief
-      await persistEntry({ startTime: startStr, endTime: endStr, breakMinutes: 0, durationMinutes, date: toLocalISODate(startAt) });
+      await persistEntry({ startTime: startStr, endTime: endStr, breakMinutes: 0, durationMinutes, date: startParts.date });
       updateTimerState({ isRunning: false, isPaused: false, startTime: null, elapsedSeconds: 0, description: '', taskId: '', breakMinutes: 0 });
       localStorage.removeItem('insight_arcs_active_timer');
       localStorage.removeItem(TIMER_FORM_KEY);
@@ -438,13 +442,13 @@ export const ZeiterfassungView: React.FC = () => {
   }, [activeTimer.isRunning, projectId, description, isBillable, effectiveUserId]);
 
   // --- Filter ---
-  const [filterPeriod, setFilterPeriod] = useState<DateRangeValue>(() => presetValue('thisMonth'));
+  const [filterPeriod, setFilterPeriod] = useState<DateRangeValue>(() => presetValue('thisMonth', undefined, todayInZoneAsDate(timeZone)));
   const [filterUserId, setFilterUserId] = useState('all');
   const [filterType, setFilterType] = useState<'all' | DayType>('all');
   const [filterClientId, setFilterClientId] = useState('all');
   const [filterProjectId, setFilterProjectId] = useState('all');
   const [filterSearch, setFilterSearch] = useState('');
-  const filterRange = getValueRange(filterPeriod);
+  const filterRange = getValueRange(filterPeriod, undefined, viewerToday);
 
   // --- Kombinierte Einträge ---
   const allRows = useMemo<UnifiedRow[]>(() => {
@@ -549,7 +553,7 @@ export const ZeiterfassungView: React.FC = () => {
   const summaryRange = useMemo(() => {
     if (filterRange) return filterRange;
     // "Alle Einträge": vom ersten Eintrag des Mitarbeiters bis heute (bzw. bis zum letzten Eintrag)
-    const today = toLocalISODate(new Date());
+    const today = todayInZone(timeZone);
     const dates = allRows.filter(r => r.userId === summaryUserId).map(r => r.date).sort();
     if (dates.length === 0) return { from: today, to: today };
     return { from: dates[0] < today ? dates[0] : today, to: dates[dates.length - 1] > today ? dates[dates.length - 1] : today };
@@ -1052,7 +1056,7 @@ export const ZeiterfassungView: React.FC = () => {
 
       {/* 3. Filterleiste (ohne Zurücksetzen-Button) */}
       <div className="bg-white rounded-2xl border border-slate-200/90 shadow-sm p-4 flex flex-wrap items-center gap-2.5">
-        <DateRangePicker value={filterPeriod} onChange={setFilterPeriod} language={language} />
+        <DateRangePicker value={filterPeriod} onChange={setFilterPeriod} language={language} today={viewerToday} />
         {isPrivileged && (
           <select id="zf-filter-user" value={filterUserId} onChange={e => setFilterUserId(e.target.value)} className={`${inputCls} w-auto`}>
             <option value="all">{t.zfAllEmployees}</option>

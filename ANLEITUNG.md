@@ -118,6 +118,23 @@ Als Favorit markierte Projektzeiten erscheinen über dem Formular als Schaltflä
 
 Die Datumsauswahl sperrt spätere Tage bereits, und der Server lehnt sie zusätzlich ab. Vergangene Tage können jederzeit nachgetragen werden – außer der Monat wurde **abgeschlossen und gesperrt** (GoBD-Monatsabschluss).
 
+### Zeitzone 🌍 (für Kolleginnen und Kollegen im Ausland)
+
+Welcher Tag „heute" ist, bestimmt **deine lokale Zeitzone** – nicht die deutsche Uhrzeit.
+
+1. Oben rechts im Kopfbereich auf deinen **Namen / Avatar** klicken.
+2. Unter **„Zeitzone"** **„Automatisch (Gerät: …)"** belassen (empfohlen) oder eine bestimmte Zone wählen, z. B. *America/Sao_Paulo*. Die Auswahl wird sofort in deinem Profil gespeichert.
+
+Die Zeitzone bestimmt:
+
+- das **vorausgewählte Datum** („heute") im Formular, die Zeitraum-Vorgaben und die Kennzahlen,
+- die von der Stoppuhr gebuchten **Start- und Endzeiten**,
+- die **Zukunftsgrenze** („Ende des nächsten Monats" ab deinem lokalen Heute).
+
+> - Uhrzeiten werden so gespeichert, wie du sie eingibst (lokale Uhrzeit, z. B. 09:00–17:00), und **nicht** umgerechnet – Kollegen in Brasilien sehen und behalten ihre eigenen Zeiten.
+> - Bucht ein Projektleiter oder Admin **für einen Mitarbeiter**, gilt die Zeitzone **dieses Mitarbeiters**.
+> - Ohne Profileinstellung wird die Zeitzone des Geräts verwendet, ersatzweise Europe/Berlin.
+
 ---
 
 ## 3. Die Eintragsliste
@@ -181,6 +198,7 @@ Ist für ein Projekt die Freigabepflicht aktiv, erhalten deine Einträge zunäch
 - **Muss ich zusätzlich zu Projektzeiten noch einen Arbeitstag erfassen?** Nein. Projektzeiten zählen bereits als Ist-Stunden. Erfasse Zeit **ohne Projekt** nur für Tätigkeiten, die keinem Projekt zugeordnet sind.
 - **Warum wird ein Krankheitstag am Samstag nicht angerechnet?** Abwesenheiten werden nur an deinen vertraglichen Arbeitstagen angerechnet.
 - **Warum kann ich keinen regulären Arbeitstag in zwei Monaten eintragen?** Außer Urlaub und Elternzeit sind Buchungen nur bis zum Ende des nächsten Monats möglich.
+- **Ich arbeite außerhalb Deutschlands – landen meine Einträge auf dem falschen Tag?** Nein. „Heute" wird aus deiner Zeitzone ermittelt (Profileinstellung oder Gerät). Prüfen kannst du das im Profilmenü unter **„Zeitzone"**.
 
 ---
 

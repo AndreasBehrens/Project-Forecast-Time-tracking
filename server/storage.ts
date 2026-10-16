@@ -33,18 +33,17 @@ import {
 } from '../src/types.js';
 import { getGermanHolidays, getWorkingDaysInRange, GERMAN_STATES, HolidayInfo } from './holidays.js';
 import * as prismaStore from './prismaStore.js';
+import { DEFAULT_TIME_ZONE, endOfNextMonth, isValidTimeZone, todayInZone, userTimeZone } from '../src/utils/timeZone.js';
 import type { AppStateSnapshot } from './prismaStore.js';
 
-/** Heutiges Datum (YYYY-MM-DD) in deutscher Zeit – nicht UTC (sonst zwischen 0 und 2 Uhr der Vortag). */
-export function localISODate(d: Date = new Date()): string {
-  return new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Berlin', year: 'numeric', month: '2-digit', day: '2-digit' }).format(d);
+/** Heutiges Datum (YYYY-MM-DD) in der angegebenen Zeitzone (Standard: deutsche Zeit) – nicht UTC. */
+export function localISODate(d: Date = new Date(), tz: string = DEFAULT_TIME_ZONE): string {
+  return todayInZone(tz, d);
 }
 
 /** Letzter Tag des Folgemonats (YYYY-MM-DD) – Zukunftsgrenze für Buchungen außer Urlaub/Elternzeit. */
 export function maxFutureBookingDate(today: string = localISODate()): string {
-  const [y, m] = today.split('-').map(Number);
-  const last = new Date(Date.UTC(y, m + 1, 0)); // m ist 1-basiert → Monat m+1 (0-basiert) Tag 0 = Ende Folgemonat
-  return last.toISOString().slice(0, 10);
+  return endOfNextMonth(today);
 }
 
 export class StorageService {
@@ -381,6 +380,18 @@ export class StorageService {
               te.id = `te-${Date.now()}-${Math.random().toString(36).substring(2, 9)}-${i}`;
             }
             seenTimeEntryIds.add(te.id);
+          });
+
+          // 8b. Gleiches für Arbeitszeit-Einträge: Ältere IDs ('wte-' + Date.now() + Zufall < 1000) konnten bei
+          // Massenimporten kollidieren. Doppelte IDs führen dazu, dass Bearbeiten/Löschen den falschen Eintrag trifft.
+          const seenWorkingTimeIds = new Set<string>();
+          this.workingTimeEntries.forEach((w, i) => {
+            if (seenWorkingTimeIds.has(w.id)) {
+              const oldId = w.id;
+              w.id = `wte-${Date.now()}-${Math.random().toString(36).substring(2, 9)}-${i}`;
+              console.warn(`[Automigration] Doppelte Arbeitszeit-ID ${oldId} (${w.userName || w.userId}, ${w.date}) → ${w.id}`);
+            }
+            seenWorkingTimeIds.add(w.id);
           });
 
           // 9. Backfill dayType='REGULAR' for existing working time entries (Präzisierung Arbeitszeiterfassung)
@@ -2104,6 +2115,16 @@ export class StorageService {
       }
     }
     
+    // Zeitzonen: nur gültige IANA-Namen; leerer String = zurücksetzen auf "Automatisch (Gerät)"
+    for (const key of ['timeZone', 'deviceTimeZone'] as const) {
+      if (sanitizedUpdates[key] === undefined) continue;
+      if (sanitizedUpdates[key] === '' || sanitizedUpdates[key] === null) {
+        sanitizedUpdates[key] = undefined;
+      } else if (!isValidTimeZone(sanitizedUpdates[key])) {
+        throw new Error(`Ungültige Zeitzone: ${String(sanitizedUpdates[key])}`);
+      }
+    }
+
     // Check holiday location rules if stateLocation or employmentType is changed
     let stateLocation = sanitizedUpdates.stateLocation !== undefined ? sanitizedUpdates.stateLocation : this.users[idx].stateLocation;
     const empType = sanitizedUpdates.employmentType !== undefined ? sanitizedUpdates.employmentType : this.users[idx].employmentType;
@@ -2790,14 +2811,15 @@ export class StorageService {
     return { data, total, page, limit };
   }
 
-  public createTimeEntry(entryData: Partial<TimeEntry>, actorId: string): TimeEntry {
-    const bookingDate = entryData.date || localISODate();
+  public createTimeEntry(entryData: Partial<TimeEntry>, actorId: string, clientTimeZone?: string): TimeEntry {
+    const tz = this.timeZoneFor(entryData.userId || actorId, actorId, clientTimeZone);
+    const bookingDate = entryData.date || localISODate(new Date(), tz);
     const periodCheck = this.isPeriodLocked(bookingDate);
     if (periodCheck.isLocked) {
       throw new Error(`GoBD-Revisionsschutz: Der Abrechnungsmonat ${bookingDate.slice(0, 7)} ist durch einen Monatsabschluss gesperrt. Neue Buchungen sind nicht mehr zulässig.`);
     }
 
-    this.assertBookingDateAllowed(bookingDate, 'REGULAR');
+    this.assertBookingDateAllowed(bookingDate, 'REGULAR', tz);
 
     const bookingUserId = entryData.userId || actorId;
     const user = this.users.find(u => u.id === bookingUserId);
@@ -2896,7 +2918,7 @@ export class StorageService {
     return entry;
   }
 
-  public updateTimeEntry(entryId: string, updates: Partial<TimeEntry>, actorId: string, reason?: string): TimeEntry | null {
+  public updateTimeEntry(entryId: string, updates: Partial<TimeEntry>, actorId: string, reason?: string, clientTimeZone?: string): TimeEntry | null {
     const idx = this.timeEntries.findIndex(e => e.id === entryId);
     if (idx === -1) return null;
 
@@ -2920,7 +2942,9 @@ export class StorageService {
       const brk = updates.breakMinutes ?? oldEntry.breakMinutes ?? 0;
       durationMinutes = Math.max(1, this.calculateMinutes(updates.startTime, updates.endTime) - brk);
     }
-    if (updates.date && updates.date !== oldEntry.date) this.assertBookingDateAllowed(updates.date, 'REGULAR');
+    if (updates.date && updates.date !== oldEntry.date) {
+      this.assertBookingDateAllowed(updates.date, 'REGULAR', this.timeZoneFor(oldEntry.userId, actorId, clientTimeZone));
+    }
     const durationHoursDecimal = Math.round((durationMinutes / 60) * 100) / 100;
 
     const isBillable = updates.isBillable ?? oldEntry.isBillable;
@@ -3087,8 +3111,9 @@ export class StorageService {
     return list;
   }
 
-  public createOrUpdateWorkingTime(entryData: Partial<WorkingTimeEntry>, actorId: string): WorkingTimeEntry {
-    const entryDate = entryData.date || localISODate();
+  public createOrUpdateWorkingTime(entryData: Partial<WorkingTimeEntry>, actorId: string, clientTimeZone?: string): WorkingTimeEntry {
+    const tz = this.timeZoneFor(entryData.userId || actorId, actorId, clientTimeZone);
+    const entryDate = entryData.date || localISODate(new Date(), tz);
     const periodCheck = this.isPeriodLocked(entryDate);
     if (periodCheck.isLocked) {
       throw new Error(`GoBD-Revisionsschutz: Die Arbeitszeit im Monat ${entryDate.slice(0, 7)} kann nicht geändert werden, da dieser Monat revisionssicher abgeschlossen und gesperrt ist.`);
@@ -3100,7 +3125,7 @@ export class StorageService {
     // Zukunftsgrenze nur für neue Einträge oder geänderte Datumswerte prüfen (Bestandsdaten bleiben editierbar)
     const prevForLimit = entryData.id ? this.workingTimeEntries.find(w => w.id === entryData.id) : undefined;
     if (!prevForLimit || prevForLimit.date !== entryDate || (prevForLimit.dayType || 'REGULAR') !== dayType) {
-      this.assertBookingDateAllowed(entryDate, dayType);
+      this.assertBookingDateAllowed(entryDate, dayType, tz);
     }
 
     // Bei Ganztags-Abwesenheiten (Urlaub, Krankheit, Sonderurlaub, Elternzeit) werden keine
@@ -3162,7 +3187,7 @@ export class StorageService {
       return this.workingTimeEntries[existingIdx];
     } else {
       const entry: WorkingTimeEntry = {
-        id: 'wte-' + (Date.now() + Math.floor(Math.random() * 1000)),
+        id: `wte-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
         orgId: this.organization.id,
         userId: user?.id || actorId,
         userName: user?.name,
@@ -3509,7 +3534,7 @@ export class StorageService {
 
     // Calculate passed workdays in month for extrapolation taking into account state holidays
     const today = new Date();
-    const todayStr = today.toISOString().substring(0, 10);
+    const todayStr = localISODate(today);
     const isCurrentMonth = today.getFullYear() === year && today.getMonth() === m;
 
     const workdaysInfo = getWorkingDaysInRange(startDate, endDate, stateCode);
@@ -3676,7 +3701,7 @@ export class StorageService {
     const totalWorkdaysInPeriod = periodWorkdaysInfo.totalWorkdays;
 
     const today = new Date();
-    const todayStr = today.toISOString().substring(0, 10);
+    const todayStr = localISODate(today);
     const isPastPeriod = endDate < todayStr;
     const isFuturePeriod = startDate > todayStr;
     const passedWorkdaysInPeriod = isPastPeriod
@@ -4167,7 +4192,7 @@ export class StorageService {
     }
 
     const today = new Date();
-    const todayStr = today.toISOString().substring(0, 10);
+    const todayStr = localISODate(today);
     const isPastPeriod = endDate < todayStr;
     const isFuturePeriod = startDate > todayStr;
 
@@ -5087,12 +5112,23 @@ export class StorageService {
    * Urlaub und Elternzeit dürfen beliebig weit im Voraus geplant werden,
    * alle anderen Einträge höchstens bis zum Ende des Folgemonats.
    */
-  public assertBookingDateAllowed(date: string, dayType: DayType = 'REGULAR') {
+  public assertBookingDateAllowed(date: string, dayType: DayType = 'REGULAR', tz: string = DEFAULT_TIME_ZONE) {
     if (dayType === 'VACATION' || dayType === 'PARENTAL_LEAVE') return;
-    const max = maxFutureBookingDate();
+    const max = maxFutureBookingDate(localISODate(new Date(), tz));
     if (date > max) {
       throw new Error(`Buchungen sind höchstens bis ${max} im Voraus möglich (Ausnahme: Urlaub und Elternzeit).`);
     }
+  }
+
+  /**
+   * Zeitzone, in der "heute" und die Zukunftsgrenze für einen Mitarbeiter bestimmt werden:
+   * Profil-Zeitzone → zuletzt erkannte Gerätezeitzone → Gerätezeitzone der aktuellen Anfrage
+   * (nur wenn der Mitarbeiter selbst bucht) → deutsche Zeit.
+   */
+  public timeZoneFor(userId: string | undefined, actorId?: string, clientTimeZone?: string): string {
+    const user = userId ? this.users.find(u => u.id === userId) : undefined;
+    const requestTz = userId && userId === actorId && isValidTimeZone(clientTimeZone) ? clientTimeZone : DEFAULT_TIME_ZONE;
+    return userTimeZone(user, requestTz);
   }
 
   private calculateMinutes(start: string, end: string): number {
@@ -5108,7 +5144,7 @@ export class StorageService {
   }
 
   private logAudit(entry: Omit<AuditLogEntry, 'id' | 'orgId' | 'timestamp'>) {
-    const id = 'aud-' + (Date.now() + Math.floor(Math.random() * 1000));
+    const id = `aud-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
     const timestamp = new Date().toISOString();
     const orgId = this.organization.id;
 

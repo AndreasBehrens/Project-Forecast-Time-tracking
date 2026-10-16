@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 
 // Persistenz-Gateway mocken: Unit-Tests dürfen keine echte PostgreSQL-Verbindung
 // benötigen. saveAll/loadAll werden zu No-Ops.
@@ -373,6 +373,80 @@ describe('Zukunfts- und Datumsregeln bei Buchungen', () => {
   it('setzt ohne Datum das heutige Datum in deutscher Zeit', () => {
     const e = storage.createTimeEntry({ userId: 'u-wt', durationMinutes: 30 }, 'u-wt');
     expect(e.date).toBe(localISODate());
+  });
+});
+
+describe('Zeitzonen der Mitarbeiter bei Buchungen', () => {
+  let storage: StorageService;
+
+  beforeEach(() => {
+    storage = new StorageService();
+    const s = storage as any;
+    s.users.push({ id: 'u-sp', orgId: s.organization.id, name: 'São Paulo', timeZone: 'America/Sao_Paulo', dailyTargetHours: 8, workDays: [1, 2, 3, 4, 5] });
+    s.users.push({ id: 'u-dev', orgId: s.organization.id, name: 'Gerät Lissabon', deviceTimeZone: 'Europe/Lisbon', dailyTargetHours: 8, workDays: [1, 2, 3, 4, 5] });
+    s.users.push({ id: 'u-none', orgId: s.organization.id, name: 'Ohne Zeitzone', dailyTargetHours: 8, workDays: [1, 2, 3, 4, 5] });
+  });
+
+  afterEach(() => vi.useRealTimers());
+
+  it('timeZoneFor: Profil → Gerät → Anfrage-Header (nur bei Selbstbuchung) → Berlin', () => {
+    expect(storage.timeZoneFor('u-sp', 'u-sp', 'Asia/Tokyo')).toBe('America/Sao_Paulo');
+    expect(storage.timeZoneFor('u-dev', 'u-dev', 'Asia/Tokyo')).toBe('Europe/Lisbon');
+    expect(storage.timeZoneFor('u-none', 'u-none', 'Asia/Tokyo')).toBe('Asia/Tokyo');
+    expect(storage.timeZoneFor('u-none', 'u-1', 'Asia/Tokyo')).toBe('Europe/Berlin'); // Kollege bucht: fremder Header zählt nicht
+    expect(storage.timeZoneFor('u-none', 'u-none', 'kaputt')).toBe('Europe/Berlin');
+  });
+
+  it('Standarddatum ohne Angabe = "heute" in der Zeitzone des Mitarbeiters', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-10-16T01:30:00Z')); // Berlin 16.10., São Paulo noch 15.10.
+    expect(storage.createTimeEntry({ userId: 'u-sp', durationMinutes: 30 }, 'u-sp').date).toBe('2026-10-15');
+    expect(storage.createTimeEntry({ userId: 'u-none', durationMinutes: 30 }, 'u-none').date).toBe('2026-10-16');
+    // Superadmin bucht für die Kollegin in São Paulo -> deren Kalendertag
+    expect(storage.createOrUpdateWorkingTime({ userId: 'u-sp', dayType: 'REGULAR', startTime: '09:00', endTime: '10:00' }, 'u-1').date).toBe('2026-10-15');
+  });
+
+  it('Zukunftsgrenze am Monatswechsel richtet sich nach der Ortszeit des Mitarbeiters', () => {
+    vi.useFakeTimers();
+    // 31.10. 23:30 UTC: Berlin bereits 01.11. (Grenze 31.12.), São Paulo noch 31.10. (Grenze 30.11.)
+    vi.setSystemTime(new Date('2026-10-31T23:30:00Z'));
+    expect(() => storage.createTimeEntry({ userId: 'u-sp', date: '2026-12-01', durationMinutes: 60 }, 'u-sp')).toThrow(/2026-11-30/);
+    expect(storage.createTimeEntry({ userId: 'u-none', date: '2026-12-01', durationMinutes: 60 }, 'u-none').date).toBe('2026-12-01');
+  });
+
+  it('updateUser akzeptiert gültige Zeitzonen, setzt mit "" zurück und lehnt ungültige ab', () => {
+    expect(storage.updateUser('u-none', { timeZone: 'Asia/Kathmandu' }, 'u-1')?.timeZone).toBe('Asia/Kathmandu');
+    expect(storage.updateUser('u-none', { timeZone: '' }, 'u-1')?.timeZone).toBeUndefined();
+    expect(() => storage.updateUser('u-none', { timeZone: 'Mars/Olympus' }, 'u-1')).toThrow(/Zeitzone/);
+    expect(() => storage.updateUser('u-none', { deviceTimeZone: 'kaputt' }, 'u-none')).toThrow(/Zeitzone/);
+  });
+});
+
+describe('Eindeutige IDs für Arbeitszeit-Einträge', () => {
+  it('vergibt bei vielen schnellen Buchungen keine doppelten IDs', () => {
+    const storage = new StorageService();
+    const s = storage as any;
+    s.users.push({ id: 'u-id', orgId: s.organization.id, name: 'ID Test', dailyTargetHours: 8, workDays: [1, 2, 3, 4, 5] });
+    const ids = new Set<string>();
+    for (let i = 0; i < 300; i++) {
+      const d = new Date(Date.UTC(2026, 0, 1 + (i % 28)));
+      ids.add(storage.createOrUpdateWorkingTime({ userId: 'u-id', date: d.toISOString().slice(0, 10), dayType: 'REGULAR', startTime: '09:00', endTime: '10:00' }, 'u-id').id);
+    }
+    expect(ids.size).toBe(300);
+  });
+
+  it('Automigration vergibt doppelten Arbeitszeit-IDs neue IDs (erster Eintrag behält seine ID)', () => {
+    const storage = new StorageService();
+    const s = storage as any;
+    const base = { orgId: s.organization.id, userId: 'u-1', dayType: 'REGULAR', halfDay: false, startTime: '09:00', endTime: '10:00' };
+    s.workingTimeEntries = [{ ...base, id: 'wte-dup', date: '2026-03-05' }, { ...base, id: 'wte-dup', date: '2026-03-23' }, { ...base, id: 'wte-ok', date: '2026-03-24' }];
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    s.applyAutomigrations();
+    warn.mockRestore();
+    const ids = s.workingTimeEntries.map((w: any) => w.id);
+    expect(new Set(ids).size).toBe(3);
+    expect(s.workingTimeEntries.find((w: any) => w.date === '2026-03-05').id).toBe('wte-dup');
+    expect(s.workingTimeEntries.find((w: any) => w.date === '2026-03-24').id).toBe('wte-ok');
   });
 });
 

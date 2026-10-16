@@ -147,27 +147,30 @@ interface DateRangePickerProps {
   buttonClassName?: string;
   /** Oberflächensprache (Standard: Deutsch). */
   language?: 'de' | 'en';
+  /** "Heute" (lokales Date, 00:00) – z. B. in der Zeitzone des Mitarbeiters. Standard: Gerätedatum. */
+  today?: Date;
 }
 
 export const DateRangePicker: React.FC<DateRangePickerProps> = ({
-  value, onChange, presets = DEFAULT_PRESETS, className = '', buttonClassName, language = 'de'
+  value, onChange, presets = DEFAULT_PRESETS, className = '', buttonClassName, language = 'de', today
 }) => {
+  const now = () => today ?? new Date();
   const ui = UI_TEXT[language] || UI_TEXT.de;
   const months = language === 'en' ? MONTHS_EN : MONTHS_DE;
   const weekdays = language === 'en' ? WEEKDAYS_EN : WEEKDAYS_DE;
   const presetLabel = (p: DateRangePreset) => (language === 'en' && PRESET_LABELS_EN[p.key]) || p.label;
   const [open, setOpen] = useState(false);
-  const [viewYear, setViewYear] = useState(() => new Date().getFullYear());
-  const [viewMonth, setViewMonth] = useState(() => new Date().getMonth());
+  const [viewYear, setViewYear] = useState(() => now().getFullYear());
+  const [viewMonth, setViewMonth] = useState(() => now().getMonth());
   const [pendingStart, setPendingStart] = useState<string | null>(null);
   const [hoverDate, setHoverDate] = useState<string | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
 
-  const todayIso = toLocalISODate(new Date());
-  const activeRange = getValueRange(value, presets);
+  const todayIso = toLocalISODate(now());
+  const activeRange = getValueRange(value, presets, now());
 
   const showMonthOf = (iso: string | null | undefined) => {
-    const d = iso ? parseLocalISODate(iso) : new Date();
+    const d = iso ? parseLocalISODate(iso) : now();
     setViewYear(d.getFullYear());
     setViewMonth(d.getMonth());
   };
@@ -207,7 +210,7 @@ export const DateRangePicker: React.FC<DateRangePickerProps> = ({
   };
 
   const applyPreset = (p: DateRangePreset) => {
-    const r = p.getRange(new Date());
+    const r = p.getRange(now());
     setPendingStart(null);
     setHoverDate(null);
     onChange({ preset: p.key, from: r?.from ?? null, to: r?.to ?? null });

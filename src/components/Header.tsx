@@ -11,6 +11,7 @@ import {
   LogOut
 } from 'lucide-react';
 import { CompanyLocationModal } from './CompanyLocationModal';
+import { deviceTimeZone, listTimeZones } from '../utils/timeZone';
 
 export const Header: React.FC = () => {
   const {
@@ -20,6 +21,8 @@ export const Header: React.FC = () => {
     logout,
     language,
     setLanguage,
+    timeZone,
+    setTimeZone,
     t,
     activeTimer,
     pauseTimer,
@@ -36,6 +39,12 @@ export const Header: React.FC = () => {
 
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [showLocationModal, setShowLocationModal] = useState(false);
+  const [tzError, setTzError] = useState<string | null>(null);
+  const timeZoneOptions = React.useMemo(() => listTimeZones(), []);
+  const handleTimeZoneChange = async (tz: string) => {
+    setTzError(null);
+    try { await setTimeZone(tz); } catch { setTzError(t.tzSaveError); }
+  };
 
   const formatTimer = (totalSeconds: number) => {
     const hours = Math.floor(totalSeconds / 3600);
@@ -230,6 +239,24 @@ export const Header: React.FC = () => {
                         🤝 {t.externalProvider} {currentUser.companyName ? `(${currentUser.companyName})` : ''}
                       </div>
                     )}
+                  </div>
+
+                  {/* Zeitzone (Profil) */}
+                  <div className="px-4 py-3 border-b border-slate-100">
+                    <label htmlFor="select-time-zone" className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">
+                      {t.tzLabel}
+                    </label>
+                    <select
+                      id="select-time-zone"
+                      value={currentUser?.timeZone || ''}
+                      onChange={e => handleTimeZoneChange(e.target.value)}
+                      className="w-full text-xs border border-slate-200 rounded-lg px-2 py-1.5 bg-white text-slate-800"
+                    >
+                      <option value="">{t.tzAuto.replace('{tz}', deviceTimeZone())}</option>
+                      {timeZoneOptions.map(tz => <option key={tz} value={tz}>{tz.replace(/_/g, ' ')}</option>)}
+                    </select>
+                    <p className="text-[10px] text-slate-500 mt-1">{t.tzHint} ({timeZone.replace(/_/g, ' ')})</p>
+                    {tzError && <p className="text-[10px] text-red-600 mt-1">{tzError}</p>}
                   </div>
 
                   {/* Logout Action Button */}

@@ -143,6 +143,30 @@ describe('Einheitliche Zeiterfassung: Buchen für Kollegen, Zukunftsgrenze, Zeit
     expect(res.body.userId).toBe(employeeId);
   });
 
+  it('Zeitzone im Profil: gültig wird gespeichert, ungültig ergibt 400', async () => {
+    const ok = await request(app).put(`/api/users/${employeeId}`).set('x-user-id', employeeId).send({ timeZone: 'America/Sao_Paulo' });
+    expect(ok.status).toBe(200);
+    expect(ok.body.timeZone).toBe('America/Sao_Paulo');
+    const bad = await request(app).put(`/api/users/${employeeId}`).set('x-user-id', employeeId).send({ timeZone: 'Mars/Olympus' });
+    expect(bad.status).toBe(400);
+    const reset = await request(app).put(`/api/users/${employeeId}`).set('x-user-id', employeeId).send({ timeZone: '' });
+    expect(reset.body.timeZone).toBeUndefined();
+  });
+
+  it('Zukunftsgrenze wird in der Gerätezeitzone (X-Time-Zone) berechnet', async () => {
+    const tz = 'Pacific/Kiritimati'; // UTC+14
+    const today = new Intl.DateTimeFormat('en-CA', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+    const [y, m] = today.split('-').map(Number);
+    const limit = new Date(Date.UTC(y, m + 1, 0)).toISOString().slice(0, 10);
+    const dayAfter = new Date(Date.UTC(y, m + 1, 1)).toISOString().slice(0, 10);
+    const ok = await request(app).post('/api/time-entries').set('x-user-id', employeeId).set('x-time-zone', tz)
+      .send({ projectId, date: limit, durationMinutes: 15 });
+    expect(ok.status).toBe(201);
+    const tooLate = await request(app).post('/api/time-entries').set('x-user-id', employeeId).set('x-time-zone', tz)
+      .send({ projectId, date: dayAfter, durationMinutes: 15 });
+    expect(tooLate.status).toBe(400);
+  });
+
   it('Superadmin bucht für eine Kollegin -> Eintrag gehört der Kollegin', async () => {
     const res = await request(app).post('/api/time-entries').set('x-user-id', 'u-1')
       .send({ userId: colleagueId, projectId, date: '2026-08-03', startTime: '10:00', endTime: '12:00', durationMinutes: 120 });

@@ -118,6 +118,23 @@ If you have marked project entries as favorites, they appear above the form as b
 
 The date picker already blocks later dates, and the server rejects them as well. Past dates can be entered at any time, unless the month has been **closed and locked** (GoBD month-end closing).
 
+### Time zone 🌍 (for colleagues abroad)
+
+The app uses **your local time zone**, not German time, to decide what "today" is.
+
+1. Click your **name / avatar** at the top right of the header.
+2. Under **"Time zone"**, keep **"Automatic (device: …)"** (recommended) or pick a specific zone, e.g. *America/Sao_Paulo*. The choice is saved in your profile straight away.
+
+The time zone determines:
+
+- the **default date** ("today") in the form, the period presets and the summary cards,
+- the **start and end times** booked by the stopwatch,
+- the **future limit** ("end of next month" is counted from your local today).
+
+> - Times are saved exactly as you enter them (local wall-clock time, e.g. 09:00–17:00). They are **not** converted, so a colleague in Brazil sees and keeps their own times.
+> - When a project manager or admin books **for a colleague**, the **colleague's** time zone applies.
+> - Without a profile setting, the device time zone is used, and Europe/Berlin is the fallback.
+
 ---
 
 ## 3. The entry list
@@ -181,6 +198,7 @@ If a project requires approval, your entries first receive the status **Draft** 
 - **Do I still need to record a separate working day in addition to my project times?** No. Project times already count as actual hours. Only record time **without a project** for work that is not linked to a project.
 - **Why is a sick day on a Saturday not credited?** Absences are credited only on your contracted working days.
 - **Why can't I enter a regular working day in two months' time?** Apart from vacation and parental leave, bookings are possible up to the end of next month.
+- **I work outside Germany. Could my entries land on the wrong date?** No. "Today" is taken from your time zone (profile setting or your device). Check it in the profile menu under **"Time zone"**.
 
 ---
 
