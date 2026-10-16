@@ -58,7 +58,12 @@ export const WorkingTimeView: React.FC = () => {
     users
   } = useApp();
 
-  const isAdmin = currentUser?.role === 'SUPERADMIN' || currentUser?.role === 'ADMIN';
+  const isSuperAdmin = currentUser?.role === 'SUPERADMIN' || currentUser?.id === 'u-1';
+  const isAdmin = isSuperAdmin || currentUser?.role === 'ADMIN';
+  // Admins zählen immer als intern; ohne Angaben (kein Typ, keine Firma) gilt ein Nutzer als intern
+  const isInternalUser = isAdmin
+    || currentUser?.employmentType === 'INTERNAL'
+    || (!currentUser?.employmentType && !currentUser?.companyName);
 
   useEffect(() => {
     if (!isAdmin && currentUser?.id) {
@@ -245,6 +250,15 @@ export const WorkingTimeView: React.FC = () => {
   const currentMonthStr = new Date().toISOString().substring(0, 7); // YYYY-MM
   const isNextMonth = !allowFuture && entryDate > `${currentMonthStr}-31`;
 
+  // Defensiv: Externe Nutzer (ohne Admin-Rolle) haben keinen Zugriff auf die allg. Arbeitszeit
+  if (!isInternalUser) {
+    return (
+      <div className="bg-white rounded-2xl border border-slate-200/90 shadow-sm p-4 sm:p-5 text-xs text-slate-500">
+        Die allgemeine Arbeitszeiterfassung ist nur für interne Mitarbeiter verfügbar.
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       {/* Header & Month/User Selector */}
@@ -398,7 +412,8 @@ export const WorkingTimeView: React.FC = () => {
         </div>
 
         <form onSubmit={handleSaveWorkingDay} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-3 items-end">
-          {/* Art (Tagesart) */}
+          {/* Art (Tagesart) – nur für interne Nutzer (Admins zählen als intern) */}
+          {isInternalUser && (
           <div className="lg:col-span-3">
             <label className="block text-[11px] font-semibold text-slate-500 mb-1 flex items-center gap-1">
               <Info className="w-3 h-3 text-emerald-600" /> {t.dayTypeLabel}
@@ -416,6 +431,7 @@ export const WorkingTimeView: React.FC = () => {
               <option value="PARENTAL_LEAVE">{t.dayTypeParentalLeave}</option>
             </select>
           </div>
+          )}
 
           <div className="lg:col-span-2">
             <label className="block text-[11px] font-semibold text-slate-500 mb-1">{t.date}</label>

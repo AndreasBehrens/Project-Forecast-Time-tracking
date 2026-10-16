@@ -37,6 +37,9 @@ export const ForecastView: React.FC = () => {
     organization
   } = useApp();
 
+  // Finanzspalten (Geplanter Umsatz / Geplante Marge): Superadmin + Admin
+  const canViewFinancials = currentUser?.role === 'SUPERADMIN' || currentUser?.role === 'ADMIN' || currentUser?.id === 'u-1';
+
   const [activeTab, setActiveTab] = useState<'aggregated' | 'capacity' | 'detail'>('aggregated');
   const [selectedMonth, setSelectedMonth] = useState('2026-08');
   const [comparisonList, setComparisonList] = useState<ForecastComparisonItem[]>([]);
@@ -278,8 +281,8 @@ export const ForecastView: React.FC = () => {
                     <th className="px-4 py-3 text-right">{t.actualHours}</th>
                     <th className="px-4 py-3 text-right font-bold text-slate-800">{t.extrapolatedHours}</th>
                     <th className="px-4 py-3 text-right">{t.deviation}</th>
-                    {currentUser?.role === 'ADMIN' && <th className="px-4 py-3 text-right">{t.plannedRevenue}</th>}
-                    {currentUser?.role === 'ADMIN' && <th className="px-4 py-3 text-right">{t.plannedMargin}</th>}
+                    {canViewFinancials && <th className="px-4 py-3 text-right">{t.plannedRevenue}</th>}
+                    {canViewFinancials && <th className="px-4 py-3 text-right">{t.plannedMargin}</th>}
                     <th className="px-4 py-3 text-center">{t.versionHistory}</th>
                     <th className="px-4 py-3 text-center">{t.status}</th>
                   </tr>
@@ -319,12 +322,12 @@ export const ForecastView: React.FC = () => {
                             {row.hoursDeviationPercent > 0 ? `+${row.hoursDeviationPercent}%` : `${row.hoursDeviationPercent}%`}
                           </span>
                         </td>
-                        {currentUser?.role === 'ADMIN' && (
+                        {canViewFinancials && (
                           <td className="px-4 py-3 text-right font-medium text-slate-800">
                             {row.plannedRevenue.toLocaleString(undefined, { style: 'currency', currency: 'EUR' })}
                           </td>
                         )}
-                        {currentUser?.role === 'ADMIN' && (
+                        {canViewFinancials && (
                           <td className="px-4 py-3 text-right font-bold text-emerald-700">
                             {(row.plannedRevenue - row.plannedCost).toLocaleString(undefined, { style: 'currency', currency: 'EUR' })}
                           </td>

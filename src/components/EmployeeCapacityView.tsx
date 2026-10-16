@@ -33,6 +33,9 @@ export const EmployeeCapacityView: React.FC = () => {
     currentUser
   } = useApp();
 
+  // Finanzspalten (Geplanter Umsatz / Geplante Marge): Superadmin + Admin
+  const canViewFinancials = currentUser?.role === 'SUPERADMIN' || currentUser?.role === 'ADMIN' || currentUser?.id === 'u-1';
+
   const [periodType, setPeriodType] = useState<'MONTH' | 'QUARTER' | 'HALF_YEAR' | 'YEAR'>('MONTH');
   const [periodKey, setPeriodKey] = useState('2026-08');
   const [selectedEmploymentType, setSelectedEmploymentType] = useState('');
@@ -462,7 +465,7 @@ export const EmployeeCapacityView: React.FC = () => {
                 <th className="px-4 py-3 text-right">{t.actualHours}</th>
                 <th className="px-4 py-3">{t.capacityUtilization}</th>
                 <th className="px-4 py-3 text-right">{t.plannedRevenue}</th>
-                {currentUser?.role === 'ADMIN' && <th className="px-4 py-3 text-right">{t.plannedMargin}</th>}
+                {canViewFinancials && <th className="px-4 py-3 text-right">{t.plannedMargin}</th>}
                 <th className="px-4 py-3 text-center">{t.status}</th>
               </tr>
             </thead>
@@ -581,7 +584,7 @@ export const EmployeeCapacityView: React.FC = () => {
                           {formatEUR(emp.totalPlannedRevenue)}
                         </td>
 
-                        {currentUser?.role === 'ADMIN' && (
+                        {canViewFinancials && (
                           <td className="px-4 py-3 text-right font-bold text-emerald-700">
                             {formatEUR(emp.totalPlannedMargin)}
                           </td>

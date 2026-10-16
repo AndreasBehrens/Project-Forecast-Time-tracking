@@ -51,7 +51,7 @@ Both are defined in `src/types.ts` (`User.role`, `User.employmentType`). Externa
 | Audit log | ✅ all orgs | ✅ active org | own actions + managed projects | own actions |
 | **Projekte & Kunden** | ✅ | ✅ | ✅ only own projects ("Meine Projekte & Team") | ❌ |
 | **Forecast** | ✅ | ✅ | ✅ only own projects ("Projekt-Forecast") | ❌ (own forecasts via API only) |
-| Planned revenue / margin columns in Forecast & capacity views | ❌¹ | ✅ | ❌ | ❌ |
+| Planned revenue / margin columns in Forecast & capacity views | ✅¹ | ✅ | ❌ | ❌ |
 | Cost rates of other employees | ✅ | ✅ | ✅ unless project has `allowPmViewCosts = false` | ❌ |
 | **Exporte** (XLSX) | ✅ if internal | ✅ if internal | ✅ if internal | ❌ |
 | **Rates & Team** (roles, rates, user management) | ✅ | ✅ | ❌ | ❌ |
@@ -62,8 +62,9 @@ Both are defined in `src/types.ts` (`User.role`, `User.employmentType`). Externa
 | Set / remove user passwords | ✅ | ❌ | ❌ | ❌ |
 | Promote users to ADMIN / SUPERADMIN, edit Superadmins or other Admins | ✅ | ❌ | ❌ | ❌ |
 
-¹ `ForecastView.tsx` / `EmployeeCapacityView.tsx` check `role === 'ADMIN'` only, so Superadmins currently do not see
-these columns (known inconsistency).
+¹ `ForecastView.tsx` / `EmployeeCapacityView.tsx` gate these columns with
+`canViewFinancials = role === 'SUPERADMIN' || role === 'ADMIN' || id === 'u-1'`, so Superadmins (incl. the built-in
+`u-1`) see them as well.
 
 Projects visible to **employees** (for booking): projects they are assigned to (`assignedUserIds` / `memberRates`)
 plus all projects without `restrictToAssignedMembers`, excluding archived/completed projects and projects listing
@@ -74,12 +75,16 @@ the user in `excludedUserIds`.
 | Feature | INTERNAL | EXTERNAL (freelancer / partner) |
 |---|:-:|:-:|
 | Projektzeiterfassung | ✅ | ✅ |
-| Allg. Arbeitszeit tab (incl. Type selection: Regular / Vacation / Sick / Special leave / Parental leave) | ✅ | ❌ (admins always see it) |
+| Allg. Arbeitszeit section (incl. Type selection: Regular / Vacation / Sick / Special leave / Parental leave) | ✅ | ❌ (admins always see it) |
 | Exporte menu (in addition to the role requirement) | ✅ | ❌ |
 
-Implementation: `App.tsx` renders the tabs *Projektzeiterfassung* / *Allg. Arbeitszeit* only for `isAdmin || isInternal`;
-external non-admins get `TimeTrackerView` without tabs. The Type selection itself (`WorkingTimeView.tsx`) has no
-separate check — it is hidden only because the whole tab is hidden.
+Implementation: `App.tsx` renders `ZeiterfassungView.tsx` for the *Zeiterfassung* menu. There are no tabs anymore:
+for `isAdmin || isInternal` it shows one page with two separated sections — *Projektzeiterfassung*
+(`TimeTrackerView`) and, below a divider, *Allg. Arbeitszeit* (`WorkingTimeView`). External non-admins get only
+`TimeTrackerView`, without section headers. As a defensive second layer, `WorkingTimeView.tsx` computes
+`isInternalUser = isAdmin || employmentType === 'INTERNAL' || (!employmentType && !companyName)`: the Type selection
+is rendered only for internal users (admins always count as internal), and external non-admins get only a short
+notice instead of the view.
 
 ---
 
