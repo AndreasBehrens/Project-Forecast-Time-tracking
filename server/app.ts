@@ -3,7 +3,7 @@ import cors from 'cors';
 import path from 'path';
 import bcrypt from 'bcrypt';
 import { createServer as createViteServer } from 'vite';
-import { storage } from './storage.js';
+import { storage, localISODate } from './storage.js';
 import { GERMAN_STATES, getGermanHolidays, getWorkingDaysInRange, resolveUserHolidayState } from './holidays.js';
 import { generateJwtToken, verifyJwtToken } from './authService.js';
 import {
@@ -19,7 +19,7 @@ import { validateBody } from './http/validate.js';
 import { BadRequestError, ForbiddenError, NotFoundError } from './http/errors.js';
 import { createSessionContext } from './http/session.js';
 import multer from 'multer';
-import pdfParse from 'pdf-parse';
+import pdfParse from 'pdf-parse/lib/pdf-parse.js';
 import { parseClockifyPdfText, mapDayType } from './clockifyPdfParser.js';
 import { buildClockifyXlsx, buildTimesheetXlsx, aggregateByTask, safeFilePart, XLSX_MIME, generateDetailedTimeReport, normalizeDateParam } from './xlsxExports.js';
 
@@ -841,7 +841,7 @@ export async function createApp(options: CreateAppOptions = {}): Promise<express
   app.get('/api/working-time/summary', (req, res) => {
     const { userId, month, from, to } = req.query as { userId: string; month: string; from?: string; to?: string };
     const targetUserId = userId || getActorId(req);
-    const targetMonth = month || new Date().toISOString().substring(0, 7);
+    const targetMonth = month || localISODate().substring(0, 7);
     // Optional: beliebiger Zeitraum (from/to, YYYY-MM-DD) statt Kalendermonat
     const isoDate = /^\d{4}-\d{2}-\d{2}$/;
     const range = from && to && isoDate.test(from) && isoDate.test(to) && from <= to ? { from, to } : undefined;

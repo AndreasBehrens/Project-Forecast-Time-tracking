@@ -102,3 +102,89 @@ describe('CRUD-Grundfunktion (Kunden, In-Memory)', () => {
     expect(res.body.id).toBeTruthy();
   });
 });
+
+describe('Einheitliche Zeiterfassung: Buchen für Kollegen, Zukunftsgrenze, Zeitraum-Saldo', () => {
+  let employeeId: string;
+  let colleagueId: string;
+  let projectId: string;
+
+  beforeAll(async () => {
+    // Seed enthält nur den Superadmin u-1 -> Testdaten über die API anlegen
+    const e = await request(app).post('/api/users/invite').set('x-user-id', 'u-1')
+      .send({ name: 'IT Mitarbeiter', email: 'it.mitarbeiter@example.com', role: 'EMPLOYEE', employmentType: 'INTERNAL', dailyTargetHours: 8, workDays: [1, 2, 3, 4, 5] });
+    const c = await request(app).post('/api/users/invite').set('x-user-id', 'u-1')
+      .send({ name: 'IT Kollegin', email: 'it.kollegin@example.com', role: 'EMPLOYEE', employmentType: 'INTERNAL', dailyTargetHours: 8, workDays: [1, 2, 3, 4, 5] });
+    const p = await request(app).post('/api/projects').set('x-user-id', 'u-1')
+      .send({ name: 'IT Projekt', projectType: 'INTERNAL_PROJECT', status: 'ACTIVE' });
+    employeeId = e.body.user.id;
+    colleagueId = c.body.user.id;
+    projectId = p.body.id;
+    expect(employeeId).toBeTruthy();
+    expect(colleagueId).toBeTruthy();
+    expect(projectId).toBeTruthy();
+  });
+
+  it('Mitarbeiter (EMPLOYEE) darf keine Projektzeit für Kollegen buchen (403)', async () => {
+    const res = await request(app).post('/api/time-entries').set('x-user-id', employeeId)
+      .send({ userId: colleagueId, projectId, date: '2026-08-03', durationMinutes: 60 });
+    expect(res.status).toBe(403);
+  });
+
+  it('Mitarbeiter (EMPLOYEE) darf keine Arbeitszeit/Abwesenheit für Kollegen buchen (403)', async () => {
+    const res = await request(app).post('/api/working-time').set('x-user-id', employeeId)
+      .send({ userId: colleagueId, date: '2026-08-04', dayType: 'VACATION' });
+    expect(res.status).toBe(403);
+  });
+
+  it('Mitarbeiter darf für sich selbst buchen (userId = eigene ID)', async () => {
+    const res = await request(app).post('/api/time-entries').set('x-user-id', employeeId)
+      .send({ userId: employeeId, projectId, date: '2026-08-03', startTime: '09:00', endTime: '10:00', durationMinutes: 60 });
+    expect(res.status).toBe(201);
+    expect(res.body.userId).toBe(employeeId);
+  });
+
+  it('Superadmin bucht für eine Kollegin -> Eintrag gehört der Kollegin', async () => {
+    const res = await request(app).post('/api/time-entries').set('x-user-id', 'u-1')
+      .send({ userId: colleagueId, projectId, date: '2026-08-03', startTime: '10:00', endTime: '12:00', durationMinutes: 120 });
+    expect(res.status).toBe(201);
+    expect(res.body.userId).toBe(colleagueId);
+
+    const wt = await request(app).post('/api/working-time').set('x-user-id', 'u-1')
+      .send({ userId: colleagueId, date: '2026-08-04', dayType: 'VACATION' });
+    expect(wt.status).toBe(200);
+    expect(wt.body.userId).toBe(colleagueId);
+  });
+
+  it('lehnt reguläre Arbeitszeit jenseits des Folgemonats ab (400), erlaubt aber Urlaub', async () => {
+    const reg = await request(app).post('/api/working-time').set('x-user-id', employeeId)
+      .send({ date: '2099-01-05', dayType: 'REGULAR', startTime: '09:00', endTime: '17:00' });
+    expect(reg.status).toBe(400);
+    const proj = await request(app).post('/api/time-entries').set('x-user-id', employeeId)
+      .send({ projectId, date: '2099-01-05', durationMinutes: 60 });
+    expect(proj.status).toBe(400);
+    const vac = await request(app).post('/api/working-time').set('x-user-id', employeeId)
+      .send({ date: '2099-01-05', dayType: 'VACATION' });
+    expect(vac.status).toBe(200);
+  });
+
+  it('GET /api/working-time/summary mit from/to liefert Gesamt-Ist und Saldo für den Zeitraum', async () => {
+    const res = await request(app).get('/api/working-time/summary')
+      .query({ userId: colleagueId, from: '2026-08-03', to: '2026-08-07' });
+    expect(res.status).toBe(200);
+    expect(res.body.from).toBe('2026-08-03');
+    expect(res.body.to).toBe('2026-08-07');
+    expect(res.body.targetHoursTotal).toBe(40);
+    // 2h Projektzeit + 8h angerechneter Urlaub
+    expect(res.body.totalActualHours).toBe(10);
+    expect(res.body.totalBalanceHours).toBe(-30);
+  });
+
+  it('PUT /api/time-entries/:id berücksichtigt die Pause bei der Dauer', async () => {
+    const created = await request(app).post('/api/time-entries').set('x-user-id', employeeId)
+      .send({ projectId, date: '2026-08-05', startTime: '09:00', endTime: '12:00', durationMinutes: 180 });
+    const res = await request(app).put(`/api/time-entries/${created.body.id}`).set('x-user-id', employeeId)
+      .send({ startTime: '09:00', endTime: '13:00', breakMinutes: 30 });
+    expect(res.status).toBe(200);
+    expect(res.body.durationMinutes).toBe(210);
+  });
+});

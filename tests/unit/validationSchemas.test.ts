@@ -175,3 +175,27 @@ describe('PeriodLockSchema', () => {
     expect(PeriodLockSchema.safeParse({ ...valid, status: 'CLOSED' }).success).toBe(false);
   });
 });
+
+describe('Einheitliche Zeiterfassung: Schema-Erweiterungen', () => {
+  it('CreateTimeEntrySchema akzeptiert optional eine Ziel-userId', () => {
+    const r = CreateTimeEntrySchema.safeParse({ projectId: 'p-1', date: '2026-08-03', durationMinutes: 60, userId: 'u-2' });
+    expect(r.success).toBe(true);
+    if (r.success) expect(r.data.userId).toBe('u-2');
+    const r2 = CreateTimeEntrySchema.safeParse({ projectId: 'p-1', date: '2026-08-03', durationMinutes: 60 });
+    expect(r2.success).toBe(true);
+    if (r2.success) expect(r2.data.userId).toBeUndefined();
+  });
+
+  it('CreateWorkingTimeSchema akzeptiert partialAbsence und Ganztags-Abwesenheit ohne Uhrzeiten', () => {
+    const r = CreateWorkingTimeSchema.safeParse({ date: '2026-08-04', dayType: 'SICK', halfDay: true, partialAbsence: true, startTime: '13:00', endTime: '17:00' });
+    expect(r.success).toBe(true);
+    if (r.success) expect(r.data.partialAbsence).toBe(true);
+    const r2 = CreateWorkingTimeSchema.safeParse({ date: '2026-08-04', dayType: 'VACATION' });
+    expect(r2.success).toBe(true);
+  });
+
+  it('CreateWorkingTimeSchema lehnt unbekannte Tagesarten ab', () => {
+    const r = CreateWorkingTimeSchema.safeParse({ date: '2026-08-04', dayType: 'HOLIDAY' });
+    expect(r.success).toBe(false);
+  });
+});

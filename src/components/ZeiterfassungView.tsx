@@ -401,12 +401,14 @@ export const ZeiterfassungView: React.FC = () => {
     if (!activeTimer.isRunning) return;
     const durationMinutes = Math.max(1, Math.round(activeTimer.elapsedSeconds / 60));
     const now = new Date();
+    const startAt = new Date(now.getTime() - durationMinutes * 60000);
     const endStr = fromMinutes(now.getHours() * 60 + now.getMinutes());
-    const startStr = fromMinutes(now.getHours() * 60 + now.getMinutes() - durationMinutes);
+    const startStr = fromMinutes(startAt.getHours() * 60 + startAt.getMinutes());
     setIsSaving(true);
     setErrorMsg(null);
     try {
-      await persistEntry({ startTime: startStr, endTime: endStr, breakMinutes: 0, durationMinutes, date: toLocalISODate(now) });
+      // Buchungsdatum = Starttag (wie im Modus Zeitraum), auch wenn die Stoppuhr über Mitternacht lief
+      await persistEntry({ startTime: startStr, endTime: endStr, breakMinutes: 0, durationMinutes, date: toLocalISODate(startAt) });
       updateTimerState({ isRunning: false, isPaused: false, startTime: null, elapsedSeconds: 0, description: '', taskId: '', breakMinutes: 0 });
       localStorage.removeItem('insight_arcs_active_timer');
       localStorage.removeItem(TIMER_FORM_KEY);

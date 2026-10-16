@@ -552,7 +552,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   };
 
   const updateTimeEntry = async (id: string, updates: Partial<TimeEntry>, reason?: string) => {
-    await fetch(`/api/time-entries/${id}`, {
+    const res = await fetch(`/api/time-entries/${id}`, {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',
@@ -560,14 +560,23 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       },
       body: JSON.stringify({ ...updates, reason })
     });
+    if (!res.ok) {
+      const error = await res.json().catch(() => ({ message: 'Unbekannter Fehler' }));
+      await refreshAllData();
+      throw new Error(error.message || `HTTP ${res.status}`);
+    }
     await refreshAllData();
   };
 
   const deleteTimeEntry = async (id: string) => {
-    await fetch(`/api/time-entries/${id}`, {
+    const res = await fetch(`/api/time-entries/${id}`, {
       method: 'DELETE',
       headers: { 'x-user-id': currentUser?.id || 'u-1' }
     });
+    if (!res.ok) {
+      const error = await res.json().catch(() => ({ message: 'Unbekannter Fehler' }));
+      throw new Error(error.message || `HTTP ${res.status}`);
+    }
     await refreshAllData();
   };
 
