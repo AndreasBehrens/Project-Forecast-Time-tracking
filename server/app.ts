@@ -42,6 +42,11 @@ export async function createApp(options: CreateAppOptions = {}): Promise<express
   const { serveStatic = true } = options;
   const app = express();
 
+  // Trust the single nginx reverse proxy in front of this app so that
+  // req.ip and rate-limiters see the real visitor address from X-Forwarded-For,
+  // and req.secure reflects X-Forwarded-Proto (important for secure cookies).
+  app.set('trust proxy', 1);
+
   // --- CORS-HAERTUNG (Section: Security Hardening) ---
   // Erlaubte Origins werden zur Laufzeit aus der Umgebungsvariable ALLOWED_ORIGINS
   // (kommagetrennte Liste) eingelesen. Fallback fuer die Entwicklung.
