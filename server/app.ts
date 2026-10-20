@@ -258,18 +258,35 @@ export async function createApp(options: CreateAppOptions = {}): Promise<express
       });
     }
 
-    // Passwort-Prüfung: nur wenn für diesen Nutzer ein Passwort gesetzt ist.
-    // Ohne passwordHash bleibt der Login ohne Passwort erlaubt (Rückwärtskompatibilität).
     const { password } = req.body;
-    if (!user.passwordHash || !password || !bcrypt.compareSync(String(password), user.passwordHash)) {
-      console.warn('[AUTH_TRACE] login rejected: password check failed', {
+    if (!user.passwordHash) {
+      console.warn('[AUTH_TRACE] login rejected: password is not configured', {
         userId: user.id,
-        passwordConfigured: Boolean(user.passwordHash),
         passwordProvided: Boolean(password)
       });
       return res.status(401).json({
         success: false,
-        error: 'Ungültige Anmeldedaten oder für dieses Konto ist kein Passwort eingerichtet.'
+        error: 'Für dieses Konto ist noch kein Passwort eingerichtet. Bitte kontaktieren Sie einen Administrator.'
+      });
+    }
+
+    if (!password) {
+      console.warn('[AUTH_TRACE] login rejected: password missing', { userId: user.id });
+      return res.status(401).json({
+        success: false,
+        error: 'Ungültige Anmeldedaten.'
+      });
+    }
+
+    if (!bcrypt.compareSync(String(password), user.passwordHash)) {
+      console.warn('[AUTH_TRACE] login rejected: password mismatch', {
+        userId: user.id,
+        passwordConfigured: true,
+        passwordProvided: true
+      });
+      return res.status(401).json({
+        success: false,
+        error: 'Ungültige Anmeldedaten.'
       });
     }
 

@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeAll, vi } from 'vitest';
 import request from 'supertest';
 import type { Express } from 'express';
+import bcrypt from 'bcrypt';
 import { generateJwtToken } from '../../server/authService.js';
 import { storage } from '../../server/storage.js';
 
@@ -53,6 +54,34 @@ describe('Health & Basis-Endpunkte', () => {
     const res = await request(app).post('/api/auth/login').send({ userId: 'u-1' });
     expect(res.status).toBe(401);
     expect(res.body.token).toBeUndefined();
+  });
+
+  it('rejects wrong passwords and only issues a JWT for a matching password', async () => {
+    const user = storage.getUsers(true).find(candidate => candidate.id === 'u-1');
+    if (!user) throw new Error('Seed superadmin u-1 is required for this test');
+    const originalHash = user.passwordHash;
+    const correctPassword = 'test-only-correct-password';
+    storage.updateUser('u-1', { passwordHash: bcrypt.hashSync(correctPassword, 4) }, 'u-1');
+
+    try {
+      const wrongPassword = await request(app).post('/api/auth/login').send({
+        userId: 'u-1',
+        password: 'test-only-wrong-password'
+      });
+      expect(wrongPassword.status).toBe(401);
+      expect(wrongPassword.body.success).toBe(false);
+      expect(wrongPassword.body.token).toBeUndefined();
+
+      const correct = await request(app).post('/api/auth/login').send({
+        userId: 'u-1',
+        password: correctPassword
+      });
+      expect(correct.status).toBe(200);
+      expect(correct.body.success).toBe(true);
+      expect(typeof correct.body.token).toBe('string');
+    } finally {
+      storage.updateUser('u-1', { passwordHash: originalHash }, 'u-1');
+    }
   });
 
   it('API-v1 bleibt beim API-Key-Schutz statt JWT-Schutz', async () => {
