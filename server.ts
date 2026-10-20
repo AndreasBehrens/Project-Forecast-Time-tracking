@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import { createApp } from './server/app.js';
 import { storage } from './server/storage.js';
 

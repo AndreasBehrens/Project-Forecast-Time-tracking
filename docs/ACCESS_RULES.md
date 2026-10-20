@@ -20,7 +20,7 @@ Both are defined in `src/types.ts` (`User.role`, `User.employmentType`). Externa
 | A user is **Superadmin** if `role === 'SUPERADMIN'` **or** `id === 'u-1'` (hard-coded owner account). | `server/storage.ts` → `getActorRoleInfo()`; also `NavigationSidebar.tsx`, `App.tsx` |
 | For non-superadmins the role is taken from the **membership of the currently active organisation** (`user.memberships[].role`), falling back to `user.role`. | `server/storage.ts` → `getActorRoleInfo()` |
 | Role flags are exclusive: `isAdmin` (includes Superadmin) → `isProjectManager` → `isEmployee`. | `server/storage.ts` → `getActorRoleInfo()` |
-| The acting user is identified via JWT (`Authorization: Bearer …`) or the `x-user-id` header. | `server/http/session.ts` → `getActorId()` |
+| The acting user is identified only from a verified JWT (`Authorization: Bearer …`); `x-user-id` is not an identity credential. | `server/http/session.ts` → `getActorId()` |
 
 > **Note:** The frontend checks `currentUser.role` (global role), while the server uses the per-organisation
 > membership role. For users with different roles per organisation, UI and server may disagree.

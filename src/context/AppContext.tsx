@@ -322,13 +322,25 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     try {
       setIsLoading(true);
       const token = localStorage.getItem('insight_arcs_auth_jwt_token');
+      if (!token) {
+        setCurrentUser(null);
+        return;
+      }
       const reqHeaders: Record<string, string> = {
         'Content-Type': 'application/json'
       };
       if (token) reqHeaders['Authorization'] = `Bearer ${token}`;
 
-      const [authRes, orgsRes, usersRes, rolesRes, clientsRes, partnersRes, projectsRes, tasksRes, timeRes, workRes, auditRes, fcRes, keysRes, locksRes] = await Promise.all([
-        fetch('/api/auth/me', { headers: reqHeaders }).then(r => r.json()),
+      const authResponse = await fetch('/api/auth/me', { headers: reqHeaders });
+      const authRes = await authResponse.json();
+      if (!authResponse.ok || !authRes.user) {
+        localStorage.removeItem('insight_arcs_auth_jwt_token');
+        setAuthToken(null);
+        setCurrentUser(null);
+        return;
+      }
+
+      const [orgsRes, usersRes, rolesRes, clientsRes, partnersRes, projectsRes, tasksRes, timeRes, workRes, auditRes, fcRes, keysRes, locksRes] = await Promise.all([
         fetch('/api/organizations', { headers: reqHeaders }).then(r => r.json()),
         fetch('/api/users', { headers: reqHeaders }).then(r => r.json()),
         fetch('/api/employee-roles', { headers: reqHeaders }).then(r => r.json()),
@@ -380,7 +392,11 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   }, [activeTimer.projectId]);
 
   useEffect(() => {
-    refreshAllData();
+    if (localStorage.getItem('insight_arcs_auth_jwt_token')) {
+      refreshAllData();
+    } else {
+      setIsLoading(false);
+    }
   }, [refreshAllData]);
 
   // Switch Active Organization / Mandant
@@ -486,6 +502,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     }
     if (data.success && data.activeUser) {
       setCurrentUser(data.activeUser);
+      if (data.token) {
+        setAuthToken(data.token);
+        localStorage.setItem('insight_arcs_auth_jwt_token', data.token);
+      }
       localStorage.setItem('insight_arcs_logged_in_user', data.activeUser.id);
       if (data.activeUser.language) setLanguageState(data.activeUser.language);
       if (data.activeOrgId) setActiveOrgId(data.activeOrgId);

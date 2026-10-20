@@ -13,6 +13,8 @@ window.fetch = (input: RequestInfo | URL, init?: RequestInit) => {
   if (!sameOriginApi) return nativeFetch(input, init);
   const headers = new Headers(init?.headers || (input instanceof Request ? input.headers : undefined));
   if (!headers.has('x-time-zone')) headers.set('x-time-zone', deviceTimeZone());
+  const token = localStorage.getItem('insight_arcs_auth_jwt_token');
+  if (token && !headers.has('Authorization')) headers.set('Authorization', `Bearer ${token}`);
   return nativeFetch(input, { ...init, headers });
 };
 

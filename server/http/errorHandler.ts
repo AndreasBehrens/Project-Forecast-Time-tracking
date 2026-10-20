@@ -49,6 +49,9 @@ export function errorHandler(
   if (err instanceof AppError) {
     statusCode = err.statusCode;
     body = { error: err.message, code: err.code, details: err.details };
+  } else if (err instanceof Error && err.name === 'UnauthorizedError') {
+    statusCode = 401;
+    body = { error: 'Nicht authentifiziert', code: 'UNAUTHORIZED' };
   } else if (err instanceof ZodError) {
     statusCode = 422;
     body = {

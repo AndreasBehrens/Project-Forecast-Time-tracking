@@ -1,8 +1,16 @@
 import crypto from 'crypto';
 import { User, UserRole, UserOrganizationMembership } from '../src/types.js';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'insight_arcs_enterprise_sec_key_2026_x89f_de_compliant';
+export const JWT_ISSUER = 'insight-arcs-auth-engine';
 const TOKEN_EXPIRY_SECONDS = 7 * 24 * 60 * 60; // 7 Days
+
+export function getJwtSecret(): string {
+  const secret = process.env.JWT_SECRET;
+  if (!secret || Buffer.byteLength(secret, 'utf8') < 32) {
+    throw new Error('JWT_SECRET must be configured with at least 32 bytes of random data.');
+  }
+  return secret;
+}
 
 export interface JwtTokenPayload {
   userId: string;
@@ -47,7 +55,7 @@ export function generateJwtToken(user: User, orgId: string, orgName?: string): {
     memberships: user.memberships,
     iat: now,
     exp: now + TOKEN_EXPIRY_SECONDS,
-    iss: 'insight-arcs-auth-engine',
+    iss: JWT_ISSUER,
     jti: crypto.randomBytes(16).toString('hex')
   };
 
@@ -61,7 +69,7 @@ export function generateJwtToken(user: User, orgId: string, orgName?: string): {
   const signatureInput = `${encodedHeader}.${encodedPayload}`;
 
   const signature = crypto
-    .createHmac('sha256', JWT_SECRET)
+    .createHmac('sha256', getJwtSecret())
     .update(signatureInput)
     .digest('base64')
     .replace(/=/g, '')
@@ -81,6 +89,13 @@ export function verifyJwtToken(token: string): { valid: boolean; payload?: JwtTo
     return { valid: false, error: 'Token fehlt oder ungültig' };
   }
 
+  let secret: string;
+  try {
+    secret = getJwtSecret();
+  } catch (error) {
+    return { valid: false, error: error instanceof Error ? error.message : 'JWT_SECRET ist nicht konfiguriert' };
+  }
+
   const parts = token.split('.');
   if (parts.length !== 3) {
     return { valid: false, error: 'Ungültige Tokenstruktur' };
@@ -90,20 +105,26 @@ export function verifyJwtToken(token: string): { valid: boolean; payload?: JwtTo
   const signatureInput = `${encodedHeader}.${encodedPayload}`;
 
   const expectedSignature = crypto
-    .createHmac('sha256', JWT_SECRET)
+    .createHmac('sha256', secret)
     .update(signatureInput)
     .digest('base64')
     .replace(/=/g, '')
     .replace(/\+/g, '-')
     .replace(/\//g, '_');
 
-  if (!crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expectedSignature))) {
+  const signatureBuffer = Buffer.from(signature);
+  const expectedSignatureBuffer = Buffer.from(expectedSignature);
+  if (signatureBuffer.length !== expectedSignatureBuffer.length || !crypto.timingSafeEqual(signatureBuffer, expectedSignatureBuffer)) {
     return { valid: false, error: 'Digitale Token-Signatur ist ungültig (Manipulationsversuch erkannt)' };
   }
 
   try {
     const payload: JwtTokenPayload = JSON.parse(base64UrlDecode(encodedPayload));
     const now = Math.floor(Date.now() / 1000);
+
+    if (payload.iss !== JWT_ISSUER) {
+      return { valid: false, error: 'Token-Aussteller ist ungültig' };
+    }
 
     if (payload.exp && payload.exp < now) {
       return { valid: false, error: 'Sitzungs-Token ist abgelaufen. Bitte erneut anmelden.' };

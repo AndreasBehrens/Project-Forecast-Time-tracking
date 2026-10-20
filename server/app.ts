@@ -2,11 +2,12 @@ import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import path from 'path';
 import bcrypt from 'bcrypt';
+import { expressjwt } from 'express-jwt';
 import { createServer as createViteServer } from 'vite';
 import { storage, localISODate } from './storage.js';
 import { isValidTimeZone } from '../src/utils/timeZone.js';
 import { GERMAN_STATES, getGermanHolidays, getWorkingDaysInRange, resolveUserHolidayState } from './holidays.js';
-import { generateJwtToken, verifyJwtToken } from './authService.js';
+import { generateJwtToken, getJwtSecret, JWT_ISSUER, verifyJwtToken } from './authService.js';
 import {
   CreateTimeEntrySchema,
   UpdateTimeEntrySchema,
@@ -41,6 +42,7 @@ export interface CreateAppOptions {
 export async function createApp(options: CreateAppOptions = {}): Promise<express.Express> {
   const { serveStatic = true } = options;
   const app = express();
+  const jwtSecret = getJwtSecret();
 
   // Trust the single nginx reverse proxy in front of this app so that
   // req.ip and rate-limiters see the real visitor address from X-Forwarded-For,
@@ -80,8 +82,29 @@ export async function createApp(options: CreateAppOptions = {}): Promise<express
   // Kapselt die simulierte Session (currentUserId) sowie die Helfer
   // getActorId, requireApiKey und requireAdminAuth in einer klar
   // abgegrenzten Einheit (Trennung der Belange).
-  const session = createSessionContext('u-1');
-  const { getActorId, requireApiKey, requireAdminAuth } = session;
+  const session = createSessionContext();
+  const { getActorId, requireApiKey, requireAdminAuth, requireAuthenticatedUser } = session;
+
+  const verifyBearerJwt = expressjwt({
+    secret: jwtSecret,
+    algorithms: ['HS256'],
+    issuer: JWT_ISSUER,
+    requestProperty: 'auth'
+  });
+  const publicApiPaths = new Set([
+    '/api/health',
+    '/api/auth/login'
+  ]);
+  app.use('/api', (req, res, next) => {
+    const requestPath = req.originalUrl.split('?')[0];
+    if (publicApiPaths.has(requestPath) || requestPath === '/api/v1' || requestPath.startsWith('/api/v1/')) {
+      return next();
+    }
+    verifyBearerJwt(req, res, (error) => {
+      if (error) return next(error);
+      requireAuthenticatedUser(req, res, next);
+    });
+  });
   // Gerätezeitzone des Browsers (Header X-Time-Zone) – nur Fallback, wenn im Profil keine Zeitzone steht
   const clientTimeZone = (req: express.Request): string | undefined => {
     const tz = req.header('x-time-zone');
@@ -187,17 +210,13 @@ export async function createApp(options: CreateAppOptions = {}): Promise<express
 
     // Passwort-Prüfung: nur wenn für diesen Nutzer ein Passwort gesetzt ist.
     // Ohne passwordHash bleibt der Login ohne Passwort erlaubt (Rückwärtskompatibilität).
-    if (user.passwordHash) {
-      const { password } = req.body;
-      if (!password || !bcrypt.compareSync(String(password), user.passwordHash)) {
-        return res.status(401).json({
-          success: false,
-          error: 'Ungültiges Passwort.'
-        });
-      }
+    const { password } = req.body;
+    if (!user.passwordHash || !password || !bcrypt.compareSync(String(password), user.passwordHash)) {
+      return res.status(401).json({
+        success: false,
+        error: 'Ungültige Anmeldedaten oder für dieses Konto ist kein Passwort eingerichtet.'
+      });
     }
-
-    session.setCurrentUserId(user.id);
 
     // Switch org if specified, or pick user's active org
     if (orgId) {
@@ -282,7 +301,6 @@ export async function createApp(options: CreateAppOptions = {}): Promise<express
   });
 
   app.post('/api/auth/logout', (req, res) => {
-    session.clearCurrentUser();
     res.json({ success: true, message: 'Erfolgreich abgemeldet' });
   });
 
@@ -293,14 +311,10 @@ export async function createApp(options: CreateAppOptions = {}): Promise<express
 
   app.post('/api/auth/switch-user', (req, res) => {
     // Nur Admins dürfen in andere Accounts wechseln.
-    // Der Aufrufer muss sich explizit ausweisen (JWT oder x-user-id) – kein Fallback
-    // auf die globale Server-Session, sonst könnten anonyme Requests durchrutschen.
-    if (!req.headers['authorization'] && !req.headers['x-user-id']) {
-      return res.status(401).json({ error: 'Nicht authentifiziert.' });
-    }
+    // Die API-JWT-Middleware hat den Aufrufer bereits authentifiziert.
     const actorId = getActorId(req);
-    const actor = storage.getUsers(true).find(u => u.id === actorId);
-    if (!actor || (actor.role !== 'SUPERADMIN' && actor.role !== 'ADMIN')) {
+    const actorRole = storage.getActorRoleInfo(actorId);
+    if (!actorRole.user || (!actorRole.isSuperAdmin && !actorRole.isAdmin)) {
       return res.status(403).json({ error: 'Nur Admins dürfen Nutzer wechseln.' });
     }
     const { userId } = req.body;
@@ -309,7 +323,6 @@ export async function createApp(options: CreateAppOptions = {}): Promise<express
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
     }
-    session.setCurrentUserId(userId);
     // Check if user has membership in current activeOrgId, if not switch to user's default/first org
     const userMemberships = user.memberships || [];
     const hasCurrentOrg = user.orgId === storage.getActiveOrgId() || userMemberships.some(m => m.orgId === storage.getActiveOrgId());
@@ -318,11 +331,14 @@ export async function createApp(options: CreateAppOptions = {}): Promise<express
     } else if (!hasCurrentOrg && user.orgId) {
       storage.setActiveOrgId(user.orgId);
     }
+    const tokenData = generateJwtToken(user, storage.getActiveOrgId(), storage.getOrganization().name);
     res.json({ 
       success: true, 
       activeUser: stripSensitive(user), 
       organization: storage.getOrganization(),
-      activeOrgId: storage.getActiveOrgId()
+      activeOrgId: storage.getActiveOrgId(),
+      token: tokenData.token,
+      expiresAt: tokenData.payload.exp
     });
   });
 
@@ -990,11 +1006,11 @@ export async function createApp(options: CreateAppOptions = {}): Promise<express
 
   // --- XLSX-Exporte (nur Admin/Superadmin/Projektmanager, explizit identifiziert) ---
   const resolveExportActor = (req: Request, res: Response): string | null => {
-    if (!req.headers['authorization'] && !req.headers['x-user-id']) {
+    const actorId = getActorId(req);
+    if (!actorId) {
       res.status(401).json({ error: 'Nicht authentifiziert.' });
       return null;
     }
-    const actorId = getActorId(req);
     const info = storage.getActorRoleInfo(actorId);
     if (!info.user || !(info.isSuperAdmin || info.isAdmin || info.isProjectManager)) {
       res.status(403).json({ error: 'Keine Berechtigung für Exporte.' });

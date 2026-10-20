@@ -208,11 +208,29 @@ certbot renew --dry-run
 
 **Datei:** `/opt/timetracking/.env` (chmod 600, nur root lesbar)
 
+Vor dem ersten Start ein starkes Secret erzeugen:
+
+```bash
+openssl rand -base64 48
+```
+
+Den ausgegebenen Wert als `JWT_SECRET` in `/opt/timetracking/.env` eintragen. Nicht den Platzhalter übernehmen und das Secret niemals ins Repository committen.
+
 ```env
 NODE_ENV=production
 ALLOWED_ORIGINS=https://timetracking.insightarcs.com
 APP_URL=https://timetracking.insightarcs.com
+JWT_SECRET=<hier den generierten Wert eintragen>
 GEMINI_API_KEY=          # Optional: für KI-Features
+```
+
+`JWT_SECRET` ist für den Serverstart erforderlich (mindestens 32 Bytes) und muss bei Neustarts sowie auf allen App-Instanzen unverändert identisch bleiben. Die Datei enthält Zugangsdaten und muss mit `chmod 600 /opt/timetracking/.env` geschützt sein. Secret-Verlust oder -Änderung macht alle bereits ausgestellten Login-Tokens ungültig; Nutzer müssen sich dann erneut anmelden. Beim ersten Aktivieren der JWT-Middleware werden bestehende Tokens aus dem bisherigen fest eingebauten Fallback ebenfalls ungültig.
+
+Nach dem Eintragen die App neu starten und den Dienststatus prüfen:
+
+```bash
+systemctl restart timetracking
+systemctl status timetracking
 ```
 
 **GEMINI_API_KEY hinzufügen:**
