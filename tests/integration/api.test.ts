@@ -32,10 +32,21 @@ beforeAll(async () => {
 
 describe('Health & Basis-Endpunkte', () => {
   it('GET /api/health liefert Status und PostgreSQL-Backend', async () => {
+    const traceSpy = vi.spyOn(console, 'info');
     const res = await request(app).get('/api/health');
     expect(res.status).toBe(200);
     expect(res.body.status).toBe('ok');
     expect(res.body.database).toBe('PostgreSQL (persistent)');
+    expect(traceSpy).toHaveBeenCalledWith('[HTTP_TRACE] request received', expect.objectContaining({
+      method: 'GET',
+      path: '/api/health'
+    }));
+    expect(traceSpy).toHaveBeenCalledWith('[HTTP_TRACE] response sent', expect.objectContaining({
+      method: 'GET',
+      path: '/api/health',
+      status: 200
+    }));
+    traceSpy.mockRestore();
   });
 
   it('POST /api/auth/login bleibt öffentlich, stellt ohne Passwort aber kein Token aus', async () => {

@@ -43,6 +43,29 @@ export async function createApp(options: CreateAppOptions = {}): Promise<express
   const { serveStatic = true } = options;
   const app = express();
   const jwtSecret = getJwtSecret();
+  let requestTraceSequence = 0;
+
+  app.use((req, res, next) => {
+    const traceId = `${process.pid}-${++requestTraceSequence}`;
+    const requestPath = req.originalUrl.split('?')[0];
+    const startedAt = Date.now();
+    console.info('[HTTP_TRACE] request received', {
+      traceId,
+      method: req.method,
+      host: req.get('host'),
+      path: requestPath
+    });
+    res.once('finish', () => {
+      console.info('[HTTP_TRACE] response sent', {
+        traceId,
+        method: req.method,
+        path: requestPath,
+        status: res.statusCode,
+        durationMs: Date.now() - startedAt
+      });
+    });
+    next();
+  });
 
   // Trust the single nginx reverse proxy in front of this app so that
   // req.ip and rate-limiters see the real visitor address from X-Forwarded-For,

@@ -1,8 +1,18 @@
 import 'dotenv/config';
 import { installConsoleFileLogging } from './server/logging.js';
+import path from 'node:path';
 
 const stopFileLogging = installConsoleFileLogging();
 const PORT = parseInt(process.env.PORT ?? '3000', 10);
+const LOG_FILE = path.resolve(process.env.LOG_FILE || path.join(process.cwd(), 'logs', 'app.log'));
+
+console.info('[STARTUP_TRACE] server process booted', {
+  pid: process.pid,
+  cwd: process.cwd(),
+  port: PORT,
+  logFile: LOG_FILE,
+  nodeEnv: process.env.NODE_ENV || 'development'
+});
 
 /**
  * Produktiv-Bootstrap: erstellt die Express-App (inkl. statischer Auslieferung),
