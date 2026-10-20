@@ -278,7 +278,34 @@ export async function createApp(options: CreateAppOptions = {}): Promise<express
       });
     }
 
-    if (!bcrypt.compareSync(String(password), user.passwordHash)) {
+    const bcryptHashInfo = /^\$(2[aby])\$(\d{2})\$/.exec(user.passwordHash);
+    console.debug('[AUTH_TRACE] password hash loaded for comparison', {
+      userId: user.id,
+      hashLength: user.passwordHash.length,
+      bcryptFormatValid: Boolean(bcryptHashInfo),
+      bcryptVariant: bcryptHashInfo?.[1],
+      bcryptCost: bcryptHashInfo ? Number(bcryptHashInfo[2]) : undefined,
+      passwordProvided: Boolean(password),
+      passwordType: typeof password
+    });
+
+    let passwordMatches = false;
+    try {
+      passwordMatches = bcrypt.compareSync(String(password), user.passwordHash);
+    } catch (error) {
+      console.error('[AUTH_TRACE] bcrypt comparison threw', {
+        userId: user.id,
+        errorName: error instanceof Error ? error.name : 'UnknownError'
+      });
+      return res.status(401).json({ success: false, error: 'Ungültige Anmeldedaten.' });
+    }
+
+    console.info('[AUTH_TRACE] bcrypt comparison completed', {
+      userId: user.id,
+      passwordMatches
+    });
+
+    if (!passwordMatches) {
       console.warn('[AUTH_TRACE] login rejected: password mismatch', {
         userId: user.id,
         passwordConfigured: true,
