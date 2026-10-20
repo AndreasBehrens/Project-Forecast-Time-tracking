@@ -57,6 +57,27 @@ Internet → Cloudflare DNS → nginx (Port 443/HTTPS)
 - **Neustarten:** `systemctl restart timetracking`
 - **Auto-Start:** Aktiviert (startet nach Server-Reboot automatisch)
 
+Die Server-Konsolenausgabe bleibt im systemd-Journal und wird zusätzlich nach `/opt/timetracking/logs/app.log` geschrieben. Das Verzeichnis wird beim Start angelegt. Der Dienstbenutzer braucht Schreibrechte; alternativ kann `LOG_FILE` in `/opt/timetracking/.env` auf einen anderen absoluten Pfad gesetzt werden. Für den Testdienst lautet der Standardpfad bei `WorkingDirectory=/opt/timetracking-test`: `/opt/timetracking-test/logs/app.log`.
+
+Logdatei ansehen:
+
+```bash
+tail -f /opt/timetracking/logs/app.log
+```
+
+Für automatische Rotation kann `/etc/logrotate.d/timetracking` beispielsweise so konfiguriert werden; `create` muss den tatsächlichen systemd-Dienstbenutzer und dessen Gruppe verwenden:
+
+```text
+/opt/timetracking/logs/app.log {
+  daily
+  rotate 14
+  compress
+  missingok
+  notifempty
+  create 0600 root root
+}
+```
+
 ### nginx (Reverse Proxy)
 - **Config:** `/etc/nginx/sites-available/timetracking`
 - **Status:** `systemctl status nginx`

@@ -1,7 +1,7 @@
 import 'dotenv/config';
-import { createApp } from './server/app.js';
-import { storage } from './server/storage.js';
+import { installConsoleFileLogging } from './server/logging.js';
 
+const stopFileLogging = installConsoleFileLogging();
 const PORT = parseInt(process.env.PORT ?? '3000', 10);
 
 /**
@@ -11,6 +11,10 @@ const PORT = parseInt(process.env.PORT ?? '3000', 10);
  * abschließt.
  */
 async function startServer() {
+  const [{ createApp }, { storage }] = await Promise.all([
+    import('./server/app.js'),
+    import('./server/storage.js')
+  ]);
   const app = await createApp({ serveStatic: true });
 
   // Persistierten Zustand aus PostgreSQL laden, bevor Anfragen angenommen werden.
@@ -32,6 +36,7 @@ async function startServer() {
       } catch (err) {
         console.error('Error while flushing state on shutdown:', err);
       }
+      stopFileLogging();
       process.exit(0);
     });
   };
