@@ -100,8 +100,28 @@ export async function createApp(options: CreateAppOptions = {}): Promise<express
     if (publicApiPaths.has(requestPath) || requestPath === '/api/v1' || requestPath.startsWith('/api/v1/')) {
       return next();
     }
+    console.debug('[AUTH_TRACE] request authentication started', {
+      method: req.method,
+      path: requestPath,
+      hasAuthorization: Boolean(req.headers.authorization)
+    });
     verifyBearerJwt(req, res, (error) => {
-      if (error) return next(error);
+      if (error) {
+        const causeName = (error as Error & { inner?: { name?: unknown } }).inner?.name;
+        console.warn('[AUTH_TRACE] bearer token rejected', {
+          method: req.method,
+          path: requestPath,
+          errorName: error.name,
+          causeName: typeof causeName === 'string' ? causeName : undefined
+        });
+        return next(error);
+      }
+      const actorId = getActorId(req);
+      console.debug('[AUTH_TRACE] bearer token verified', {
+        method: req.method,
+        path: requestPath,
+        actorId
+      });
       requireAuthenticatedUser(req, res, next);
     });
   });
@@ -178,6 +198,11 @@ export async function createApp(options: CreateAppOptions = {}): Promise<express
     if (user && org) {
       tokenData = generateJwtToken(user, org.id, org.name);
     }
+    console.debug('[AUTH_TRACE] current-user lookup', {
+      foundUser: Boolean(user),
+      actorId: targetId || undefined,
+      foundOrganization: Boolean(org)
+    });
     
     res.json({
       user: stripSensitive(user),
@@ -191,6 +216,7 @@ export async function createApp(options: CreateAppOptions = {}): Promise<express
 
   app.post('/api/auth/login', (req, res) => {
     const { email, userId, orgId } = req.body;
+    const lookupMethod = userId ? 'userId' : email ? 'email' : 'missing';
     const allUsers = storage.getUsers(true);
     let user = null;
 
@@ -202,6 +228,7 @@ export async function createApp(options: CreateAppOptions = {}): Promise<express
     }
 
     if (!user) {
+      console.warn('[AUTH_TRACE] login rejected: account not found', { lookupMethod });
       return res.status(401).json({
         success: false,
         error: 'Kein Benutzer mit diesen Anmeldedaten gefunden. Bitte prüfen Sie Ihre E-Mail oder nutzen Sie die Profilauswahl.'
@@ -212,6 +239,11 @@ export async function createApp(options: CreateAppOptions = {}): Promise<express
     // Ohne passwordHash bleibt der Login ohne Passwort erlaubt (Rückwärtskompatibilität).
     const { password } = req.body;
     if (!user.passwordHash || !password || !bcrypt.compareSync(String(password), user.passwordHash)) {
+      console.warn('[AUTH_TRACE] login rejected: password check failed', {
+        userId: user.id,
+        passwordConfigured: Boolean(user.passwordHash),
+        passwordProvided: Boolean(password)
+      });
       return res.status(401).json({
         success: false,
         error: 'Ungültige Anmeldedaten oder für dieses Konto ist kein Passwort eingerichtet.'
@@ -233,6 +265,10 @@ export async function createApp(options: CreateAppOptions = {}): Promise<express
 
     const org = storage.getOrganization();
     const tokenData = generateJwtToken(user, org.id, org.name);
+    console.info('[AUTH_TRACE] login succeeded', {
+      userId: user.id,
+      organizationId: org.id
+    });
 
     res.json({
       success: true,
@@ -315,12 +351,18 @@ export async function createApp(options: CreateAppOptions = {}): Promise<express
     const actorId = getActorId(req);
     const actorRole = storage.getActorRoleInfo(actorId);
     if (!actorRole.user || (!actorRole.isSuperAdmin && !actorRole.isAdmin)) {
+      console.warn('[AUTH_TRACE] user switch denied', {
+        actorId: actorId || undefined,
+        foundActor: Boolean(actorRole.user),
+        role: actorRole.role
+      });
       return res.status(403).json({ error: 'Nur Admins dürfen Nutzer wechseln.' });
     }
     const { userId } = req.body;
     const allUsers = storage.getUsers(true);
     const user = allUsers.find(u => u.id === userId);
     if (!user) {
+      console.warn('[AUTH_TRACE] user switch target not found', { actorId });
       return res.status(404).json({ error: 'User not found' });
     }
     // Check if user has membership in current activeOrgId, if not switch to user's default/first org
@@ -332,6 +374,7 @@ export async function createApp(options: CreateAppOptions = {}): Promise<express
       storage.setActiveOrgId(user.orgId);
     }
     const tokenData = generateJwtToken(user, storage.getActiveOrgId(), storage.getOrganization().name);
+    console.info('[AUTH_TRACE] user switch succeeded', { actorId, targetUserId: user.id });
     res.json({ 
       success: true, 
       activeUser: stripSensitive(user), 
