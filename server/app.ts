@@ -3,7 +3,7 @@ import cors from 'cors';
 import path from 'path';
 import bcrypt from 'bcrypt';
 import { expressjwt } from 'express-jwt';
-import nodemailer from 'nodemailer';
+import {EmailClient} from '@azure/communication-email';
 import { createServer as createViteServer } from 'vite';
 import { storage, localISODate } from './storage.js';
 import { isValidTimeZone } from '../src/utils/timeZone.js';
@@ -364,36 +364,33 @@ export async function createApp(options: CreateAppOptions = {}): Promise<express
       return res.status(400).json({ success: false, error: 'Bitte geben Sie Ihre E-Mail-Adresse ein.' });
     }
 
-    const smtpHost = process.env.SMTP_HOST;
-    const smtpPort = Number(process.env.SMTP_PORT || 587);
-    const smtpUser = process.env.SMTP_USER;
-    const smtpPassword = process.env.SMTP_PASSWORD;
-    const fromAddress = process.env.SMTP_FROM;
-    if (!smtpHost || !smtpUser || !smtpPassword || !fromAddress || !Number.isInteger(smtpPort)) {
-      console.error('[AUTH_TRACE] password reset email unavailable: SMTP is not configured');
+    const connectionString = process.env['COMMUNICATION_SERVICES_CONNECTION_STRING'];
+    if (!connectionString) {
+      console.error('[AUTH_TRACE] password reset email unavailable: Azure Communication Services is not configured');
       return res.status(503).json({ success: false, error: 'Der E-Mail-Versand ist derzeit nicht verfügbar.' });
     }
+    const client = new EmailClient(connectionString);
 
     const user = storage.getUsers(true).find(candidate => candidate.email.trim().toLowerCase() === email);
     if (user) {
       const { token } = createPasswordResetToken(user.id);
       const appUrl = (process.env.APP_URL || 'https://timetracking.insightarcs.com').replace(/\/$/, '');
       const resetUrl = `${appUrl}/#reset-password=${encodeURIComponent(token)}`;
-      const transporter = nodemailer.createTransport({
-        host: smtpHost,
-        port: smtpPort,
-        secure: smtpPort === 465,
-        auth: { user: smtpUser, pass: smtpPassword }
-      });
-
-      try {
-        await transporter.sendMail({
-          from: fromAddress,
-          to: user.email,
+      const emailMessage = {
+        senderAddress: "DoNotReply@timetracking.insightarcs.com",
+        content: {
           subject: 'Passwort zurücksetzen',
-          text: `Zum Zurücksetzen Ihres Passworts öffnen Sie innerhalb von 30 Minuten diesen Link:\n\n${resetUrl}\n\nFalls Sie die Rücksetzung nicht angefordert haben, ignorieren Sie diese E-Mail.`,
-          html: `<p>Zum Zurücksetzen Ihres Passworts öffnen Sie innerhalb von 30 Minuten diesen Link:</p><p><a href="${resetUrl}">Passwort zurücksetzen</a></p><p>Falls Sie die Rücksetzung nicht angefordert haben, ignorieren Sie diese E-Mail.</p>`
-        });
+          plainText: `Zum Zurücksetzen Ihres Passworts öffnen Sie innerhalb von 30 Minuten diesen Link:\n\n${resetUrl}\n\nFalls Sie die Rücksetzung nicht angefordert haben, ignorieren Sie diese E-Mail.`,
+          html: `<p>Zum Zurücksetzen Ihres Passworts öffnen Sie innerhalb von 30 Minuten diesen Link:</p><p><a href="${resetUrl}">Passwort zurücksetzen</a></p><p>Falls Sie die Rücksetzung nicht angefordert haben, ignorieren Sie diese E-Mail.</p>`,
+        },
+        recipients: {
+          to: [{ address: user.email, displayName: user.name || 'Benutzer' }],
+        },
+      };
+      try {
+        const poller = await client.beginSend(emailMessage);
+        const result = await poller.pollUntilDone();
+        console.log('[AUTH_TRACE] password reset email sent', result);
       } catch (error) {
         clearPasswordResetToken(user.id);
         console.error('[AUTH_TRACE] password reset email delivery failed', {
