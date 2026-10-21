@@ -238,7 +238,7 @@ export async function createApp(options: CreateAppOptions = {}): Promise<express
   });
 
   app.post('/api/auth/login', (req, res) => {
-    const { email, userId, orgId } = req.body;
+    const { email, userId } = req.body;
     const lookupMethod = userId ? 'userId' : email ? 'email' : 'missing';
     const allUsers = storage.getUsers(true);
     let user = null;
@@ -317,20 +317,27 @@ export async function createApp(options: CreateAppOptions = {}): Promise<express
       });
     }
 
-    // Switch org if specified, or pick user's active org
-    if (orgId) {
-      storage.setActiveOrgId(orgId);
-    } else {
-      const userMemberships = user.memberships || [];
-      const hasCurrentOrg = user.orgId === storage.getActiveOrgId() || userMemberships.some(m => m.orgId === storage.getActiveOrgId());
-      if (!hasCurrentOrg && userMemberships.length > 0) {
-        storage.setActiveOrgId(userMemberships[0].orgId);
-      } else if (!hasCurrentOrg && user.orgId) {
-        storage.setActiveOrgId(user.orgId);
-      }
+    const firstMembership = user.memberships?.[0];
+    if (!firstMembership?.orgId) {
+      console.warn('[AUTH_TRACE] login rejected: account has no organization membership', { userId: user.id });
+      return res.status(403).json({
+        success: false,
+        error: 'Für dieses Konto ist keine Unternehmenszugehörigkeit eingerichtet.'
+      });
     }
 
-    const org = storage.getOrganization();
+    const org = storage.setActiveOrgId(firstMembership.orgId);
+    if (!org) {
+      console.warn('[AUTH_TRACE] login rejected: first membership organization not found', {
+        userId: user.id,
+        organizationId: firstMembership.orgId
+      });
+      return res.status(403).json({
+        success: false,
+        error: 'Die erste Unternehmenszugehörigkeit dieses Kontos ist ungültig.'
+      });
+    }
+
     const tokenData = generateJwtToken(user, org.id, org.name);
     console.info('[AUTH_TRACE] login succeeded', {
       userId: user.id,

@@ -3,7 +3,6 @@ import { useApp } from '../context/AppContext';
 import {
   Lock,
   Mail,
-  Building2,
   ShieldCheck,
   CheckCircle2,
   AlertCircle,
@@ -20,17 +19,16 @@ import {
   ExternalLink,
   Info
 } from 'lucide-react';
-import { User, Organization } from '../types';
+import { User } from '../types';
 
 export const LoginView: React.FC = () => {
-  const { login, users, organizations, jobRoles, organization } = useApp();
+  const { login, users, jobRoles } = useApp();
 
   // Schnellanmeldung (Quick-Login) nur im Admin-Modus (?mode=admin) sichtbar
   const showAdminMode = false;
   const [activeTab, setActiveTab] = useState<'quick' | 'manual'>('manual');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [selectedOrgId, setSelectedOrgId] = useState<string>(organizations[0]?.id || 'org-insight-arcs-01');
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -66,8 +64,7 @@ export const LoginView: React.FC = () => {
     setIsSubmitting(true);
     const res = await login({
       email: email.trim(),
-      password,
-      orgId: selectedOrgId
+      password
     });
     setIsSubmitting(false);
 
@@ -80,8 +77,7 @@ export const LoginView: React.FC = () => {
     setErrorMessage(null);
     setIsSubmitting(true);
     const res = await login({
-      userId: user.id,
-      orgId: user.orgId || selectedOrgId
+      userId: user.id
     });
     setIsSubmitting(false);
     if (!res.success) {
@@ -381,28 +377,6 @@ export const LoginView: React.FC = () => {
                   >
                     {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
-                </div>
-              </div>
-
-              {/* Organization / Mandant Selection */}
-              <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-1.5">
-                  Mandant / Unternehmen (Optional)
-                </label>
-                <div className="relative">
-                  <Building2 className="w-4 h-4 text-slate-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
-                  <select
-                    id="select-login-org"
-                    value={selectedOrgId}
-                    onChange={e => setSelectedOrgId(e.target.value)}
-                    className="w-full pl-10 pr-8 py-2.5 bg-slate-950/90 border border-slate-800 rounded-xl text-xs text-white focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 appearance-none"
-                  >
-                    {organizations.map(o => (
-                      <option key={o.id} value={o.id} className="bg-slate-900 text-white">
-                        {o.name} ({o.code})
-                      </option>
-                    ))}
-                  </select>
                 </div>
               </div>
 

@@ -64,7 +64,7 @@ interface AppContextType {
   apiKeys: ApiKey[];
   periodLocks: PeriodLock[];
   isLoading: boolean;
-  login: (credentials: { email?: string; password?: string; userId?: string; orgId?: string }) => Promise<{ success: boolean; error?: string }>;
+  login: (credentials: { email?: string; password?: string; userId?: string }) => Promise<{ success: boolean; error?: string }>;
   logout: () => Promise<void>;
   // Formatting helpers (Always 2 decimal places for rates and money)
   formatRate: (rate?: number | null, currency?: string) => string;
@@ -434,7 +434,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   };
 
   // Login Action
-  const login = async (credentials: { email?: string; password?: string; userId?: string; orgId?: string }): Promise<{ success: boolean; error?: string }> => {
+  const login = async (credentials: { email?: string; password?: string; userId?: string }): Promise<{ success: boolean; error?: string }> => {
     try {
       setIsLoading(true);
       const res = await fetch('/api/auth/login', {
