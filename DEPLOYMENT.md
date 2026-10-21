@@ -161,6 +161,21 @@ systemctl status timetracking
 journalctl -u timetracking -f
 ```
 
+### Deployment via GitHub Actions
+
+Der manuelle Workflow `.github/workflows/deploy-production.yml` läuft nur für `main`; er pullt den aktuellen Stand, installiert Dependencies, baut die App und startet `timetracking` neu. Unter **Settings → Secrets and variables → Actions** müssen diese Repository-Secrets gesetzt sein:
+
+- `DEPLOY_HOST`: SSH-Hostname oder IP des Servers
+- `DEPLOY_PORT`: SSH-Port
+- `DEPLOY_USER`: SSH-Benutzer
+- `DEPLOY_SSH_KEY`: privater OpenSSH-Schlüssel für den Deploy-Benutzer (vollständiger Inhalt einschließlich PEM/OpenSSH-Markierungen)
+- `DEPLOY_SSH_KEY_PASSPHRASE`: Passphrase des privaten Schlüssels; leer lassen, falls der Schlüssel keine Passphrase hat
+- `DEPLOY_FINGERPRINT`: SSH-Host-Key-Fingerprint zur Serveridentitätsprüfung
+
+Für GitHub Actions einen dedizierten Schlüssel erzeugen, nicht den persönlichen SSH-Schlüssel verwenden. Den öffentlichen Schlüssel in `~/.ssh/authorized_keys` des Deploy-Benutzers eintragen und ausschließlich den privaten Schlüssel als `DEPLOY_SSH_KEY` in GitHub speichern. Den privaten Schlüssel niemals ins Repository committen oder in Logs ausgeben. SSH-Passwort-Authentifizierung muss für diesen Workflow nicht aktiviert sein.
+
+Der GitHub-hosted Runner muss Netzwerkzugriff auf `DEPLOY_HOST` haben. Wenn der Server nur über ein privates VPN erreichbar ist, muss der Workflow-Runner vorher diesem VPN beitreten oder als self-hosted Runner im VPN laufen. Die SSH-Benutzerrechte müssen `git pull`, `npm install`, `npm run build` sowie `systemctl restart/is-active timetracking` erlauben; für systemd kann eine eng begrenzte `sudoers`-Regel erforderlich sein. Workflow manuell über **Actions → Deploy production → Run workflow** starten.
+
 ### Node.js-Version aktualisieren
 ```bash
 # NodeSource-Repository nutzt immer die neueste 20.x
