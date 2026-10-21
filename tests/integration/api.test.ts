@@ -3,6 +3,7 @@ import request from 'supertest';
 import type { Express } from 'express';
 import bcrypt from 'bcrypt';
 import { generateJwtToken } from '../../server/authService.js';
+import { createPasswordResetToken } from '../../server/passwordResetTokens.js';
 import { storage } from '../../server/storage.js';
 
 // Persistenz mocken: Integrationstests laufen gegen den In-Memory-Seed-Zustand,
@@ -135,6 +136,33 @@ describe('Health & Basis-Endpunkte', () => {
       storage.updateUser('u-1', { passwordHash: originalHash, memberships: originalMemberships }, 'u-1');
       storage.setActiveOrgId(originalActiveOrgId);
     }
+  });
+
+  it('completes password reset once and rejects reuse of the reset token', async () => {
+    const user = storage.getUsers(true).find(candidate => candidate.id === 'u-1');
+    if (!user) throw new Error('Seed superadmin u-1 is required for this test');
+    const originalHash = user.passwordHash;
+    const { token } = createPasswordResetToken(user.id);
+    const newPassword = 'test-only-reset-password';
+
+    try {
+      const firstUse = await request(app).post('/api/auth/password-reset/complete').send({ token, password: newPassword });
+      expect(firstUse.status).toBe(200);
+      expect(firstUse.body.success).toBe(true);
+      expect(bcrypt.compareSync(newPassword, storage.getUsers(true).find(candidate => candidate.id === user.id)!.passwordHash!)).toBe(true);
+
+      const secondUse = await request(app).post('/api/auth/password-reset/complete').send({ token, password: newPassword });
+      expect(secondUse.status).toBe(400);
+      expect(secondUse.body.success).toBe(false);
+    } finally {
+      storage.updateUser(user.id, { passwordHash: originalHash }, user.id);
+    }
+  });
+
+  it('password reset request requires an email address', async () => {
+    const res = await request(app).post('/api/auth/password-reset/request').send({ email: '   ' });
+    expect(res.status).toBe(400);
+    expect(res.body.success).toBe(false);
   });
 
   it('API-v1 bleibt beim API-Key-Schutz statt JWT-Schutz', async () => {

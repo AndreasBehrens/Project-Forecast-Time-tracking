@@ -3,6 +3,7 @@ import cors from 'cors';
 import path from 'path';
 import bcrypt from 'bcrypt';
 import { expressjwt } from 'express-jwt';
+import nodemailer from 'nodemailer';
 import { createServer as createViteServer } from 'vite';
 import { storage, localISODate } from './storage.js';
 import { isValidTimeZone } from '../src/utils/timeZone.js';
@@ -20,6 +21,7 @@ import { asyncHandler } from './http/asyncHandler.js';
 import { validateBody } from './http/validate.js';
 import { BadRequestError, ForbiddenError, NotFoundError } from './http/errors.js';
 import { createSessionContext } from './http/session.js';
+import { consumePasswordResetToken, createPasswordResetToken, clearPasswordResetToken } from './passwordResetTokens.js';
 import multer from 'multer';
 import pdfParse from 'pdf-parse/lib/pdf-parse.js';
 import { parseClockifyPdfText, mapDayType } from './clockifyPdfParser.js';
@@ -116,7 +118,9 @@ export async function createApp(options: CreateAppOptions = {}): Promise<express
   });
   const publicApiPaths = new Set([
     '/api/health',
-    '/api/auth/login'
+    '/api/auth/login',
+    '/api/auth/password-reset/request',
+    '/api/auth/password-reset/complete'
   ]);
   app.use('/api', (req, res, next) => {
     const requestPath = req.originalUrl.split('?')[0];
@@ -352,6 +356,76 @@ export async function createApp(options: CreateAppOptions = {}): Promise<express
       token: tokenData.token,
       expiresAt: tokenData.payload.exp
     });
+  });
+
+  app.post('/api/auth/password-reset/request', asyncHandler(async (req, res) => {
+    const email = typeof req.body?.email === 'string' ? req.body.email.trim().toLowerCase() : '';
+    if (!email) {
+      return res.status(400).json({ success: false, error: 'Bitte geben Sie Ihre E-Mail-Adresse ein.' });
+    }
+
+    const smtpHost = process.env.SMTP_HOST;
+    const smtpPort = Number(process.env.SMTP_PORT || 587);
+    const smtpUser = process.env.SMTP_USER;
+    const smtpPassword = process.env.SMTP_PASSWORD;
+    const fromAddress = process.env.SMTP_FROM;
+    if (!smtpHost || !smtpUser || !smtpPassword || !fromAddress || !Number.isInteger(smtpPort)) {
+      console.error('[AUTH_TRACE] password reset email unavailable: SMTP is not configured');
+      return res.status(503).json({ success: false, error: 'Der E-Mail-Versand ist derzeit nicht verfügbar.' });
+    }
+
+    const user = storage.getUsers(true).find(candidate => candidate.email.trim().toLowerCase() === email);
+    if (user) {
+      const { token } = createPasswordResetToken(user.id);
+      const appUrl = (process.env.APP_URL || 'https://timetracking.insightarcs.com').replace(/\/$/, '');
+      const resetUrl = `${appUrl}/#reset-password=${encodeURIComponent(token)}`;
+      const transporter = nodemailer.createTransport({
+        host: smtpHost,
+        port: smtpPort,
+        secure: smtpPort === 465,
+        auth: { user: smtpUser, pass: smtpPassword }
+      });
+
+      try {
+        await transporter.sendMail({
+          from: fromAddress,
+          to: user.email,
+          subject: 'Passwort zurücksetzen',
+          text: `Zum Zurücksetzen Ihres Passworts öffnen Sie innerhalb von 30 Minuten diesen Link:\n\n${resetUrl}\n\nFalls Sie die Rücksetzung nicht angefordert haben, ignorieren Sie diese E-Mail.`,
+          html: `<p>Zum Zurücksetzen Ihres Passworts öffnen Sie innerhalb von 30 Minuten diesen Link:</p><p><a href="${resetUrl}">Passwort zurücksetzen</a></p><p>Falls Sie die Rücksetzung nicht angefordert haben, ignorieren Sie diese E-Mail.</p>`
+        });
+      } catch (error) {
+        clearPasswordResetToken(user.id);
+        console.error('[AUTH_TRACE] password reset email delivery failed', {
+          userId: user.id,
+          errorName: error instanceof Error ? error.name : 'UnknownError'
+        });
+        return res.status(503).json({ success: false, error: 'Der E-Mail-Versand ist derzeit nicht verfügbar.' });
+      }
+    }
+
+    res.json({ success: true, message: 'Falls ein Konto mit dieser E-Mail existiert, wurde ein Link zum Zurücksetzen versandt.' });
+  }));
+
+  app.post('/api/auth/password-reset/complete', (req, res) => {
+    const { token, password } = req.body as { token?: string; password?: string };
+    if (typeof password !== 'string' || password.length < 12) {
+      return res.status(400).json({ success: false, error: 'Das neue Passwort muss mindestens 12 Zeichen lang sein.' });
+    }
+
+    const userId = consumePasswordResetToken(token || '');
+    if (!userId) {
+      return res.status(400).json({ success: false, error: 'Der Link ist ungültig oder abgelaufen. Fordern Sie einen neuen Link an.' });
+    }
+
+    const hash = bcrypt.hashSync(password, 12);
+    const updated = storage.updateUser(userId, { passwordHash: hash, requirePasswordChange: false }, userId);
+    if (!updated) {
+      return res.status(400).json({ success: false, error: 'Der Link ist ungültig oder abgelaufen. Fordern Sie einen neuen Link an.' });
+    }
+
+    console.info('[AUTH_TRACE] password reset completed', { userId });
+    res.json({ success: true, message: 'Passwort aktualisiert. Sie können sich jetzt anmelden.' });
   });
 
   // Passwort für einen Nutzer setzen (nur Superadmin). Der Superadmin

@@ -65,6 +65,8 @@ interface AppContextType {
   periodLocks: PeriodLock[];
   isLoading: boolean;
   login: (credentials: { email?: string; password?: string; userId?: string }) => Promise<{ success: boolean; error?: string }>;
+  requestPasswordReset: (email: string) => Promise<{ success: boolean; error?: string; message?: string }>;
+  completePasswordReset: (token: string, password: string) => Promise<{ success: boolean; error?: string; message?: string }>;
   logout: () => Promise<void>;
   // Formatting helpers (Always 2 decimal places for rates and money)
   formatRate: (rate?: number | null, currency?: string) => string;
@@ -462,6 +464,38 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       return { success: false, error: err.message || 'Verbindungsfehler beim Anmelden' };
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const requestPasswordReset = async (email: string): Promise<{ success: boolean; error?: string; message?: string }> => {
+    try {
+      const res = await fetch('/api/auth/password-reset/request', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email })
+      });
+      const data = await res.json();
+      return res.ok
+        ? { success: true, message: data.message }
+        : { success: false, error: data.error || 'Die Anfrage konnte nicht verarbeitet werden.' };
+    } catch (err: any) {
+      return { success: false, error: err.message || 'Verbindungsfehler bei der Anfrage.' };
+    }
+  };
+
+  const completePasswordReset = async (token: string, password: string): Promise<{ success: boolean; error?: string; message?: string }> => {
+    try {
+      const res = await fetch('/api/auth/password-reset/complete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token, password })
+      });
+      const data = await res.json();
+      return res.ok
+        ? { success: true, message: data.message }
+        : { success: false, error: data.error || 'Das Passwort konnte nicht zurückgesetzt werden.' };
+    } catch (err: any) {
+      return { success: false, error: err.message || 'Verbindungsfehler beim Zurücksetzen.' };
     }
   };
 
@@ -1223,6 +1257,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         periodLocks,
         isLoading,
         login,
+        requestPasswordReset,
+        completePasswordReset,
         logout,
         formatRate,
         formatCurrency,
