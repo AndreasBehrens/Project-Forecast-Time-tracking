@@ -57,6 +57,27 @@ Internet → Cloudflare DNS → nginx (Port 443/HTTPS)
 - **Neustarten:** `systemctl restart timetracking`
 - **Auto-Start:** Aktiviert (startet nach Server-Reboot automatisch)
 
+Die Server-Konsolenausgabe bleibt im systemd-Journal und wird zusätzlich nach `/opt/timetracking/logs/app.log` geschrieben. Das Verzeichnis wird beim Start angelegt. Der Dienstbenutzer braucht Schreibrechte; alternativ kann `LOG_FILE` in `/opt/timetracking/.env` auf einen anderen absoluten Pfad gesetzt werden. Für den Testdienst lautet der Standardpfad bei `WorkingDirectory=/opt/timetracking-test`: `/opt/timetracking-test/logs/app.log`.
+
+Logdatei ansehen:
+
+```bash
+tail -f /opt/timetracking/logs/app.log
+```
+
+Für automatische Rotation kann `/etc/logrotate.d/timetracking` beispielsweise so konfiguriert werden; `create` muss den tatsächlichen systemd-Dienstbenutzer und dessen Gruppe verwenden:
+
+```text
+/opt/timetracking/logs/app.log {
+  daily
+  rotate 14
+  compress
+  missingok
+  notifempty
+  create 0600 root root
+}
+```
+
 ### nginx (Reverse Proxy)
 - **Config:** `/etc/nginx/sites-available/timetracking`
 - **Status:** `systemctl status nginx`
@@ -208,11 +229,29 @@ certbot renew --dry-run
 
 **Datei:** `/opt/timetracking/.env` (chmod 600, nur root lesbar)
 
+Vor dem ersten Start ein starkes Secret erzeugen:
+
+```bash
+openssl rand -base64 48
+```
+
+Den ausgegebenen Wert als `JWT_SECRET` in `/opt/timetracking/.env` eintragen. Nicht den Platzhalter übernehmen und das Secret niemals ins Repository committen.
+
 ```env
 NODE_ENV=production
 ALLOWED_ORIGINS=https://timetracking.insightarcs.com
 APP_URL=https://timetracking.insightarcs.com
+JWT_SECRET=<hier den generierten Wert eintragen>
 GEMINI_API_KEY=          # Optional: für KI-Features
+```
+
+`JWT_SECRET` ist für den Serverstart erforderlich (mindestens 32 Bytes) und muss bei Neustarts sowie auf allen App-Instanzen unverändert identisch bleiben. Die Datei enthält Zugangsdaten und muss mit `chmod 600 /opt/timetracking/.env` geschützt sein. Secret-Verlust oder -Änderung macht alle bereits ausgestellten Login-Tokens ungültig; Nutzer müssen sich dann erneut anmelden. Beim ersten Aktivieren der JWT-Middleware werden bestehende Tokens aus dem bisherigen fest eingebauten Fallback ebenfalls ungültig.
+
+Nach dem Eintragen die App neu starten und den Dienststatus prüfen:
+
+```bash
+systemctl restart timetracking
+systemctl status timetracking
 ```
 
 **GEMINI_API_KEY hinzufügen:**

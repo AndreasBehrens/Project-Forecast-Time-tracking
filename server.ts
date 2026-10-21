@@ -1,7 +1,18 @@
-import { createApp } from './server/app.js';
-import { storage } from './server/storage.js';
+import 'dotenv/config';
+import { installConsoleFileLogging } from './server/logging.js';
+import path from 'node:path';
 
-const PORT = 3000;
+const stopFileLogging = installConsoleFileLogging();
+const PORT = parseInt(process.env.PORT ?? '3000', 10);
+const LOG_FILE = path.resolve(process.env.LOG_FILE || path.join(process.cwd(), 'logs', 'app.log'));
+
+console.info('[STARTUP_TRACE] server process booted', {
+  pid: process.pid,
+  cwd: process.cwd(),
+  port: PORT,
+  logFile: LOG_FILE,
+  nodeEnv: process.env.NODE_ENV || 'development'
+});
 
 /**
  * Produktiv-Bootstrap: erstellt die Express-App (inkl. statischer Auslieferung),
@@ -10,6 +21,10 @@ const PORT = 3000;
  * abschließt.
  */
 async function startServer() {
+  const [{ createApp }, { storage }] = await Promise.all([
+    import('./server/app.js'),
+    import('./server/storage.js')
+  ]);
   const app = await createApp({ serveStatic: true });
 
   // Persistierten Zustand aus PostgreSQL laden, bevor Anfragen angenommen werden.
@@ -31,6 +46,7 @@ async function startServer() {
       } catch (err) {
         console.error('Error while flushing state on shutdown:', err);
       }
+      stopFileLogging();
       process.exit(0);
     });
   };

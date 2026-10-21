@@ -26,8 +26,8 @@ export const LoginView: React.FC = () => {
   const { login, users, organizations, jobRoles, organization } = useApp();
 
   // Schnellanmeldung (Quick-Login) nur im Admin-Modus (?mode=admin) sichtbar
-  const showAdminMode = new URLSearchParams(window.location.search).get('mode') === 'admin';
-  const [activeTab, setActiveTab] = useState<'quick' | 'manual'>(showAdminMode ? 'quick' : 'manual');
+  const showAdminMode = false;
+  const [activeTab, setActiveTab] = useState<'quick' | 'manual'>('manual');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [selectedOrgId, setSelectedOrgId] = useState<string>(organizations[0]?.id || 'org-insight-arcs-01');

@@ -97,6 +97,8 @@ export interface User {
   stateLocation?: string; // Bundesland code for holidays if mobile workplaces enabled on tenant (e.g. 'DE-BY')
   holidayCalendar?: string;
   language: Language;
+  timeZone?: string; // IANA-Zeitzone aus dem Profil (z. B. 'America/Sao_Paulo'); leer = automatisch (Gerät)
+  deviceTimeZone?: string; // zuletzt vom Gerät erkannte Zeitzone (automatisch gepflegt)
   status: 'ACTIVE' | 'INVITED' | 'SUSPENDED';
   invitationToken?: string;
   invitationExpiresAt?: string;
@@ -302,6 +304,7 @@ export interface WorkingTimeEntry {
   date: string; // YYYY-MM-DD
   dayType?: DayType; // Standard: 'REGULAR'
   halfDay?: boolean; // Nur bei Abwesenheiten: true = halber Tag (Zeitfelder sichtbar)
+  partialAbsence?: boolean; // Teilzeitige Abwesenheit: Start/Ende = Abwesenheitszeitraum (wird angerechnet)
   startTime: string; // HH:mm
   endTime: string; // HH:mm
   breakMinutes: number;

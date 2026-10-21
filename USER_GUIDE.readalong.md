@@ -4,241 +4,175 @@
 
 **Access link: https://timetracking.insightarcs.com**
 
-*Deutsche Version: ANLEITUNG.md*
+*Deutsche Version: ANLEITUNG.md · Full reference: USER_GUIDE.md*
 
-This quick guide is aimed at employees. It explains the daily use of the "Time Tracking" menu item, which brings two areas together under one roof:
+This quick guide explains the "Time Tracking" page. It is the single place where you record all your time:
 
-**• Project Time Tracking** – project-related recording of work performed
+**• Project time** – what you worked on, for which client and project
 
-**• General Working Hours** – legally required attendance tracking incl. absences
+**• Working time without a project** – e.g. internal tasks, meetings, administration
+
+**• Absences** – vacation, sick leave, special leave, parental leave
 
 |  |
 | --- |
-| **Note:** Additional functions for project managers and administrators will follow in upcoming releases and will be added here. |
+| **Note:** The former tabs "Project Time" and "Working Hours" are now combined into one form and one list. What you see depends on your role (see "Who sees what?"). |
 
 # **What is the solution designed for?**
 
-Insight Arcs Time Tracking is a web-based solution that lets teams record their working hours in a way that is legally compliant and project-accurate. It combines two levels:
+Insight Arcs Time Tracking lets teams record their working hours in a way that is legally compliant and project-accurate:
 
-**• Project-based time tracking:** How much time was spent on which project and which task – the basis for reporting, invoicing (billable / non-billable) and project forecasts.
+**• Project-based time tracking:** time per project and task – the basis for reporting, invoicing (billable / non-billable) and forecasts.
 
-**• General working hours (attendance):** The legally required documentation of daily working time under the German Working Hours Act (ArbZG) – regardless of whether you are currently booking on a project.
+**• Working time under the German Working Hours Act (ArbZG):** your daily working time incl. absences, even without a project.
 
-All data is stored GDPR-compliant in Germany and archived in an audit-proof, GoBD-compliant manner (10-year retention, tamper-evident verification chain). The interface is bilingual (German / English) – the chosen language is stored permanently per user.
+All data is stored GDPR-compliant in Germany and archived GoBD-compliant (10-year retention, tamper-evident verification chain). The interface is bilingual (German / English); your language is saved per user.
 
 # **Login & Navigation**
 
-**1.** Open https://timetracking.insightarcs.com in your browser.
+**1.** Open https://timetracking.insightarcs.com in your browser and log in.
 
-**2.** Log in with your credentials.
+**2.** Click "Time Tracking" in the sidebar (desktop) or the bottom navigation bar (mobile).
 
-**3.** Click "Time Tracking" in the sidebar (desktop) or the bottom navigation bar (mobile).
+**3.** Switch the language (German/English) at the top right of the header. The setting is saved.
 
-**4.** Inside "Time Tracking", switch between the two areas using the tabs at the top: "Project Time" → book time on projects and tasks; "Working Hours" → attendance, absences, clock in–clock out.
+**4.** Check your time zone once: click your name at the top right → "Time zone" (see section 4).
 
-**5.** The language (German/English) can be switched at the top right of the header – the setting is saved.
+The page has three areas: **summary cards** (target / actual / difference), the **entry form**, and the **filter bar with the entry list**.
 
-|  |
-| --- |
-| **Tip:** External users (freelancers / partners) only see the Project Time tab – no tab switching needed. |
+# **1. Summary cards**
 
-# **1. Project Time Tracking**
+*Visible to internal employees, project managers, admins and superadmins – not to external users.*
 
-*Tab: "Project Time" (inside the "Time Tracking" menu item)*
+|  |  |
+| --- | --- |
+| **Card** | **Meaning** |
+| **Target hours** | Working days × daily hours in the selected period (no weekends / public holidays) |
+| **Actual hours** | Project time + working time without a project + credited absences |
+| **Difference** | Actual − Target (green = surplus, red = shortfall) |
 
-There are two recording methods. Switch between them at the top of the tab:
+**•** The cards follow the period chosen in the filter bar (default: "This month").
 
-## **a) Live Timer (for ongoing activities)**
+**•** Vacation, sick leave and special leave on a working day are credited with your daily hours. Parental leave reduces the target.
 
-Ideal when you start a task now and want the time to run live.
+**•** Older data with a working-time "frame" plus project times inside it is counted only once.
 
-**1.** Select the "Live Timer" tab.
+# **2. Recording time**
 
-**2.** Choose the project and optionally the task.
+## **a) Stopwatch (for ongoing work)**
 
-**3.** Enter a short description of the activity.
+**1.** Choose the date, the project (optional for internal employees) and enter the task.
 
-**4.** Click "Start Timer" – the clock runs.
+**2.** Select the entry mode "Stopwatch" and click "Start".
 
-**5.** For interruptions: "Pause" (resume later) – paused time is not counted.
+**3.** Use "Pause" / "Resume" for interruptions – paused time is not counted.
 
-**6.** To finish: "Stop & Save" – the entry is booked.
-
-|  |
-| --- |
-| **Note:** The timer keeps running in the background, even if you reload the page. |
-
-## **b) Manual Time Entry (for forgotten / past days)**
-
-Ideal for adding times that were not stopped live.
-
-**1.** Select the "Manual Time Entry" tab (labelled "Past Days").
-
-**2.** Choose the date.
-
-**3.** Choose the project and optionally the task.
-
-**4.** Enter a description.
-
-**5.** Enter the start time and end time.
-
-**6.** If needed, enter the break (min) – it is deducted from working time.
-
-**7.** Click "Save Entry".
-
-## **Billable / Non-billable**
-
-For every entry, the € symbol determines whether the time is billable:
-
-**• € (green) =** billable (invoiced to the client)
-
-**• € struck through (grey) =** non-billable (e.g. internal activity)
-
-The default comes from the project (client project = billable, internal project = non-billable) but can be adjusted per entry. Hover over the symbol to see the current status in your language.
-
-## **Approval workflow (if enabled for a project)**
-
-If approval is required for a project, your entries first receive the status:
-
-**•** Draft → not yet submitted
-
-**•** Submitted → waiting for approval by the project manager
-
-**•** Approved → reviewed and booked
+**4.** Click "Stop & save" – the entry is booked with start and end time.
 
 |  |
 | --- |
-| **Note:** If no approval requirement is set, entries are booked directly as approved. |
+| **Note:** The stopwatch keeps running after a reload. If it runs past midnight, the entry is booked on the day it was started. |
 
-# **2. General Working Hours (attendance)**
+## **b) Time range (for adding or correcting times)**
 
-*Tab: "Working Hours" (inside the "Time Tracking" menu item)*
+**1.** Choose the date, the project (optional for internal employees) and enter the task.
 
-This tab is for the legally required working time recording (ArbZG). It is independent of project bookings and relevant whenever you do not work on a project (e.g. general tasks, meetings, administration), or are not assigned to a project full-time and need to document your daily attendance.
+**2.** Select the entry mode "Time range".
 
-## **Day Types and Absences**
+**3.** Enter From, To and, if needed, Break (min). "Total" shows (End − Start) − Break live.
 
-Each day can now be assigned to one of five types:
-
-|  |  |  |
-| --- | --- | --- |
-| **Type** | **Description** | **Time fields** |
-| **Regular Working Time** | Normal working day | Clock in, clock out, break required |
-| **Vacation** | Vacation day | Optional: only for half-day |
-| **Sick Leave** | Sick day | Optional: only for half-day |
-| **Special Leave** | Special leave (e.g. moving, wedding) | Optional: only for half-day |
-| **Parental Leave** | Parental leave | No time fields |
-
-### **Full-day absence vs. half-day**
-
-**•** Full-day absence: Select the appropriate day type (e.g. "Vacation") – the time fields (clock in/out/break) are automatically hidden. The day counts as fully absent.
-
-**•** Half-day: Activate the "Half Day" checkbox – the time fields remain visible so you can record the worked half-day (e.g. vacation in the morning, worked in the afternoon).
-
-## **Target time calculation: crediting vs. neutralization**
-
-The day type affects how the day is included in the monthly target hours:
-
-**•** Regular Working Time: Counts towards target hours, worked hours are recorded.
-
-**•** Vacation / Sick Leave / Special Leave: The day is credited – it counts towards the target AND is considered fulfilled (credited to your time account). Your balance remains neutral. Full day: full daily target hours (e.g. 8 hours) are credited. Half day: half of daily target hours (e.g. 4 hours) are credited, worked hours are additionally recorded.
-
-**•** Parental Leave: The day is neutralized – it is completely removed from the target hours (neither target nor actual). The monthly target hours are reduced accordingly.
-
-### **Example**
-
-20 target workdays in the month, including 3 days vacation and 2 days parental leave: Target hours remain at 20 days (vacation counts). Vacation is credited with 3 × 8h = 24h. Effective target hours are reduced to 18 days (−2 days parental leave).
-
-The metric cards at the top show you:
-
-**•** Target Hours Month – including number of credited days and parental leave days
-
-**•** Actual Hours Month – including credited hours
-
-**•** Overtime Balance
-
-## **Recording a working day**
-
-How to record a working day:
-
-**1.** Choose the date.
-
-**2.** Select the type of day (default: "Regular Working Time").
-
-**3.** For absences: optionally activate "Half Day".
-
-**4.** For regular work or half-day: enter Clock In (start time), Clock Out (end time), Break (min).
-
-**5.** Optional: add a note (e.g. "Home Office" or location).
-
-**6.** Click Save to save the day.
-
-## **Editing daily entries**
-
-Each saved day can be edited retrospectively (except in locked periods):
-
-**1.** In the table, click "Edit" for the day you want to change.
-
-**2.** The entry is loaded into the form – everything can be corrected (date, type, times, note).
-
-**3.** Make the desired changes.
-
-**4.** Click "Save" or "Cancel" to discard the edit.
+**4.** Click "Save entry".
 
 |  |
 | --- |
-| **Note:** All corrections are logged in the GoBD-compliant audit log. |
+| **Note:** If To is earlier than From (e.g. 22:00–02:00), the entry runs past midnight. |
 
-## **Working days table**
+## **c) Absences (internal employees only)**
 
-In the table below you see for each day:
+**1.** Choose the date and the type: Vacation, Sick, Special leave or Parental leave.
 
-**•** Date
+**2.** "Full day" is ticked by default and credits your daily hours. For a partial absence, untick it and enter From / To.
 
-**•** Type (colored badge with icon; "· ½" for half-days)
+**3.** Optionally add a note and click "Save entry".
 
-**•** Clock In – Clock Out (for full-day absences: "—")
+## **Billable and favorites**
 
-**•** Break Time
+**•** "Billable" appears when a project is selected; the default comes from the project.
 
-**•** Gross Time (total attendance)
+**•** Favorites appear as buttons above the form – one click fills in project, task and billable status.
 
-**•** Net Working Time (gross time minus break)
+## **How far into the future can I book?**
 
-**•** Note
+**•** Vacation and parental leave: no limit.
 
-**•** Actions (Edit button)
+**•** Everything else: up to the end of next month. Past dates are always possible unless the month is locked (GoBD month-end closing).
 
-# **Project Time vs. General Working Hours – the difference**
+# **3. The entry list**
 
-Both areas are found under the "Time Tracking" menu item – separated by tabs.
+**•** Filter by period, employee (privileged roles), type, client, project or free text.
 
-|  |  |  |
-| --- | --- | --- |
-|  | **Tab: Project Time** | **Tab: Working Hours** |
-| **Purpose** | What did I work on? | When was I present? |
-| **Reference** | Project + task | No project reference |
-| **Basis for** | Reporting, invoicing, forecast | Legal obligation (ArbZG) |
-| **Billable?** | Yes (€ billable / non-billable) | Not relevant |
-| **Visible for** | All users | Internal employees only |
-| **When to use?** | For project work | Daily – including absences |
+**•** Entries are grouped by day (newest first) with a daily total and sorted by start time.
+
+**•** ✏️ Edit loads the entry into the form; 🗑 Delete asks for confirmation.
+
+**•** "Export CSV" downloads exactly the entries currently shown.
+
+**•** Approval (if enabled for a project): Draft → Submitted → Approved. Without approval, entries are approved straight away.
 
 |  |
 | --- |
-| **Tip:** Both tabs complement each other. Project times show the content of your work, general working hours document your attendance – together they form a complete, legally compliant record. |
+| **Note:** Entries in a locked month cannot be changed or deleted. All corrections are logged in the GoBD audit log. |
+
+# **4. Time zone (for colleagues abroad)**
+
+"Today" is determined by your local time zone, not German time.
+
+**1.** Click your name at the top right of the header.
+
+**2.** Under "Time zone", keep "Automatic (device: …)" or choose a zone, e.g. America/Sao\_Paulo. It is saved immediately.
+
+**•** It sets the default date, the period presets, the stopwatch times and the future limit.
+
+**•** Times are saved as entered (local clock time) and are not converted.
+
+|  |
+| --- |
+| **Note:** When a project manager or admin books for a colleague, the colleague's time zone applies. Without a setting, the device time zone is used (fallback: Europe/Berlin). |
+
+# **Who sees what?**
+
+|  |  |  |  |  |
+| --- | --- | --- | --- | --- |
+|  | **Internal** | **External** | **Project manager** | **Admin / Superadmin** |
+| **Summary cards** | own | – | own / selected | own / selected |
+| **Absences** | yes | – | yes | yes |
+| **Project** | optional | required | optional | optional |
+| **Log for colleague** | – | – | yes | yes |
+| **Edit / delete** | own | own | all visible | all visible |
+| **Approve in list** | – | – | – | yes |
+
+**Logging for a colleague:** choose the person under "Log for colleague" in the form header. For external colleagues the project is required and absences are not available. The entry belongs to the colleague.
 
 # **Frequently Asked Questions (brief)**
 
-**Q: Do I have to set the language again at every login?**
+**Q: Do I have to set the language at every login?**
 
-A: No. The last chosen language is stored in your user profile and loaded automatically at your next login.
+A: No. Your last choice is saved in your profile.
 
-**Q: What if I forgot the timer?**
+**Q: I forgot to start the stopwatch.**
 
-A: Use Manual Time Entry to add the day afterwards.
+A: Use "Time range" and enter From/To afterwards.
 
 **Q: Are breaks deducted?**
 
-A: Yes – both project-based time tracking and general working hours deduct the break from net working time.
+A: Yes, in time-range mode, when creating and when editing.
+
+**Q: Do I need a separate working day in addition to project times?**
+
+A: No. Project times already count as actual hours.
+
+**Q: I work outside Germany. Could my entries land on the wrong date?**
+
+A: No. "Today" comes from your time zone (profile or device). Check it under "Time zone" in the profile menu.
 
 *Insight Arcs – Time Tracking & Project Forecast · GDPR-compliant (hosting in Germany) · GoBD & ArbZG compliant*

@@ -1,3 +1,4 @@
+import { deviceTimeZone, userTimeZone, zonedParts } from '../utils/timeZone';
 import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
 import {
   User,
@@ -39,6 +40,10 @@ interface ActiveTimer {
 interface AppContextType {
   language: Language;
   setLanguage: (lang: Language) => void;
+  /** Effektive Zeitzone des angemeldeten Mitarbeiters (Profil → Gerät) */
+  timeZone: string;
+  /** Zeitzone im Profil setzen; '' = automatisch (Gerät) */
+  setTimeZone: (tz: string) => Promise<void>;
   t: typeof translations['de'];
   currentUser: User | null;
   setCurrentUser: (user: User) => void;
@@ -247,6 +252,37 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     }
   };
 
+  // --- Zeitzone: Profil-Einstellung, sonst Gerätezeitzone ---
+  const timeZone = userTimeZone(currentUser, deviceTimeZone());
+
+  const setTimeZone = async (tz: string) => {
+    if (!currentUser) return;
+    const res = await fetch(`/api/users/${currentUser.id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', 'x-user-id': currentUser.id },
+      body: JSON.stringify({ timeZone: tz })
+    });
+    if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Zeitzone konnte nicht gespeichert werden');
+    const updated = await res.json();
+    setCurrentUser(prev => (prev ? { ...prev, timeZone: updated.timeZone } : prev));
+    setUsers(prev => prev.map(u => (u.id === currentUser.id ? { ...u, timeZone: updated.timeZone } : u)));
+  };
+
+  // Gerätezeitzone im Profil aktuell halten, damit Buchungen durch Kollegen/Server
+  // auch ohne explizite Profil-Einstellung das richtige "heute" verwenden.
+  useEffect(() => {
+    if (!currentUser) return;
+    const device = deviceTimeZone();
+    if (currentUser.deviceTimeZone === device) return;
+    fetch(`/api/users/${currentUser.id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', 'x-user-id': currentUser.id },
+      body: JSON.stringify({ deviceTimeZone: device })
+    }).then(r => {
+      if (r.ok) setCurrentUser(prev => (prev ? { ...prev, deviceTimeZone: device } : prev));
+    }).catch(() => {});
+  }, [currentUser?.id, currentUser?.deviceTimeZone]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Timer Tick Interval
   useEffect(() => {
     let interval: any;
@@ -286,13 +322,25 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     try {
       setIsLoading(true);
       const token = localStorage.getItem('insight_arcs_auth_jwt_token');
+      if (!token) {
+        setCurrentUser(null);
+        return;
+      }
       const reqHeaders: Record<string, string> = {
         'Content-Type': 'application/json'
       };
       if (token) reqHeaders['Authorization'] = `Bearer ${token}`;
 
-      const [authRes, orgsRes, usersRes, rolesRes, clientsRes, partnersRes, projectsRes, tasksRes, timeRes, workRes, auditRes, fcRes, keysRes, locksRes] = await Promise.all([
-        fetch('/api/auth/me', { headers: reqHeaders }).then(r => r.json()),
+      const authResponse = await fetch('/api/auth/me', { headers: reqHeaders });
+      const authRes = await authResponse.json();
+      if (!authResponse.ok || !authRes.user) {
+        localStorage.removeItem('insight_arcs_auth_jwt_token');
+        setAuthToken(null);
+        setCurrentUser(null);
+        return;
+      }
+
+      const [orgsRes, usersRes, rolesRes, clientsRes, partnersRes, projectsRes, tasksRes, timeRes, workRes, auditRes, fcRes, keysRes, locksRes] = await Promise.all([
         fetch('/api/organizations', { headers: reqHeaders }).then(r => r.json()),
         fetch('/api/users', { headers: reqHeaders }).then(r => r.json()),
         fetch('/api/employee-roles', { headers: reqHeaders }).then(r => r.json()),
@@ -344,7 +392,11 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   }, [activeTimer.projectId]);
 
   useEffect(() => {
-    refreshAllData();
+    if (localStorage.getItem('insight_arcs_auth_jwt_token')) {
+      refreshAllData();
+    } else {
+      setIsLoading(false);
+    }
   }, [refreshAllData]);
 
   // Switch Active Organization / Mandant
@@ -450,6 +502,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     }
     if (data.success && data.activeUser) {
       setCurrentUser(data.activeUser);
+      if (data.token) {
+        setAuthToken(data.token);
+        localStorage.setItem('insight_arcs_auth_jwt_token', data.token);
+      }
       localStorage.setItem('insight_arcs_logged_in_user', data.activeUser.id);
       if (data.activeUser.language) setLanguageState(data.activeUser.language);
       if (data.activeOrgId) setActiveOrgId(data.activeOrgId);
@@ -496,10 +552,13 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const durationMinutes = Math.max(1, Math.round(activeTimer.elapsedSeconds / 60));
 
     // Calculate times
+    // Uhrzeiten und Datum in der Zeitzone des Mitarbeiters; Buchungstag = Starttag
     const now = new Date();
-    const endTimeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
-    const startObj = new Date(now.getTime() - durationMinutes * 60 * 1000);
-    const startTimeStr = `${String(startObj.getHours()).padStart(2, '0')}:${String(startObj.getMinutes()).padStart(2, '0')}`;
+    const hm = (min: number) => `${String(Math.floor(min / 60)).padStart(2, '0')}:${String(min % 60).padStart(2, '0')}`;
+    const endParts = zonedParts(now, timeZone);
+    const startParts = zonedParts(new Date(now.getTime() - durationMinutes * 60 * 1000), timeZone);
+    const endTimeStr = hm(endParts.minutes);
+    const startTimeStr = hm(startParts.minutes);
 
     await createTimeEntry({
       projectId: activeTimer.projectId || projects[0]?.id,
@@ -510,7 +569,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       endTime: endTimeStr,
       breakMinutes: activeTimer.breakMinutes,
       isBillable: activeTimer.isBillable,
-      date: now.toISOString().split('T')[0]
+      date: startParts.date
     });
 
     const resetTimer: ActiveTimer = {
@@ -552,7 +611,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   };
 
   const updateTimeEntry = async (id: string, updates: Partial<TimeEntry>, reason?: string) => {
-    await fetch(`/api/time-entries/${id}`, {
+    const res = await fetch(`/api/time-entries/${id}`, {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',
@@ -560,14 +619,23 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       },
       body: JSON.stringify({ ...updates, reason })
     });
+    if (!res.ok) {
+      const error = await res.json().catch(() => ({ message: 'Unbekannter Fehler' }));
+      await refreshAllData();
+      throw new Error(error.message || `HTTP ${res.status}`);
+    }
     await refreshAllData();
   };
 
   const deleteTimeEntry = async (id: string) => {
-    await fetch(`/api/time-entries/${id}`, {
+    const res = await fetch(`/api/time-entries/${id}`, {
       method: 'DELETE',
       headers: { 'x-user-id': currentUser?.id || 'u-1' }
     });
+    if (!res.ok) {
+      const error = await res.json().catch(() => ({ message: 'Unbekannter Fehler' }));
+      throw new Error(error.message || `HTTP ${res.status}`);
+    }
     await refreshAllData();
   };
 
@@ -1132,6 +1200,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       value={{
         language,
         setLanguage,
+        timeZone,
+        setTimeZone,
         t,
         currentUser,
         setCurrentUser,

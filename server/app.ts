@@ -2,10 +2,12 @@ import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import path from 'path';
 import bcrypt from 'bcrypt';
+import { expressjwt } from 'express-jwt';
 import { createServer as createViteServer } from 'vite';
-import { storage } from './storage.js';
+import { storage, localISODate } from './storage.js';
+import { isValidTimeZone } from '../src/utils/timeZone.js';
 import { GERMAN_STATES, getGermanHolidays, getWorkingDaysInRange, resolveUserHolidayState } from './holidays.js';
-import { generateJwtToken, verifyJwtToken } from './authService.js';
+import { generateJwtToken, getJwtSecret, JWT_ISSUER, verifyJwtToken } from './authService.js';
 import {
   CreateTimeEntrySchema,
   UpdateTimeEntrySchema,
@@ -16,10 +18,10 @@ import {
 import { apiNotFoundHandler, errorHandler } from './http/errorHandler.js';
 import { asyncHandler } from './http/asyncHandler.js';
 import { validateBody } from './http/validate.js';
-import { BadRequestError, NotFoundError } from './http/errors.js';
+import { BadRequestError, ForbiddenError, NotFoundError } from './http/errors.js';
 import { createSessionContext } from './http/session.js';
 import multer from 'multer';
-import pdfParse from 'pdf-parse';
+import pdfParse from 'pdf-parse/lib/pdf-parse.js';
 import { parseClockifyPdfText, mapDayType } from './clockifyPdfParser.js';
 import { buildClockifyXlsx, buildTimesheetXlsx, aggregateByTask, safeFilePart, XLSX_MIME, generateDetailedTimeReport, normalizeDateParam } from './xlsxExports.js';
 
@@ -40,6 +42,35 @@ export interface CreateAppOptions {
 export async function createApp(options: CreateAppOptions = {}): Promise<express.Express> {
   const { serveStatic = true } = options;
   const app = express();
+  const jwtSecret = getJwtSecret();
+  let requestTraceSequence = 0;
+
+  app.use((req, res, next) => {
+    const traceId = `${process.pid}-${++requestTraceSequence}`;
+    const requestPath = req.originalUrl.split('?')[0];
+    const startedAt = Date.now();
+    console.info('[HTTP_TRACE] request received', {
+      traceId,
+      method: req.method,
+      host: req.get('host'),
+      path: requestPath
+    });
+    res.once('finish', () => {
+      console.info('[HTTP_TRACE] response sent', {
+        traceId,
+        method: req.method,
+        path: requestPath,
+        status: res.statusCode,
+        durationMs: Date.now() - startedAt
+      });
+    });
+    next();
+  });
+
+  // Trust the single nginx reverse proxy in front of this app so that
+  // req.ip and rate-limiters see the real visitor address from X-Forwarded-For,
+  // and req.secure reflects X-Forwarded-Proto (important for secure cookies).
+  app.set('trust proxy', 1);
 
   // --- CORS-HAERTUNG (Section: Security Hardening) ---
   // Erlaubte Origins werden zur Laufzeit aus der Umgebungsvariable ALLOWED_ORIGINS
@@ -74,8 +105,54 @@ export async function createApp(options: CreateAppOptions = {}): Promise<express
   // Kapselt die simulierte Session (currentUserId) sowie die Helfer
   // getActorId, requireApiKey und requireAdminAuth in einer klar
   // abgegrenzten Einheit (Trennung der Belange).
-  const session = createSessionContext('u-1');
-  const { getActorId, requireApiKey, requireAdminAuth } = session;
+  const session = createSessionContext();
+  const { getActorId, requireApiKey, requireAdminAuth, requireAuthenticatedUser } = session;
+
+  const verifyBearerJwt = expressjwt({
+    secret: jwtSecret,
+    algorithms: ['HS256'],
+    issuer: JWT_ISSUER,
+    requestProperty: 'auth'
+  });
+  const publicApiPaths = new Set([
+    '/api/health',
+    '/api/auth/login'
+  ]);
+  app.use('/api', (req, res, next) => {
+    const requestPath = req.originalUrl.split('?')[0];
+    if (publicApiPaths.has(requestPath) || requestPath === '/api/v1' || requestPath.startsWith('/api/v1/')) {
+      return next();
+    }
+    console.debug('[AUTH_TRACE] request authentication started', {
+      method: req.method,
+      path: requestPath,
+      hasAuthorization: Boolean(req.headers.authorization)
+    });
+    verifyBearerJwt(req, res, (error) => {
+      if (error) {
+        const causeName = (error as Error & { inner?: { name?: unknown } }).inner?.name;
+        console.warn('[AUTH_TRACE] bearer token rejected', {
+          method: req.method,
+          path: requestPath,
+          errorName: error.name,
+          causeName: typeof causeName === 'string' ? causeName : undefined
+        });
+        return next(error);
+      }
+      const actorId = getActorId(req);
+      console.debug('[AUTH_TRACE] bearer token verified', {
+        method: req.method,
+        path: requestPath,
+        actorId
+      });
+      requireAuthenticatedUser(req, res, next);
+    });
+  });
+  // Gerätezeitzone des Browsers (Header X-Time-Zone) – nur Fallback, wenn im Profil keine Zeitzone steht
+  const clientTimeZone = (req: express.Request): string | undefined => {
+    const tz = req.header('x-time-zone');
+    return isValidTimeZone(tz) ? tz : undefined;
+  };
 
   // Entfernt sicherheitsrelevante Felder (passwordHash) aus User-Objekten,
   // bevor sie in API-Responses zurückgegeben werden. passwordHash darf NIE
@@ -144,6 +221,11 @@ export async function createApp(options: CreateAppOptions = {}): Promise<express
     if (user && org) {
       tokenData = generateJwtToken(user, org.id, org.name);
     }
+    console.debug('[AUTH_TRACE] current-user lookup', {
+      foundUser: Boolean(user),
+      actorId: targetId || undefined,
+      foundOrganization: Boolean(org)
+    });
     
     res.json({
       user: stripSensitive(user),
@@ -157,6 +239,7 @@ export async function createApp(options: CreateAppOptions = {}): Promise<express
 
   app.post('/api/auth/login', (req, res) => {
     const { email, userId, orgId } = req.body;
+    const lookupMethod = userId ? 'userId' : email ? 'email' : 'missing';
     const allUsers = storage.getUsers(true);
     let user = null;
 
@@ -168,25 +251,71 @@ export async function createApp(options: CreateAppOptions = {}): Promise<express
     }
 
     if (!user) {
+      console.warn('[AUTH_TRACE] login rejected: account not found', { lookupMethod });
       return res.status(401).json({
         success: false,
         error: 'Kein Benutzer mit diesen Anmeldedaten gefunden. Bitte prüfen Sie Ihre E-Mail oder nutzen Sie die Profilauswahl.'
       });
     }
 
-    // Passwort-Prüfung: nur wenn für diesen Nutzer ein Passwort gesetzt ist.
-    // Ohne passwordHash bleibt der Login ohne Passwort erlaubt (Rückwärtskompatibilität).
-    if (user.passwordHash) {
-      const { password } = req.body;
-      if (!password || !bcrypt.compareSync(String(password), user.passwordHash)) {
-        return res.status(401).json({
-          success: false,
-          error: 'Ungültiges Passwort.'
-        });
-      }
+    const { password } = req.body;
+    if (!user.passwordHash) {
+      console.warn('[AUTH_TRACE] login rejected: password is not configured', {
+        userId: user.id,
+        passwordProvided: Boolean(password)
+      });
+      return res.status(401).json({
+        success: false,
+        error: 'Für dieses Konto ist noch kein Passwort eingerichtet. Bitte kontaktieren Sie einen Administrator.'
+      });
     }
 
-    session.setCurrentUserId(user.id);
+    if (!password) {
+      console.warn('[AUTH_TRACE] login rejected: password missing', { userId: user.id });
+      return res.status(401).json({
+        success: false,
+        error: 'Ungültige Anmeldedaten.'
+      });
+    }
+
+    const bcryptHashInfo = /^\$(2[aby])\$(\d{2})\$/.exec(user.passwordHash);
+    console.debug('[AUTH_TRACE] password hash loaded for comparison', {
+      userId: user.id,
+      hashLength: user.passwordHash.length,
+      bcryptFormatValid: Boolean(bcryptHashInfo),
+      bcryptVariant: bcryptHashInfo?.[1],
+      bcryptCost: bcryptHashInfo ? Number(bcryptHashInfo[2]) : undefined,
+      passwordProvided: Boolean(password),
+      passwordType: typeof password
+    });
+
+    let passwordMatches = false;
+    try {
+      passwordMatches = bcrypt.compareSync(String(password), user.passwordHash);
+    } catch (error) {
+      console.error('[AUTH_TRACE] bcrypt comparison threw', {
+        userId: user.id,
+        errorName: error instanceof Error ? error.name : 'UnknownError'
+      });
+      return res.status(401).json({ success: false, error: 'Ungültige Anmeldedaten.' });
+    }
+
+    console.info('[AUTH_TRACE] bcrypt comparison completed', {
+      userId: user.id,
+      passwordMatches
+    });
+
+    if (!passwordMatches) {
+      console.warn('[AUTH_TRACE] login rejected: password mismatch', {
+        userId: user.id,
+        passwordConfigured: true,
+        passwordProvided: true
+      });
+      return res.status(401).json({
+        success: false,
+        error: 'Ungültige Anmeldedaten.'
+      });
+    }
 
     // Switch org if specified, or pick user's active org
     if (orgId) {
@@ -203,6 +332,10 @@ export async function createApp(options: CreateAppOptions = {}): Promise<express
 
     const org = storage.getOrganization();
     const tokenData = generateJwtToken(user, org.id, org.name);
+    console.info('[AUTH_TRACE] login succeeded', {
+      userId: user.id,
+      organizationId: org.id
+    });
 
     res.json({
       success: true,
@@ -271,7 +404,6 @@ export async function createApp(options: CreateAppOptions = {}): Promise<express
   });
 
   app.post('/api/auth/logout', (req, res) => {
-    session.clearCurrentUser();
     res.json({ success: true, message: 'Erfolgreich abgemeldet' });
   });
 
@@ -282,23 +414,24 @@ export async function createApp(options: CreateAppOptions = {}): Promise<express
 
   app.post('/api/auth/switch-user', (req, res) => {
     // Nur Admins dürfen in andere Accounts wechseln.
-    // Der Aufrufer muss sich explizit ausweisen (JWT oder x-user-id) – kein Fallback
-    // auf die globale Server-Session, sonst könnten anonyme Requests durchrutschen.
-    if (!req.headers['authorization'] && !req.headers['x-user-id']) {
-      return res.status(401).json({ error: 'Nicht authentifiziert.' });
-    }
+    // Die API-JWT-Middleware hat den Aufrufer bereits authentifiziert.
     const actorId = getActorId(req);
-    const actor = storage.getUsers(true).find(u => u.id === actorId);
-    if (!actor || (actor.role !== 'SUPERADMIN' && actor.role !== 'ADMIN')) {
+    const actorRole = storage.getActorRoleInfo(actorId);
+    if (!actorRole.user || (!actorRole.isSuperAdmin && !actorRole.isAdmin)) {
+      console.warn('[AUTH_TRACE] user switch denied', {
+        actorId: actorId || undefined,
+        foundActor: Boolean(actorRole.user),
+        role: actorRole.role
+      });
       return res.status(403).json({ error: 'Nur Admins dürfen Nutzer wechseln.' });
     }
     const { userId } = req.body;
     const allUsers = storage.getUsers(true);
     const user = allUsers.find(u => u.id === userId);
     if (!user) {
+      console.warn('[AUTH_TRACE] user switch target not found', { actorId });
       return res.status(404).json({ error: 'User not found' });
     }
-    session.setCurrentUserId(userId);
     // Check if user has membership in current activeOrgId, if not switch to user's default/first org
     const userMemberships = user.memberships || [];
     const hasCurrentOrg = user.orgId === storage.getActiveOrgId() || userMemberships.some(m => m.orgId === storage.getActiveOrgId());
@@ -307,11 +440,15 @@ export async function createApp(options: CreateAppOptions = {}): Promise<express
     } else if (!hasCurrentOrg && user.orgId) {
       storage.setActiveOrgId(user.orgId);
     }
+    const tokenData = generateJwtToken(user, storage.getActiveOrgId(), storage.getOrganization().name);
+    console.info('[AUTH_TRACE] user switch succeeded', { actorId, targetUserId: user.id });
     res.json({ 
       success: true, 
       activeUser: stripSensitive(user), 
       organization: storage.getOrganization(),
-      activeOrgId: storage.getActiveOrgId()
+      activeOrgId: storage.getActiveOrgId(),
+      token: tokenData.token,
+      expiresAt: tokenData.payload.exp
     });
   });
 
@@ -396,9 +533,13 @@ export async function createApp(options: CreateAppOptions = {}): Promise<express
 
   app.put('/api/users/:id', (req, res) => {
     const actorId = getActorId(req);
-    const updated = storage.updateUser(req.params.id, req.body, actorId);
-    if (!updated) return res.status(404).json({ error: 'User not found' });
-    res.json(stripSensitive(updated));
+    try {
+      const updated = storage.updateUser(req.params.id, req.body, actorId);
+      if (!updated) return res.status(404).json({ error: 'User not found' });
+      res.json(stripSensitive(updated));
+    } catch (err: any) {
+      res.status(400).json({ error: err?.message || 'Update failed' });
+    }
   });
 
   app.delete('/api/users/:id', (req, res) => {
@@ -586,13 +727,23 @@ export async function createApp(options: CreateAppOptions = {}): Promise<express
     res.json(result);
   });
 
+  // Buchen für andere Mitarbeiter ist nur ADMIN / SUPERADMIN / PROJECT_MANAGER erlaubt
+  const assertMayBookFor = (actorId: string, targetUserId?: string) => {
+    if (!targetUserId || targetUserId === actorId) return;
+    const roleInfo = storage.getActorRoleInfo(actorId);
+    if (!roleInfo.isSuperAdmin && !roleInfo.isAdmin && !roleInfo.isProjectManager) {
+      throw new ForbiddenError('Keine Berechtigung, Zeiten für andere Mitarbeiter zu erfassen.');
+    }
+  };
+
   app.post('/api/time-entries', validateBody(CreateTimeEntrySchema), (req, res, next) => {
     try {
       const actorId = getActorId(req);
-      const entry = storage.createTimeEntry(req.body, actorId);
+      assertMayBookFor(actorId, req.body.userId);
+      const entry = storage.createTimeEntry(req.body, actorId, clientTimeZone(req));
       res.status(201).json(entry);
     } catch (err: any) {
-      next(new BadRequestError(err.message || 'Fehler beim Erstellen der Zeiterfassung'));
+      next(err instanceof ForbiddenError ? err : new BadRequestError(err.message || 'Fehler beim Erstellen der Zeiterfassung'));
     }
   });
 
@@ -600,7 +751,7 @@ export async function createApp(options: CreateAppOptions = {}): Promise<express
     try {
       const actorId = getActorId(req);
       const { reason, ...updates } = req.body;
-      const entry = storage.updateTimeEntry(req.params.id, updates, actorId, reason);
+      const entry = storage.updateTimeEntry(req.params.id, updates, actorId, reason, clientTimeZone(req));
       if (!entry) throw new NotFoundError('Zeiteintrag nicht gefunden');
       res.json(entry);
     } catch (err: any) {
@@ -704,10 +855,11 @@ export async function createApp(options: CreateAppOptions = {}): Promise<express
   app.post('/api/working-time', validateBody(CreateWorkingTimeSchema), (req, res, next) => {
     try {
       const actorId = getActorId(req);
-      const entry = storage.createOrUpdateWorkingTime(req.body, actorId);
+      assertMayBookFor(actorId, req.body.userId);
+      const entry = storage.createOrUpdateWorkingTime(req.body, actorId, clientTimeZone(req));
       res.json(entry);
     } catch (err: any) {
-      next(new BadRequestError(err.message || 'Fehler beim Speichern der Arbeitszeit'));
+      next(err instanceof ForbiddenError ? err : new BadRequestError(err.message || 'Fehler beim Speichern der Arbeitszeit'));
     }
   });
 
@@ -828,10 +980,13 @@ export async function createApp(options: CreateAppOptions = {}): Promise<express
   });
 
   app.get('/api/working-time/summary', (req, res) => {
-    const { userId, month } = req.query as { userId: string; month: string };
+    const { userId, month, from, to } = req.query as { userId: string; month: string; from?: string; to?: string };
     const targetUserId = userId || getActorId(req);
-    const targetMonth = month || new Date().toISOString().substring(0, 7);
-    const summary = storage.getWorkingTimeSummary(targetUserId, targetMonth);
+    const targetMonth = month || localISODate(new Date(), storage.timeZoneFor(targetUserId, getActorId(req), clientTimeZone(req))).substring(0, 7);
+    // Optional: beliebiger Zeitraum (from/to, YYYY-MM-DD) statt Kalendermonat
+    const isoDate = /^\d{4}-\d{2}-\d{2}$/;
+    const range = from && to && isoDate.test(from) && isoDate.test(to) && from <= to ? { from, to } : undefined;
+    const summary = storage.getWorkingTimeSummary(targetUserId, targetMonth, range);
     res.json(summary);
   });
 
@@ -853,7 +1008,7 @@ export async function createApp(options: CreateAppOptions = {}): Promise<express
   });
 
   app.get('/api/forecasts/plan-vs-actual', (req, res) => {
-    const month = (req.query.month as string) || new Date().toISOString().substring(0, 7);
+    const month = (req.query.month as string) || localISODate().substring(0, 7);
     const comparison = storage.getForecastPlanVsActual(month);
     res.json({ month, comparison });
   });
@@ -961,11 +1116,11 @@ export async function createApp(options: CreateAppOptions = {}): Promise<express
 
   // --- XLSX-Exporte (nur Admin/Superadmin/Projektmanager, explizit identifiziert) ---
   const resolveExportActor = (req: Request, res: Response): string | null => {
-    if (!req.headers['authorization'] && !req.headers['x-user-id']) {
+    const actorId = getActorId(req);
+    if (!actorId) {
       res.status(401).json({ error: 'Nicht authentifiziert.' });
       return null;
     }
-    const actorId = getActorId(req);
     const info = storage.getActorRoleInfo(actorId);
     if (!info.user || !(info.isSuperAdmin || info.isAdmin || info.isProjectManager)) {
       res.status(403).json({ error: 'Keine Berechtigung für Exporte.' });
@@ -1218,7 +1373,7 @@ export async function createApp(options: CreateAppOptions = {}): Promise<express
 
   app.get('/api/v1/forecasts', requireApiKey, (req, res) => {
     const { month } = req.query as any;
-    const targetMonth = month || new Date().toISOString().substring(0, 7);
+    const targetMonth = month || localISODate().substring(0, 7);
     const comparison = storage.getForecastPlanVsActual(targetMonth);
     res.json({
       month: targetMonth,

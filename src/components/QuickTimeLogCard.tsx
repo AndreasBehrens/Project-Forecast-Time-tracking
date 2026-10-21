@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useApp } from '../context/AppContext';
+import { todayInZone } from '../utils/timeZone';
 import {
   Clock,
   Play,
@@ -32,7 +33,8 @@ export const QuickTimeLogCard: React.FC<QuickTimeLogCardProps> = ({ onEntryCreat
     resumeTimer,
     stopTimer,
     updateTimerState,
-    createTimeEntry
+    createTimeEntry,
+    timeZone
   } = useApp();
 
   // Natural Language Input / Quick Text State
@@ -197,7 +199,7 @@ export const QuickTimeLogCard: React.FC<QuickTimeLogCardProps> = ({ onEntryCreat
       await createTimeEntry({
         projectId: selectedProjectId,
         taskId: taskIdToUse,
-        date: new Date().toISOString().split('T')[0],
+        date: todayInZone(timeZone),
         durationMinutes: parsedExpression.minutes,
         description: parsedExpression.description || `${t.quickLogTitle || 'Quick Log'} (${project?.name || ''})`,
         isBillable: isBillable,

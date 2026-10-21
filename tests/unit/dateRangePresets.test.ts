@@ -84,3 +84,13 @@ describe('Value-Helfer', () => {
     expect(formatDateDE('2026-09-01')).toBe('01.09.2026');
   });
 });
+
+describe('DateRangePicker Sprachumschaltung', () => {
+  it('hat für jedes Standard-Preset eine englische Bezeichnung', async () => {
+    const { PRESET_DEFINITIONS, PRESET_LABELS_EN } = await import('../../src/components/DateRangePicker');
+    for (const key of Object.keys(PRESET_DEFINITIONS)) {
+      expect(PRESET_LABELS_EN[key], key).toBeTruthy();
+      expect(PRESET_LABELS_EN[key]).not.toBe(PRESET_DEFINITIONS[key].label);
+    }
+  });
+});

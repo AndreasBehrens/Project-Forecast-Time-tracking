@@ -4,23 +4,26 @@
 
 **Aufruflink:** 👉 **https://timetracking.insightarcs.com**
 
-Diese Kurzanleitung richtet sich an **Mitarbeiterinnen und Mitarbeiter**. Sie erklärt die tägliche Nutzung des Menüpunkts **„Zeiterfassung"**, der zwei Bereiche unter einem Dach vereint:
+Diese Anleitung erklärt die Seite **„Zeiterfassung"** – den einen Ort, an dem du **alle** Zeiten erfasst:
 
-1. **Projektzeiterfassung** – projektbezogene Buchung von Arbeitsleistung
-2. **Allgemeine Arbeitszeit** – gesetzliche Anwesenheitserfassung inkl. Abwesenheiten
+- **Projektzeiten** – woran du für welchen Kunden und welches Projekt gearbeitet hast
+- **Arbeitszeit ohne Projekt** – z. B. interne Aufgaben, Besprechungen, Verwaltung
+- **Abwesenheiten** – Urlaub, Krankheit, Sonderurlaub, Elternzeit
 
-> ℹ️ Weitere Funktionen für **Projektleiter** und **Administratoren** folgen in kommenden Releases und werden dann hier ergänzt.
+Die früheren getrennten Tabs „Projektzeiterfassung" und „Allg. Arbeitszeit" sind jetzt in **einem Formular und einer Liste** zusammengeführt.
+
+> ℹ️ Was du siehst, hängt von deiner Rolle ab – siehe Abschnitt [Wer sieht was?](#wer-sieht-was).
 
 ---
 
 ## Wofür ist die Lösung gedacht?
 
-Insight Arcs Zeiterfassung ist eine webbasierte Lösung, mit der Teams ihre Arbeitszeiten **rechtssicher und projektgenau** erfassen. Sie verbindet zwei Ebenen:
+Insight Arcs Zeiterfassung ist eine webbasierte Lösung, mit der Teams ihre Arbeitszeiten **rechtssicher und projektgenau** erfassen:
 
 - **Projektbezogene Zeiterfassung:** Wie viel Zeit wurde für welches Projekt und welche Aufgabe aufgewendet – die Basis für Auswertung, Abrechnung (abrechenbar / nicht abrechenbar) und Projekt-Forecasts.
-- **Allgemeine Arbeitszeit (Anwesenheit):** Die gesetzlich vorgeschriebene Dokumentation der täglichen Arbeitszeit nach dem **Arbeitszeitgesetz (ArbZG)** – unabhängig davon, ob man gerade auf einem Projekt bucht.
+- **Arbeitszeiterfassung nach dem Arbeitszeitgesetz (ArbZG):** Dokumentation der täglichen Arbeitszeit inklusive Abwesenheiten – auch wenn du gerade nicht auf einem Projekt buchst.
 
-Alle Daten werden **DSGVO-konform in Deutschland** gespeichert und **GoBD-konform revisionssicher** archiviert (10 Jahre Aufbewahrung, unveränderbare Prüfkette). Die Oberfläche ist zweisprachig (Deutsch / Englisch) – die gewählte Sprache wird pro Nutzer dauerhaft gespeichert.
+Alle Daten werden **DSGVO-konform in Deutschland** gespeichert und **GoBD-konform revisionssicher** archiviert (10 Jahre Aufbewahrung, unveränderbare Prüfkette). Die Oberfläche ist zweisprachig (Deutsch / Englisch) – die gewählte Sprache wird pro Nutzer gespeichert.
 
 ---
 
@@ -29,173 +32,173 @@ Alle Daten werden **DSGVO-konform in Deutschland** gespeichert und **GoBD-konfor
 1. Öffne **https://timetracking.insightarcs.com** im Browser.
 2. Melde dich mit deinen Zugangsdaten an.
 3. Klicke in der Seitenleiste (Desktop) bzw. der unteren Navigationsleiste (Smartphone) auf **„Zeiterfassung"**.
-4. Innerhalb von „Zeiterfassung" wechselst du über die **Tabs** oben zwischen den zwei Bereichen:
-   - **„Projektzeiterfassung"** → Buchung auf Projekte und Aufgaben
-   - **„Allg. Arbeitszeit"** → Anwesenheit, Abwesenheiten, Kommen–Gehen
+4. Die **Sprache** (Deutsch/Englisch) stellst du oben rechts im Kopfbereich um – die Einstellung bleibt gespeichert, alle Beschriftungen der Seite (auch der Zeitraum-Auswahl) wechseln mit.
 
-   > 💡 **Externe Mitarbeiter** (Freelancer / Partner) sehen nur die Projektzeiterfassung – kein Tab-Wechsel nötig.
+Die Seite besteht von oben nach unten aus:
 
-5. Die **Sprache** (Deutsch/Englisch) lässt sich oben rechts im Kopfbereich umstellen – die Einstellung bleibt gespeichert.
+1. **Kennzahlen** (Soll-Stunden · Ist-Stunden · Differenz)
+2. **Eingabeformular** („Neuer Eintrag" bzw. „Eintrag bearbeiten")
+3. **Filterleiste und Eintragsliste**
 
 ---
 
-## 1. Projektzeiterfassung
+## 1. Kennzahlen (Soll / Ist / Differenz)
 
-Tab: **„Projektzeiterfassung"** (innerhalb des Menüpunkts „Zeiterfassung")
+> Sichtbar für **interne Mitarbeitende**, **Projektleiter**, **Admins** und **Superadmins** – nicht für externe Nutzer.
 
-Es gibt **zwei Erfassungsmethoden**. Oben im Tab wechselst du zwischen ihnen:
+| Karte | Bedeutung |
+|---|---|
+| **Soll-Stunden** | Vertragliche Sollzeit im gewählten Zeitraum (Arbeitstage × Tagesarbeitszeit, ohne Wochenenden und Feiertage) |
+| **Ist-Stunden** | Projektzeiten + Arbeitszeit ohne Projekt + angerechnete Abwesenheiten |
+| **Differenz** | Ist − Soll (grün = Plus, rot = Minus) |
 
-### a) Live-Timer ⏱️ (für laufende Tätigkeiten)
+- Die Kennzahlen beziehen sich immer auf den **Zeitraum aus der Filterleiste** (z. B. „Dieser Monat", „Letzte Woche" oder ein eigener Zeitraum). Der Zeitraum steht unter dem Soll-Wert.
+- Bei **„Alle Einträge"** gilt der Zeitraum vom ersten Eintrag bis heute (bzw. bis zum letzten Zukunftseintrag).
+- Projektleiter und Admins sehen die Werte des **in der Filterleiste gewählten Mitarbeiters**.
+- **Elternzeit** reduziert die Sollzeit (der Tag zählt weder als Soll noch als Ist).
+- **Urlaub, Krankheit, Sonderurlaub** werden an Arbeitstagen mit der vertraglichen Tagesarbeitszeit angerechnet. An Wochenenden oder Feiertagen eingetragene Abwesenheiten werden **nicht** angerechnet.
+- **Altdaten:** An manchen Tagen aus der Zeit vor der Zusammenführung gibt es sowohl eine Arbeitszeit als „Rahmen" (z. B. 09–17 Uhr) als auch Projektzeiten innerhalb dieses Rahmens. Die überlappenden Stunden werden **nur einmal** gezählt.
 
-Ideal, wenn du **jetzt** mit einer Aufgabe beginnst und die Zeit live mitläuft.
+---
 
-1. Wähle den Reiter **„Live-Timer"**.
-2. Wähle das **Projekt** und optional die **Aufgabe** aus.
-3. Trage eine kurze **Beschreibung** der Tätigkeit ein.
-4. Klicke auf **„Timer starten"** ▶️ – die Uhr läuft.
-5. Bei Unterbrechungen: **„Pause"** ⏸️ (später fortsetzen) – die Pausenzeit wird nicht mitgezählt.
-6. Zum Abschluss: **„Stopp & Speichern"** ⏹️ – der Eintrag wird gebucht.
+## 2. Zeit erfassen – das Eingabeformular
 
-> Der Timer läuft im Hintergrund weiter, auch wenn du die Seite neu lädst.
+### Felder im Überblick
 
-### b) Manuelle Zeiterfassung ✍️ (für vergessene / zurückliegende Tage)
+| Feld | Beschreibung | Sichtbar für |
+|---|---|---|
+| **Datum** | Buchungstag | alle |
+| **Typ** | Regulärer Arbeitstag, Urlaub, Krank, Sonderurlaub, Elternzeit | nur interne Mitarbeitende |
+| **Projekt** | Projekt (Kunde in Klammern); 🔒 = nur für zugewiesene Teammitglieder | alle – **Pflicht für Externe**, optional für Interne („— Ohne Projekt —") |
+| **Erfassungsmodus** | **Stoppuhr** oder **Zeitraum** | bei regulärem Arbeitstag |
+| **Aufgabe** | Woran du gearbeitet hast. Vorschläge kommen aus deinen eigenen früheren Einträgen im selben Projekt | alle; bei Abwesenheiten wird daraus **„Notiz (optional)"** |
+| **Abrechenbar** | Wird dem Kunden berechnet; Vorgabe kommt aus dem Projekt | nur wenn ein Projekt gewählt ist |
 
-Ideal, um Zeiten **nachzutragen**, die nicht live gestoppt wurden.
+### a) Stoppuhr ⏱️ (für laufende Tätigkeiten)
 
-1. Wähle den Reiter **„Manuelle Zeiterfassung"** (Kennzeichnung „Vergessene Tage").
-2. Wähle das **Datum**.
-3. Wähle **Projekt** und optional **Aufgabe**.
-4. Trage eine **Beschreibung** ein.
-5. Erfasse **Startzeit** und **Endzeit**.
-6. Trage bei Bedarf die **Pause (Min)** ein – sie wird von der Arbeitszeit abgezogen.
-7. Klicke auf **„Eintrag speichern"**.
+1. **Datum** (i. d. R. heute) wählen, **Projekt** (für Interne optional) wählen und **Aufgabe** eintragen.
+2. Erfassungsmodus **„Stoppuhr"** wählen.
+3. **„Start"** klicken – die laufende Zeit wird neben den Schaltflächen angezeigt.
+4. Bei Unterbrechungen **„Pausieren"** / **„Fortsetzen"** – pausierte Zeit wird nicht gezählt.
+5. **„Stopp & speichern"** – der Eintrag wird mit Start- und Endzeit gebucht.
 
-### Abrechenbar / Nicht abrechenbar 💶
+> - Die Stoppuhr läuft weiter, auch wenn du die Seite neu lädst oder einen anderen Menüpunkt öffnest.
+> - Läuft die Stoppuhr über Mitternacht, wird der Eintrag dem **Starttag** zugeordnet.
+> - Solange die Stoppuhr läuft, sind Projekt, Aufgabe und Datum gesperrt.
 
-Bei jeder Buchung legst du über das **€-Symbol** fest, ob die Zeit abrechenbar ist:
+### b) Zeitraum 🕘 (zum Nachtragen oder Korrigieren)
 
-- **€ (grün)** = **abrechenbar** (wird dem Kunden in Rechnung gestellt)
-- **€ durchgestrichen (grau)** = **nicht abrechenbar** (z. B. interne Tätigkeit)
+1. **Datum**, **Projekt** (für Interne optional) und **Aufgabe** eintragen.
+2. Erfassungsmodus **„Zeitraum"** wählen.
+3. **Von**, **Bis** und bei Bedarf **Pause (Min.)** eintragen.
+4. Das Feld **„Gesamt"** zeigt live **(Ende − Start) − Pause**. Der Wert muss größer als 0 sein.
+5. **„Eintrag speichern"** klicken.
 
-Der Standardwert ergibt sich aus dem Projekt (Kundenprojekt = abrechenbar, internes Projekt = nicht abrechenbar), kann aber pro Eintrag angepasst werden. Fahre mit der Maus über das Symbol, um den aktuellen Status in deiner Sprache zu sehen.
+> Ist **Bis** früher als **Von** (z. B. 22:00–02:00), wird der Eintrag als über Mitternacht laufend gewertet.
+
+### c) Abwesenheiten 🌴 (nur interne Mitarbeitende)
+
+1. **Datum** wählen.
+2. **Typ** wählen: **Urlaub**, **Krank**, **Sonderurlaub** oder **Elternzeit**.
+3. **Ganztägig** ist vorausgewählt – der Tag wird mit deiner **vertraglichen Tagesarbeitszeit** angerechnet (Hinweis unter der Checkbox).
+4. Für eine teilweise Abwesenheit (z. B. Arzttermin) **„Ganztägig"** abwählen und **Von** / **Bis** der Abwesenheit eintragen. Hier wird nur die Abwesenheit selbst erfasst – die an dem Tag gearbeiteten Stunden trägst du als eigenen regulären Eintrag ein.
+5. Optional eine **Notiz** eintragen.
+6. **„Eintrag speichern"** klicken.
+
+### Favoriten ⭐
+
+Als Favorit markierte Projektzeiten erscheinen über dem Formular als Schaltflächen. Ein Klick übernimmt Projekt, Aufgabe und Abrechenbarkeit.
+
+### Wie weit in die Zukunft kann ich buchen?
+
+| Typ | Zukunftsgrenze |
+|---|---|
+| **Urlaub**, **Elternzeit** | unbegrenzt (beliebig weit im Voraus planbar) |
+| alles andere (Projektzeit, regulärer Arbeitstag, Krank, Sonderurlaub) | bis zum **Ende des nächsten Monats** |
+
+Die Datumsauswahl sperrt spätere Tage bereits, und der Server lehnt sie zusätzlich ab. Vergangene Tage können jederzeit nachgetragen werden – außer der Monat wurde **abgeschlossen und gesperrt** (GoBD-Monatsabschluss).
+
+### Zeitzone 🌍 (für Kolleginnen und Kollegen im Ausland)
+
+Welcher Tag „heute" ist, bestimmt **deine lokale Zeitzone** – nicht die deutsche Uhrzeit.
+
+1. Oben rechts im Kopfbereich auf deinen **Namen / Avatar** klicken.
+2. Unter **„Zeitzone"** **„Automatisch (Gerät: …)"** belassen (empfohlen) oder eine bestimmte Zone wählen, z. B. *America/Sao_Paulo*. Die Auswahl wird sofort in deinem Profil gespeichert.
+
+Die Zeitzone bestimmt:
+
+- das **vorausgewählte Datum** („heute") im Formular, die Zeitraum-Vorgaben und die Kennzahlen,
+- die von der Stoppuhr gebuchten **Start- und Endzeiten**,
+- die **Zukunftsgrenze** („Ende des nächsten Monats" ab deinem lokalen Heute).
+
+> - Uhrzeiten werden so gespeichert, wie du sie eingibst (lokale Uhrzeit, z. B. 09:00–17:00), und **nicht** umgerechnet – Kollegen in Brasilien sehen und behalten ihre eigenen Zeiten.
+> - Bucht ein Projektleiter oder Admin **für einen Mitarbeiter**, gilt die Zeitzone **dieses Mitarbeiters**.
+> - Ohne Profileinstellung wird die Zeitzone des Geräts verwendet, ersatzweise Europe/Berlin.
+
+---
+
+## 3. Die Eintragsliste
+
+### Filterleiste
+
+| Filter | Beschreibung | Sichtbar für |
+|---|---|---|
+| **Zeitraum** | Vorgaben (Heute, Gestern, Diese Woche, Letzte Woche, Letzte zwei Wochen, Dieser Monat, Letzter Monat, Dieses Quartal, Dieses Jahr, Letztes Jahr, Alle Einträge) oder eigener Zeitraum über den Kalender. Standard: **Dieser Monat** | alle |
+| **Mitarbeiter** | Alle Mitarbeiter oder eine bestimmte Person | Projektleiter, Admins, Superadmins |
+| **Typ** | Alle Typen, Regulärer Arbeitstag oder eine Abwesenheitsart | interne Mitarbeitende und berechtigte Rollen |
+| **Kunde** / **Projekt** | Auf einen Kunden bzw. ein Projekt einschränken | alle |
+| **Suche** | Freitext über Aufgabe, Projekt und Kunde | alle |
+
+Die Kennzahlen oben folgen dem hier gewählten Zeitraum (und bei berechtigten Rollen dem gewählten Mitarbeiter).
+
+### Liste
+
+- Einträge sind **nach Datum gruppiert** (neuester Tag oben) mit **Tagessumme**; innerhalb eines Tages **nach Startzeit sortiert**.
+- Jede Zeile zeigt Projekt und Kunde (bzw. **„Ohne Projekt"**), Aufgabe/Notiz, Zeitspanne (oder **„ganztägig"**), Dauer, **Abrechenbar / Nicht abrechenbar** und ggf. den Freigabestatus.
+- Kennzeichnung der Abwesenheiten: **Urlaub** (gelb), **Krank** (rot), **Sonderurlaub** (blau), **Elternzeit** (lila); ein regulärer Arbeitstag ohne Projekt trägt ein graues Etikett **„Regulärer Arbeitstag"**.
+- **✏️ Bearbeiten** lädt den Eintrag oben ins Formular. Ändern und **„Änderung speichern"** klicken – oder **„Abbrechen"**. Beim Bearbeiten kannst du auch zwischen Projektzeit, Arbeitszeit ohne Projekt und Abwesenheit wechseln.
+- **🗑 Löschen** fragt vorher nach.
+- **CSV exportieren** lädt genau die aktuell angezeigten Einträge herunter (inkl. aller Filter).
+
+> Einträge in einem **gesperrten Monat** können weder geändert noch gelöscht werden – du erhältst eine Fehlermeldung. Alle Korrekturen werden GoBD-konform im Audit-Log protokolliert.
 
 ### Freigabe-Workflow (falls für ein Projekt aktiviert)
 
-Ist für ein Projekt die **Freigabepflicht** aktiv, erhalten deine Einträge zunächst den Status:
-
-- **Entwurf** → noch nicht eingereicht
-- **Eingereicht** → wartet auf Freigabe durch die Projektleitung
-- **Freigegeben** → geprüft und verbucht
-
-Ist keine Freigabepflicht hinterlegt, werden Einträge direkt als freigegeben verbucht.
+Ist für ein Projekt die Freigabepflicht aktiv, erhalten deine Einträge zunächst den Status **Entwurf** bzw. **Eingereicht** und nach Prüfung **Freigegeben**. Admins können direkt in der Liste über das ✔-Symbol freigeben. Ohne Freigabepflicht werden Einträge sofort als freigegeben verbucht.
 
 ---
 
-## 2. Allgemeine Arbeitszeit (Anwesenheit)
+## Wer sieht was?
 
-Tab: **„Allg. Arbeitszeit"** (innerhalb des Menüpunkts „Zeiterfassung")
+| | **Mitarbeitende (intern)** | **Mitarbeitende (extern)** | **Projektleiter** | **Admin / Superadmin** |
+|---|---|---|---|---|
+| Kennzahlen | ✅ eigene | ❌ | ✅ eigene / gewählter Mitarbeiter | ✅ eigene / gewählter Mitarbeiter |
+| Feld „Typ" (Abwesenheiten) | ✅ | ❌ | ✅ | ✅ |
+| Projekt | optional | **Pflicht** | optional | optional |
+| „Für Mitarbeiter erfassen" | ❌ | ❌ | ✅ | ✅ |
+| Filter „Mitarbeiter" | ❌ (nur eigene Einträge) | ❌ (nur eigene Einträge) | ✅ | ✅ |
+| Bearbeiten / Löschen | eigene Einträge | eigene Einträge | alle sichtbaren Einträge | alle sichtbaren Einträge |
+| Freigeben in der Liste | ❌ | ❌ | ❌ | ✅ |
 
-Dieser Tab dient der **gesetzlich vorgeschriebenen Arbeitszeiterfassung (ArbZG)**. Er ist **unabhängig von Projektbuchungen** und immer dann relevant, wenn du
+### Für Mitarbeiter erfassen (Projektleiter, Admins, Superadmins)
 
-- **nicht auf einem Projekt** arbeitest (z. B. allgemeine Aufgaben, Besprechungen, Verwaltung), oder
-- **nicht in Vollzeit einem Projekt zugeordnet** bist und deine tägliche Anwesenheit dokumentieren musst.
+1. Im Formularkopf unter **„Für Mitarbeiter erfassen"** die Person auswählen (du selbst bist mit **„(Ich)"** markiert).
+2. Das Formular passt sich der Beschäftigungsart an: Bei **externen** Mitarbeitenden ist das **Projekt Pflicht** und Abwesenheiten stehen nicht zur Verfügung (ein Hinweis wird angezeigt).
+3. Eintrag wie gewohnt ausfüllen und speichern – er wird der gewählten Person zugeordnet, nicht dir.
 
-### Tagesarten und Abwesenheiten
-
-Jeder Tag kann jetzt einer von **fünf Arten** zugeordnet werden:
-
-| Art | Symbol | Beschreibung | Zeitfelder |
-|---|---|---|---|
-| **Reguläre Arbeitszeit** | grau | Normaler Arbeitstag | Kommen, Gehen, Pause erforderlich |
-| **Urlaub** | 🌴 blau | Urlaubstag | Optional: nur bei Halbtag |
-| **Krankheit** | 🩺 orange | Krankheitstag | Optional: nur bei Halbtag |
-| **Sonderurlaub** | 💼 lila | Sonderurlaub (z. B. Umzug, Hochzeit) | Optional: nur bei Halbtag |
-| **Elternzeit** | 👶 grün | Elternzeit | Keine Zeitfelder |
-
-#### Ganztags-Abwesenheit vs. Halbtag
-
-- **Ganztags-Abwesenheit:** Wähle die entsprechende Tagesart (z. B. „Urlaub") – die Zeitfelder (Kommen/Gehen/Pause) werden automatisch ausgeblendet. Der Tag gilt als vollständig abwesend.
-- **Halber Tag:** Aktiviere die Checkbox **„Halber Tag"** – die Zeitfelder bleiben sichtbar, sodass du den gearbeiteten halben Tag erfassen kannst (z. B. Vormittag Urlaub, Nachmittag gearbeitet).
-
-#### Sollzeit-Berechnung: Anrechnung vs. Neutralisierung
-
-Die Tagesart beeinflusst, wie der Tag in die **monatliche Sollzeit** einfließt:
-
-- **Reguläre Arbeitszeit:** Zählt zur Sollzeit, die gearbeiteten Stunden werden erfasst.
-- **Urlaub / Krankheit / Sonderurlaub:** Der Tag wird **angerechnet** – er zählt zur Sollzeit UND gilt als erfüllt (wird dem Zeitkonto gutgeschrieben). Dein Saldo bleibt neutral.
-  - **Ganztag:** volle Tagessollzeit (z. B. 8 Stunden) wird gutgeschrieben
-  - **Halbtag:** halbe Tagessollzeit (z. B. 4 Stunden) wird gutgeschrieben, die gearbeiteten Stunden werden zusätzlich erfasst
-- **Elternzeit:** Der Tag wird **neutralisiert** – er fällt komplett aus der Sollzeit heraus (weder Soll noch Ist). Die monatliche Sollzeit reduziert sich entsprechend.
-
-**Beispiel:** 20 Sollarbeitstage im Monat, davon 3 Tage Urlaub und 2 Tage Elternzeit:
-- Sollzeit bleibt bei 20 Tagen (Urlaub zählt)
-- Urlaub wird mit 3 × 8h = 24h gutgeschrieben
-- Effektive Sollzeit reduziert sich auf 18 Tage (−2 Tage Elternzeit)
-
-Die **Metrikkarten** oben zeigen dir:
-- **Sollstunden Monat** – inkl. Anzahl angerechneter Tage und Elternzeit-Tage
-- **Ist-Stunden Monat** – inkl. gutgeschriebene Stunden
-- **Überstunden-Saldo**
-
-### Arbeitstag erfassen
-
-So erfasst du einen Arbeitstag:
-
-1. Wähle das **Datum**.
-2. Wähle die **Art** des Tages (Standard: „Reguläre Arbeitszeit").
-3. Bei Abwesenheiten: optional **„Halber Tag"** aktivieren.
-4. Bei regulärer Arbeit oder Halbtag: **Kommen** (Startzeit), **Gehen** (Endzeit), **Pause (Min)** eintragen.
-5. Optional: eine **Notiz** hinzufügen (z. B. „Home Office" oder Ort).
-6. Klicke auf **➕ Speichern**, um den Tag zu speichern.
-
-### Tageseinträge bearbeiten
-
-Jeder gespeicherte Tag kann nachträglich **bearbeitet** werden (außer in gesperrten Monaten):
-
-1. Klicke in der Tabelle auf **„Bearbeiten"** ✏️ bei dem Tag, den du ändern möchtest.
-2. Der Eintrag wird ins Formular geladen – **alles** lässt sich korrigieren (Datum, Art, Zeiten, Notiz).
-3. Nimm die gewünschten Änderungen vor.
-4. Klicke auf **„Speichern"** oder **„Abbrechen"**, um die Bearbeitung zu verwerfen.
-
-Alle Korrekturen werden **GoBD-konform im Audit-Log** protokolliert.
-
-### Tabelle der Arbeitstage
-
-In der Tabelle darunter siehst du je Tag:
-
-- **Datum**
-- **Art** (farbiges Etikett mit Symbol; „· ½" bei Halbtagen)
-- **Kommen – Gehen** (bei Ganztags-Abwesenheiten: „—")
-- **Pausenzeit**
-- **Bruttozeit** (Anwesenheit gesamt)
-- **Nettoarbeitszeit** (Bruttozeit abzüglich Pause)
-- **Notiz**
-- **Aktionen** (Bearbeiten-Button)
+> Der Server prüft das ebenfalls: Mitarbeitende ohne diese Rollen können keine Zeiten für andere buchen.
 
 ---
 
-## Projektzeiterfassung vs. Allgemeine Arbeitszeit – der Unterschied
+## Häufige Fragen
 
-Beide Bereiche findest du unter dem Menüpunkt **„Zeiterfassung"** – getrennt durch Tabs.
-
-| | **Tab: Projektzeiterfassung** | **Tab: Allg. Arbeitszeit** |
-|---|---|---|
-| **Zweck** | Was habe ich woran gearbeitet? | Wann war ich anwesend? |
-| **Bezug** | Projekt + Aufgabe | Kein Projektbezug |
-| **Grundlage** | Auswertung, Abrechnung, Forecast | Gesetzliche Pflicht (ArbZG) |
-| **Abrechenbar?** | Ja (€ abrechenbar / nicht abrechenbar) | Nicht relevant |
-| **Sichtbar für** | Alle Nutzer | Nur interne Mitarbeiter |
-| **Wann nutzen?** | Bei Projektarbeit | Täglich – auch bei Abwesenheit |
-
-> 💡 **Tipp:** Beide Tabs ergänzen sich. Projektzeiten zeigen den *Inhalt* deiner Arbeit, die allgemeine Arbeitszeit dokumentiert deine *Anwesenheit* – gemeinsam ergeben sie eine vollständige, rechtssichere Erfassung.
-
----
-
-## Häufige Fragen (Kurz)
-
-- **Muss ich die Sprache bei jedem Login neu einstellen?** Nein. Die zuletzt gewählte Sprache wird in deinem Nutzerprofil gespeichert und beim nächsten Login automatisch geladen.
-- **Was, wenn ich den Timer vergessen habe?** Nutze die **Manuelle Zeiterfassung**, um den Tag nachzutragen.
-- **Werden Pausen abgezogen?** Ja – sowohl bei der projektbezogenen Zeiterfassung als auch bei der allgemeinen Arbeitszeit wird die Pause von der Netto-Arbeitszeit abgezogen.
+- **Muss ich die Sprache bei jedem Login neu einstellen?** Nein, die letzte Auswahl wird in deinem Profil gespeichert.
+- **Ich habe vergessen, die Stoppuhr zu starten.** Nutze **„Zeitraum"** und trage Von/Bis nachträglich ein.
+- **Werden Pausen abgezogen?** Ja – im Modus Zeitraum wird die Pause von der Gesamtzeit abgezogen, beim Anlegen wie beim Bearbeiten.
+- **Muss ich zusätzlich zu Projektzeiten noch einen Arbeitstag erfassen?** Nein. Projektzeiten zählen bereits als Ist-Stunden. Erfasse Zeit **ohne Projekt** nur für Tätigkeiten, die keinem Projekt zugeordnet sind.
+- **Warum wird ein Krankheitstag am Samstag nicht angerechnet?** Abwesenheiten werden nur an deinen vertraglichen Arbeitstagen angerechnet.
+- **Warum kann ich keinen regulären Arbeitstag in zwei Monaten eintragen?** Außer Urlaub und Elternzeit sind Buchungen nur bis zum Ende des nächsten Monats möglich.
+- **Ich arbeite außerhalb Deutschlands – landen meine Einträge auf dem falschen Tag?** Nein. „Heute" wird aus deiner Zeitzone ermittelt (Profileinstellung oder Gerät). Prüfen kannst du das im Profilmenü unter **„Zeitzone"**.
 
 ---
 

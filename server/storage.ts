@@ -33,7 +33,18 @@ import {
 } from '../src/types.js';
 import { getGermanHolidays, getWorkingDaysInRange, GERMAN_STATES, HolidayInfo } from './holidays.js';
 import * as prismaStore from './prismaStore.js';
+import { DEFAULT_TIME_ZONE, endOfNextMonth, isValidTimeZone, todayInZone, userTimeZone } from '../src/utils/timeZone.js';
 import type { AppStateSnapshot } from './prismaStore.js';
+
+/** Heutiges Datum (YYYY-MM-DD) in der angegebenen Zeitzone (Standard: deutsche Zeit) – nicht UTC. */
+export function localISODate(d: Date = new Date(), tz: string = DEFAULT_TIME_ZONE): string {
+  return todayInZone(tz, d);
+}
+
+/** Letzter Tag des Folgemonats (YYYY-MM-DD) – Zukunftsgrenze für Buchungen außer Urlaub/Elternzeit. */
+export function maxFutureBookingDate(today: string = localISODate()): string {
+  return endOfNextMonth(today);
+}
 
 export class StorageService {
   private organizations: Organization[] = [];
@@ -369,6 +380,18 @@ export class StorageService {
               te.id = `te-${Date.now()}-${Math.random().toString(36).substring(2, 9)}-${i}`;
             }
             seenTimeEntryIds.add(te.id);
+          });
+
+          // 8b. Gleiches für Arbeitszeit-Einträge: Ältere IDs ('wte-' + Date.now() + Zufall < 1000) konnten bei
+          // Massenimporten kollidieren. Doppelte IDs führen dazu, dass Bearbeiten/Löschen den falschen Eintrag trifft.
+          const seenWorkingTimeIds = new Set<string>();
+          this.workingTimeEntries.forEach((w, i) => {
+            if (seenWorkingTimeIds.has(w.id)) {
+              const oldId = w.id;
+              w.id = `wte-${Date.now()}-${Math.random().toString(36).substring(2, 9)}-${i}`;
+              console.warn(`[Automigration] Doppelte Arbeitszeit-ID ${oldId} (${w.userName || w.userId}, ${w.date}) → ${w.id}`);
+            }
+            seenWorkingTimeIds.add(w.id);
           });
 
           // 9. Backfill dayType='REGULAR' for existing working time entries (Präzisierung Arbeitszeiterfassung)
@@ -2092,6 +2115,16 @@ export class StorageService {
       }
     }
     
+    // Zeitzonen: nur gültige IANA-Namen; leerer String = zurücksetzen auf "Automatisch (Gerät)"
+    for (const key of ['timeZone', 'deviceTimeZone'] as const) {
+      if (sanitizedUpdates[key] === undefined) continue;
+      if (sanitizedUpdates[key] === '' || sanitizedUpdates[key] === null) {
+        sanitizedUpdates[key] = undefined;
+      } else if (!isValidTimeZone(sanitizedUpdates[key])) {
+        throw new Error(`Ungültige Zeitzone: ${String(sanitizedUpdates[key])}`);
+      }
+    }
+
     // Check holiday location rules if stateLocation or employmentType is changed
     let stateLocation = sanitizedUpdates.stateLocation !== undefined ? sanitizedUpdates.stateLocation : this.users[idx].stateLocation;
     const empType = sanitizedUpdates.employmentType !== undefined ? sanitizedUpdates.employmentType : this.users[idx].employmentType;
@@ -2778,12 +2811,15 @@ export class StorageService {
     return { data, total, page, limit };
   }
 
-  public createTimeEntry(entryData: Partial<TimeEntry>, actorId: string): TimeEntry {
-    const bookingDate = entryData.date || new Date().toISOString().split('T')[0];
+  public createTimeEntry(entryData: Partial<TimeEntry>, actorId: string, clientTimeZone?: string): TimeEntry {
+    const tz = this.timeZoneFor(entryData.userId || actorId, actorId, clientTimeZone);
+    const bookingDate = entryData.date || localISODate(new Date(), tz);
     const periodCheck = this.isPeriodLocked(bookingDate);
     if (periodCheck.isLocked) {
       throw new Error(`GoBD-Revisionsschutz: Der Abrechnungsmonat ${bookingDate.slice(0, 7)} ist durch einen Monatsabschluss gesperrt. Neue Buchungen sind nicht mehr zulässig.`);
     }
+
+    this.assertBookingDateAllowed(bookingDate, 'REGULAR', tz);
 
     const bookingUserId = entryData.userId || actorId;
     const user = this.users.find(u => u.id === bookingUserId);
@@ -2849,7 +2885,7 @@ export class StorageService {
       clientName: client?.name || '',
       taskId: task?.id,
       taskName: task?.name,
-      date: entryData.date || new Date().toISOString().split('T')[0],
+      date: bookingDate,
       startTime: entryData.startTime,
       endTime: entryData.endTime,
       durationMinutes,
@@ -2882,7 +2918,7 @@ export class StorageService {
     return entry;
   }
 
-  public updateTimeEntry(entryId: string, updates: Partial<TimeEntry>, actorId: string, reason?: string): TimeEntry | null {
+  public updateTimeEntry(entryId: string, updates: Partial<TimeEntry>, actorId: string, reason?: string, clientTimeZone?: string): TimeEntry | null {
     const idx = this.timeEntries.findIndex(e => e.id === entryId);
     if (idx === -1) return null;
 
@@ -2902,7 +2938,12 @@ export class StorageService {
 
     let durationMinutes = updates.durationMinutes ?? oldEntry.durationMinutes;
     if (updates.startTime && updates.endTime) {
-      durationMinutes = this.calculateMinutes(updates.startTime, updates.endTime);
+      // Netto-Dauer wie beim Anlegen: (Ende − Start) − Pause
+      const brk = updates.breakMinutes ?? oldEntry.breakMinutes ?? 0;
+      durationMinutes = Math.max(1, this.calculateMinutes(updates.startTime, updates.endTime) - brk);
+    }
+    if (updates.date && updates.date !== oldEntry.date) {
+      this.assertBookingDateAllowed(updates.date, 'REGULAR', this.timeZoneFor(oldEntry.userId, actorId, clientTimeZone));
     }
     const durationHoursDecimal = Math.round((durationMinutes / 60) * 100) / 100;
 
@@ -3070,8 +3111,9 @@ export class StorageService {
     return list;
   }
 
-  public createOrUpdateWorkingTime(entryData: Partial<WorkingTimeEntry>, actorId: string): WorkingTimeEntry {
-    const entryDate = entryData.date || new Date().toISOString().split('T')[0];
+  public createOrUpdateWorkingTime(entryData: Partial<WorkingTimeEntry>, actorId: string, clientTimeZone?: string): WorkingTimeEntry {
+    const tz = this.timeZoneFor(entryData.userId || actorId, actorId, clientTimeZone);
+    const entryDate = entryData.date || localISODate(new Date(), tz);
     const periodCheck = this.isPeriodLocked(entryDate);
     if (periodCheck.isLocked) {
       throw new Error(`GoBD-Revisionsschutz: Die Arbeitszeit im Monat ${entryDate.slice(0, 7)} kann nicht geändert werden, da dieser Monat revisionssicher abgeschlossen und gesperrt ist.`);
@@ -3080,6 +3122,11 @@ export class StorageService {
     const user = this.users.find(u => u.id === (entryData.userId || actorId));
     const dayType: DayType = entryData.dayType || 'REGULAR';
     const halfDay = entryData.halfDay === true;
+    // Zukunftsgrenze nur für neue Einträge oder geänderte Datumswerte prüfen (Bestandsdaten bleiben editierbar)
+    const prevForLimit = entryData.id ? this.workingTimeEntries.find(w => w.id === entryData.id) : undefined;
+    if (!prevForLimit || prevForLimit.date !== entryDate || (prevForLimit.dayType || 'REGULAR') !== dayType) {
+      this.assertBookingDateAllowed(entryDate, dayType, tz);
+    }
 
     // Bei Ganztags-Abwesenheiten (Urlaub, Krankheit, Sonderurlaub, Elternzeit) werden keine
     // Arbeitszeiten erfasst. Nur bei regulärer Arbeitszeit oder halbtägiger Abwesenheit
@@ -3106,6 +3153,10 @@ export class StorageService {
 
     if (existingIdx !== -1) {
       const previous = this.workingTimeEntries[existingIdx];
+      // Auch das ursprüngliche Datum darf nicht in einem gesperrten Monat liegen (wie bei Projektzeiten)
+      if (previous.date !== entryDate && this.isPeriodLocked(previous.date).isLocked) {
+        throw new Error(`GoBD-Revisionsschutz: Der Eintrag liegt im abgeschlossenen und gesperrten Monat ${previous.date.slice(0, 7)}. Änderungen sind gesetzlich unzulässig.`);
+      }
       this.workingTimeEntries[existingIdx] = {
         ...previous,
         ...entryData,
@@ -3117,6 +3168,7 @@ export class StorageService {
         totalGrossMinutes: grossMinutes,
         totalNetMinutes: netMinutes,
         totalNetHoursDecimal: netHours,
+        partialAbsence: dayType !== 'REGULAR' && halfDay && entryData.partialAbsence === true ? true : undefined,
         updatedAt: new Date().toISOString()
       };
       // GoBD-Nachvollziehbarkeit: Korrektur eines bestehenden Tageseintrags protokollieren
@@ -3135,11 +3187,11 @@ export class StorageService {
       return this.workingTimeEntries[existingIdx];
     } else {
       const entry: WorkingTimeEntry = {
-        id: 'wte-' + (Date.now() + Math.floor(Math.random() * 1000)),
+        id: `wte-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
         orgId: this.organization.id,
         userId: user?.id || actorId,
         userName: user?.name,
-        date: entryData.date || new Date().toISOString().split('T')[0],
+        date: entryDate,
         dayType,
         halfDay,
         startTime: isFullDayAbsence ? '' : (entryData.startTime || '09:00'),
@@ -3148,6 +3200,7 @@ export class StorageService {
         totalGrossMinutes: grossMinutes,
         totalNetMinutes: netMinutes,
         totalNetHoursDecimal: netHours,
+        partialAbsence: dayType !== 'REGULAR' && halfDay && entryData.partialAbsence === true ? true : undefined,
         note: entryData.note,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString()
@@ -3194,10 +3247,10 @@ export class StorageService {
   }
 
   // --- Working Time Summary & Sanity Check (Section 20) ---
-  public getWorkingTimeSummary(userId: string, month: string) {
+  public getWorkingTimeSummary(userId: string, month: string, range?: { from: string; to: string }) {
     const user = this.users.find(u => u.id === userId);
-    const from = `${month}-01`;
-    const to = `${month}-31`;
+    const from = range ? range.from : `${month}-01`;
+    const to = range ? range.to : `${month}-31`;
 
     const workingEntries = this.workingTimeEntries.filter(w => w.userId === userId && w.date >= from && w.date <= to);
     const projectEntries = this.timeEntries.filter(t => t.userId === userId && t.date >= from && t.date <= to);
@@ -3209,8 +3262,8 @@ export class StorageService {
     const year = parseInt(yearStr, 10);
     const m = parseInt(monthStr, 10) - 1;
     const daysInMonth = new Date(year, m + 1, 0).getDate();
-    const startDate = `${month}-01`;
-    const endDate = `${month}-${String(daysInMonth).padStart(2, '0')}`;
+    const startDate = range ? range.from : `${month}-01`;
+    const endDate = range ? range.to : `${month}-${String(daysInMonth).padStart(2, '0')}`;
     const userWorkDays = user?.workDays || [1, 2, 3, 4, 5];
     const stateCode = this.organization.stateLocation || 'DE-BE';
     const dailyTargetHours = user?.dailyTargetHours || 8.0;
@@ -3226,10 +3279,21 @@ export class StorageService {
     let creditedHours = 0;       // Angerechnete Stunden aus Urlaub/Krankheit/Sonderurlaub
     let creditedDays = 0;        // Anzahl angerechneter Abwesenheitstage (Halbtag zählt 0,5)
     let parentalLeaveDays = 0;   // Anzahl Elternzeit-Tage auf regulären Arbeitstagen (neutralisiert)
+    let partialParentalHours = 0; // Teilzeitige Elternzeit (Stunden) reduziert die Sollzeit
 
     workingEntries.forEach(w => {
       const dt: DayType = w.dayType || 'REGULAR';
       const isHalf = w.halfDay === true;
+      if (dt !== 'REGULAR' && w.partialAbsence) {
+        // Teilzeitige Abwesenheit: Start/Ende beschreiben die Abwesenheit selbst
+        if (dt === 'PARENTAL_LEAVE') {
+          partialParentalHours += w.totalNetHoursDecimal;
+        } else {
+          creditedHours += w.totalNetHoursDecimal;
+          creditedDays += dailyTargetHours > 0 ? w.totalNetHoursDecimal / dailyTargetHours : 0;
+        }
+        return;
+      }
       if (dt === 'REGULAR') {
         actualWorkedHours += w.totalNetHoursDecimal;
       } else if (dt === 'PARENTAL_LEAVE') {
@@ -3247,7 +3311,8 @@ export class StorageService {
           creditedHours += 0.5 * dailyTargetHours;
           creditedDays += 0.5;
           actualWorkedHours += w.totalNetHoursDecimal; // gearbeitete Hälfte zählt zusätzlich
-        } else {
+        } else if (workdayDatesSet.has(w.date)) {
+          // Ganztägige Abwesenheit wird nur an Soll-Arbeitstagen angerechnet (nicht an Wochenenden/Feiertagen)
           creditedHours += dailyTargetHours;
           creditedDays += 1;
         }
@@ -3256,14 +3321,25 @@ export class StorageService {
 
     // Elternzeit reduziert die effektive Sollzeit (halbtägige Elternzeit = halber Tag Soll).
     const parentalHalfDays = workingEntries.filter(
-      w => (w.dayType === 'PARENTAL_LEAVE') && w.halfDay === true && workdayDatesSet.has(w.date)
+      w => (w.dayType === 'PARENTAL_LEAVE') && w.halfDay === true && !w.partialAbsence && workdayDatesSet.has(w.date)
     ).length;
     const parentalReductionDays = parentalLeaveDays - (parentalHalfDays * 0.5);
     const effectiveTargetDays = Math.max(0, targetWorkDays - parentalReductionDays);
 
-    const targetHoursTotal = Math.round(effectiveTargetDays * dailyTargetHours * 100) / 100;
+    const targetHoursTotal = Math.round(Math.max(0, effectiveTargetDays * dailyTargetHours - partialParentalHours) * 100) / 100;
     const actualWorkingHours = actualWorkedHours + creditedHours;
     const balanceHours = Math.round((actualWorkingHours - targetHoursTotal) * 100) / 100;
+
+    // Gesamt-Ist für die einheitliche Zeiterfassung: Projektzeiten + Arbeitszeit ohne Projekt + angerechnete Abwesenheiten.
+    // Altdaten (vor der Zusammenführung) enthalten oft eine reguläre Tagesarbeitszeit als "Rahmen" (z. B. 09–17 Uhr),
+    // innerhalb derer zusätzlich Projektzeiten gebucht wurden. Damit diese Stunden nicht doppelt zählen, wird die
+    // zeitliche Überschneidung zwischen regulärer Arbeitszeit und Projektzeiten je Tag abgezogen.
+    const overlapMinutes = StorageService.computeWorkProjectOverlapMinutes(
+      workingEntries.filter(w => (w.dayType || 'REGULAR') === 'REGULAR'),
+      projectEntries
+    );
+    const totalActualHours = Math.round((actualProjectHours + actualWorkingHours - overlapMinutes / 60) * 100) / 100;
+    const totalBalanceHours = Math.round((totalActualHours - targetHoursTotal) * 100) / 100;
 
     // Daily Sanity Check: Warn if project time > working time
     const daysMap = new Map<string, { workH: number; projectH: number }>();
@@ -3294,6 +3370,8 @@ export class StorageService {
       userId,
       userName: user?.name,
       month,
+      from: startDate,
+      to: endDate,
       stateLocation: stateCode,
       holidaysInMonth: workdaysData.holidaysInRange,
       targetWorkDays,
@@ -3307,6 +3385,9 @@ export class StorageService {
       actualProjectHours: Math.round(actualProjectHours * 100) / 100,
       balanceHours,
       isOvertime: balanceHours > 0,
+      dailyTargetHours,
+      totalActualHours,
+      totalBalanceHours,
       sanityDiscrepancies
     };
   }
@@ -3453,7 +3534,7 @@ export class StorageService {
 
     // Calculate passed workdays in month for extrapolation taking into account state holidays
     const today = new Date();
-    const todayStr = today.toISOString().substring(0, 10);
+    const todayStr = localISODate(today);
     const isCurrentMonth = today.getFullYear() === year && today.getMonth() === m;
 
     const workdaysInfo = getWorkingDaysInRange(startDate, endDate, stateCode);
@@ -3620,7 +3701,7 @@ export class StorageService {
     const totalWorkdaysInPeriod = periodWorkdaysInfo.totalWorkdays;
 
     const today = new Date();
-    const todayStr = today.toISOString().substring(0, 10);
+    const todayStr = localISODate(today);
     const isPastPeriod = endDate < todayStr;
     const isFuturePeriod = startDate > todayStr;
     const passedWorkdaysInPeriod = isPastPeriod
@@ -4111,7 +4192,7 @@ export class StorageService {
     }
 
     const today = new Date();
-    const todayStr = today.toISOString().substring(0, 10);
+    const todayStr = localISODate(today);
     const isPastPeriod = endDate < todayStr;
     const isFuturePeriod = startDate > todayStr;
 
@@ -4966,6 +5047,90 @@ export class StorageService {
   }
 
   // --- Helpers ---
+  /**
+   * Summe der zeitlichen Überschneidung (Minuten) zwischen regulären Arbeitszeit-Einträgen und Projektzeiten
+   * desselben Tages. Einträge ohne Start/Ende werden ignoriert (keine Überschneidung bestimmbar).
+   * Über Mitternacht laufende Intervalle werden bis 24:00 des Buchungstages verlängert.
+   */
+  public static computeWorkProjectOverlapMinutes(
+    work: Array<{ date: string; startTime?: string; endTime?: string; breakMinutes?: number; totalNetMinutes?: number }>,
+    project: Array<{ date: string; startTime?: string; endTime?: string; durationMinutes?: number }>
+  ): number {
+    const toMin = (s?: string) => {
+      if (!s || !/^\d{1,2}:\d{2}$/.test(s)) return null;
+      const [h, m] = s.split(':').map(Number);
+      return h * 60 + m;
+    };
+    const interval = (s?: string, e?: string): [number, number] | null => {
+      const a = toMin(s), b = toMin(e);
+      if (a === null || b === null || a === b) return null;
+      return [a, b > a ? b : b + 1440];
+    };
+    const merge = (list: Array<[number, number]>) => {
+      const sorted = [...list].sort((x, y) => x[0] - y[0]);
+      const out: Array<[number, number]> = [];
+      for (const iv of sorted) {
+        const last = out[out.length - 1];
+        if (last && iv[0] <= last[1]) last[1] = Math.max(last[1], iv[1]);
+        else out.push([iv[0], iv[1]]);
+      }
+      return out;
+    };
+    const byDate = new Map<string, { w: Array<[number, number]>; p: Array<[number, number]>; wNet: number; pDur: number }>();
+    const slot = (d: string) => {
+      if (!byDate.has(d)) byDate.set(d, { w: [], p: [], wNet: 0, pDur: 0 });
+      return byDate.get(d)!;
+    };
+    work.forEach(w => {
+      const iv = interval(w.startTime, w.endTime);
+      if (!iv) return;
+      const s = slot(w.date);
+      s.w.push(iv);
+      s.wNet += w.totalNetMinutes ?? Math.max(0, iv[1] - iv[0] - (w.breakMinutes || 0));
+    });
+    project.forEach(p => {
+      const iv = interval(p.startTime, p.endTime);
+      if (!iv) return;
+      const s = slot(p.date);
+      s.p.push(iv);
+      s.pDur += p.durationMinutes ?? (iv[1] - iv[0]);
+    });
+    let total = 0;
+    byDate.forEach(s => {
+      if (!s.w.length || !s.p.length) return;
+      const wm = merge(s.w), pm = merge(s.p);
+      let ov = 0;
+      for (const a of wm) for (const b of pm) ov += Math.max(0, Math.min(a[1], b[1]) - Math.max(a[0], b[0]));
+      // Nie mehr abziehen als die tatsächlich gezählten Minuten (Pausen innerhalb des Rahmens)
+      total += Math.min(ov, s.wNet, s.pDur);
+    });
+    return total;
+  }
+
+  /**
+   * Zukunftsgrenze für Buchungen (identisch mit der Eingabemaske):
+   * Urlaub und Elternzeit dürfen beliebig weit im Voraus geplant werden,
+   * alle anderen Einträge höchstens bis zum Ende des Folgemonats.
+   */
+  public assertBookingDateAllowed(date: string, dayType: DayType = 'REGULAR', tz: string = DEFAULT_TIME_ZONE) {
+    if (dayType === 'VACATION' || dayType === 'PARENTAL_LEAVE') return;
+    const max = maxFutureBookingDate(localISODate(new Date(), tz));
+    if (date > max) {
+      throw new Error(`Buchungen sind höchstens bis ${max} im Voraus möglich (Ausnahme: Urlaub und Elternzeit).`);
+    }
+  }
+
+  /**
+   * Zeitzone, in der "heute" und die Zukunftsgrenze für einen Mitarbeiter bestimmt werden:
+   * Profil-Zeitzone → zuletzt erkannte Gerätezeitzone → Gerätezeitzone der aktuellen Anfrage
+   * (nur wenn der Mitarbeiter selbst bucht) → deutsche Zeit.
+   */
+  public timeZoneFor(userId: string | undefined, actorId?: string, clientTimeZone?: string): string {
+    const user = userId ? this.users.find(u => u.id === userId) : undefined;
+    const requestTz = userId && userId === actorId && isValidTimeZone(clientTimeZone) ? clientTimeZone : DEFAULT_TIME_ZONE;
+    return userTimeZone(user, requestTz);
+  }
+
   private calculateMinutes(start: string, end: string): number {
     try {
       const [sh, sm] = start.split(':').map(Number);
@@ -4979,7 +5144,7 @@ export class StorageService {
   }
 
   private logAudit(entry: Omit<AuditLogEntry, 'id' | 'orgId' | 'timestamp'>) {
-    const id = 'aud-' + (Date.now() + Math.floor(Math.random() * 1000));
+    const id = `aud-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
     const timestamp = new Date().toISOString();
     const orgId = this.organization.id;
 
