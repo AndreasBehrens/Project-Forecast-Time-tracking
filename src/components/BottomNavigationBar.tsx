@@ -131,7 +131,7 @@ export const BottomNavigationBar: React.FC<BottomNavigationBarProps> = ({
     },
     {
       id: 'ratesTeam',
-      label: t.navRatesTeam || 'Mitarbeiter & Stundensätze',
+      label: t.navRatesTeam || 'Mitarbeiter & Rolle',
       icon: Layers,
       badge: null,
       visible: isAdmin
