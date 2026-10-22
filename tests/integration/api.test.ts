@@ -184,6 +184,18 @@ describe('Health & Basis-Endpunkte', () => {
     expect(Array.isArray(res.body)).toBe(true);
   });
 
+  it('creates an internal client for each new organization', async () => {
+    const createdOrg = await authenticated('post', '/api/organizations')
+      .send({ name: 'Reset Flow Test Organization', code: `RFT-${Date.now()}` });
+    expect(createdOrg.status).toBe(201);
+
+    const clientsResponse = await authenticated('get', '/api/clients?allOrgs=true');
+    const internalClient = clientsResponse.body.find((client: { orgId: string; name: string }) =>
+      client.orgId === createdOrg.body.id && client.name === `${createdOrg.body.name} (Intern)`
+    );
+    expect(internalClient).toBeTruthy();
+  });
+
   it('interne API-Routen verlangen ein gültiges Bearer-Token', async () => {
     const res = await request(app).get('/api/users');
     expect(res.status).toBe(401);
