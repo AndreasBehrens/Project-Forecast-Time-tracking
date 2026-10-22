@@ -15,6 +15,7 @@ import {
   ArrowRight,
   Server,
   KeyRound,
+  X,
   Search,
   ExternalLink,
   Info
@@ -476,8 +477,17 @@ export const LoginView: React.FC = () => {
       {/* Forgot Password Modal */}
       {showForgotModal && (
         <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl">
-            <div className="flex items-center gap-3">
+          <div className="relative bg-slate-900 border border-slate-800 rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl">
+            <button
+              type="button"
+              onClick={() => setShowForgotModal(false)}
+              aria-label="Schließen"
+              title="Schließen"
+              className="absolute top-4 right-4 p-1.5 text-slate-400 hover:text-white rounded-md hover:bg-slate-800"
+            >
+              <X className="w-4 h-4" />
+            </button>
+            <div className="flex items-center gap-3 pr-8">
               <div className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 flex items-center justify-center">
                 <Info className="w-5 h-5" />
               </div>
