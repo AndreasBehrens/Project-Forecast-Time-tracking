@@ -30,6 +30,7 @@ jobs:
           script: |
             set -eu
             cd /opt/timetracking
+            git checkout .
             git pull --ff-only
             npm install
             npm run build

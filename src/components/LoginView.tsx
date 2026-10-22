@@ -3,7 +3,6 @@ import { useApp } from '../context/AppContext';
 import {
   Lock,
   Mail,
-  Building2,
   ShieldCheck,
   CheckCircle2,
   AlertCircle,
@@ -16,28 +15,33 @@ import {
   ArrowRight,
   Server,
   KeyRound,
+  X,
   Search,
   ExternalLink,
   Info
 } from 'lucide-react';
-import { User, Organization } from '../types';
+import { User } from '../types';
 
 export const LoginView: React.FC = () => {
-  const { login, users, organizations, jobRoles, organization } = useApp();
+  const { login, requestPasswordReset, completePasswordReset, users, jobRoles } = useApp();
 
   // Schnellanmeldung (Quick-Login) nur im Admin-Modus (?mode=admin) sichtbar
   const showAdminMode = false;
   const [activeTab, setActiveTab] = useState<'quick' | 'manual'>('manual');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [selectedOrgId, setSelectedOrgId] = useState<string>(organizations[0]?.id || 'org-insight-arcs-01');
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [roleFilter, setRoleFilter] = useState<'ALL' | 'ADMIN' | 'PM' | 'INTERNAL' | 'EXTERNAL'>('ALL');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [showForgotModal, setShowForgotModal] = useState(false);
+  const [emailError, setEmailError] = useState<string | null>(null);
+  const [resetToken, setResetToken] = useState(() => new URLSearchParams(window.location.hash.slice(1)).get('reset-password') || '');
+  const [resetPassword, setResetPassword] = useState('');
+  const [resetPasswordConfirm, setResetPasswordConfirm] = useState('');
+  const [resetFeedback, setResetFeedback] = useState<string | null>(null);
+  const [showForgotModal, setShowForgotModal] = useState(() => Boolean(new URLSearchParams(window.location.hash.slice(1)).get('reset-password')));
 
   // Filter users for the Quick-Login tab
   const filteredUsers = users.filter(u => {
@@ -66,8 +70,7 @@ export const LoginView: React.FC = () => {
     setIsSubmitting(true);
     const res = await login({
       email: email.trim(),
-      password,
-      orgId: selectedOrgId
+      password
     });
     setIsSubmitting(false);
 
@@ -80,12 +83,50 @@ export const LoginView: React.FC = () => {
     setErrorMessage(null);
     setIsSubmitting(true);
     const res = await login({
-      userId: user.id,
-      orgId: user.orgId || selectedOrgId
+      userId: user.id
     });
     setIsSubmitting(false);
     if (!res.success) {
       setErrorMessage(res.error || 'Schnellanmeldung fehlgeschlagen.');
+    }
+  };
+
+  const handleForgotPassword = async () => {
+    setEmailError(null);
+    setResetFeedback(null);
+    if (!email.trim()) {
+      setEmailError('Bitte geben Sie zuerst Ihre E-Mail-Adresse ein.');
+      document.getElementById('input-login-email')?.focus();
+      return;
+    }
+
+    setIsSubmitting(true);
+    const result = await requestPasswordReset(email.trim());
+    setIsSubmitting(false);
+    setResetFeedback(result.success ? result.message || 'Falls ein Konto mit dieser E-Mail existiert, wurde ein Link versandt.' : result.error || 'Anfrage fehlgeschlagen.');
+    setShowForgotModal(true);
+  };
+
+  const handleCompletePasswordReset = async (event: React.FormEvent) => {
+    event.preventDefault();
+    setResetFeedback(null);
+    if (resetPassword.length < 12) {
+      setResetFeedback('Das neue Passwort muss mindestens 12 Zeichen lang sein.');
+      return;
+    }
+    if (resetPassword !== resetPasswordConfirm) {
+      setResetFeedback('Die Passwörter stimmen nicht überein.');
+      return;
+    }
+
+    setIsSubmitting(true);
+    const result = await completePasswordReset(resetToken, resetPassword);
+    setIsSubmitting(false);
+    setResetFeedback(result.success ? result.message || 'Passwort aktualisiert.' : result.error || 'Passwort-Reset fehlgeschlagen.');
+    if (result.success) {
+      setResetToken('');
+      setPassword('');
+      window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}`);
     }
   };
 
@@ -341,7 +382,10 @@ export const LoginView: React.FC = () => {
                     type="email"
                     required
                     value={email}
-                    onChange={e => setEmail(e.target.value)}
+                    onChange={e => {
+                      setEmail(e.target.value);
+                      setEmailError(null);
+                    }}
                     placeholder="z. B. andreas.behrens@insightarcs.de"
                     className="w-full pl-10 pr-4 py-2.5 bg-slate-950/90 border border-slate-800 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
                   />
@@ -349,6 +393,7 @@ export const LoginView: React.FC = () => {
                 <p className="text-[10px] text-slate-500 mt-1">
                   Tipp: Geben Sie eine E-Mail eines Mitarbeiters ein oder nutzen Sie den Schnellanmelde-Tab.
                 </p>
+                {emailError && <p className="text-[10px] text-red-300 mt-1" role="alert">{emailError}</p>}
               </div>
 
               <div>
@@ -358,7 +403,8 @@ export const LoginView: React.FC = () => {
                   </label>
                   <button
                     type="button"
-                    onClick={() => setShowForgotModal(true)}
+                    onClick={handleForgotPassword}
+                    disabled={isSubmitting}
                     className="text-[11px] text-emerald-400 hover:underline"
                   >
                     Passwort vergessen?
@@ -381,28 +427,6 @@ export const LoginView: React.FC = () => {
                   >
                     {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
-                </div>
-              </div>
-
-              {/* Organization / Mandant Selection */}
-              <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-1.5">
-                  Mandant / Unternehmen (Optional)
-                </label>
-                <div className="relative">
-                  <Building2 className="w-4 h-4 text-slate-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
-                  <select
-                    id="select-login-org"
-                    value={selectedOrgId}
-                    onChange={e => setSelectedOrgId(e.target.value)}
-                    className="w-full pl-10 pr-8 py-2.5 bg-slate-950/90 border border-slate-800 rounded-xl text-xs text-white focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 appearance-none"
-                  >
-                    {organizations.map(o => (
-                      <option key={o.id} value={o.id} className="bg-slate-900 text-white">
-                        {o.name} ({o.code})
-                      </option>
-                    ))}
-                  </select>
                 </div>
               </div>
 
@@ -453,30 +477,69 @@ export const LoginView: React.FC = () => {
       {/* Forgot Password Modal */}
       {showForgotModal && (
         <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl">
-            <div className="flex items-center gap-3">
+          <div className="relative bg-slate-900 border border-slate-800 rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl">
+            <button
+              type="button"
+              onClick={() => setShowForgotModal(false)}
+              aria-label="Schließen"
+              title="Schließen"
+              className="absolute top-4 right-4 p-1.5 text-slate-400 hover:text-white rounded-md hover:bg-slate-800"
+            >
+              <X className="w-4 h-4" />
+            </button>
+            <div className="flex items-center gap-3 pr-8">
               <div className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 flex items-center justify-center">
                 <Info className="w-5 h-5" />
               </div>
               <div>
-                <h3 className="font-bold text-sm text-white">Passwort zurücksetzen</h3>
+                <h3 className="font-bold text-sm text-white">{resetToken ? 'Neues Passwort festlegen' : 'Passwort zurücksetzen'}</h3>
                 <p className="text-xs text-slate-400">Unternehmenszugang</p>
               </div>
             </div>
 
-            <p className="text-xs text-slate-300 leading-relaxed">
-              Wenden Sie sich an Ihren Administrator, um Ihr Passwort zurückzusetzen.
-            </p>
-
-            <div className="flex justify-end pt-2">
-              <button
-                type="button"
-                onClick={() => setShowForgotModal(false)}
-                className="bg-emerald-500 text-slate-950 font-bold px-4 py-2 rounded-xl text-xs hover:bg-emerald-400"
-              >
-                Verstanden
-              </button>
-            </div>
+            {resetToken ? (
+              <form onSubmit={handleCompletePasswordReset} className="space-y-3">
+                <input
+                  type="password"
+                  autoComplete="new-password"
+                  value={resetPassword}
+                  onChange={event => setResetPassword(event.target.value)}
+                  placeholder="Neues Passwort (mindestens 12 Zeichen)"
+                  className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-lg text-xs text-white"
+                  required
+                />
+                <input
+                  type="password"
+                  autoComplete="new-password"
+                  value={resetPasswordConfirm}
+                  onChange={event => setResetPasswordConfirm(event.target.value)}
+                  placeholder="Neues Passwort wiederholen"
+                  className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-lg text-xs text-white"
+                  required
+                />
+                {resetFeedback && <p className="text-xs text-slate-300" role="status">{resetFeedback}</p>}
+                <div className="flex justify-end">
+                  <button type="submit" disabled={isSubmitting} className="bg-emerald-500 text-slate-950 font-bold px-4 py-2 rounded-xl text-xs disabled:opacity-50">
+                    Passwort speichern
+                  </button>
+                </div>
+              </form>
+            ) : (
+              <>
+                <p className="text-xs text-slate-300 leading-relaxed" role="status">
+                  {resetFeedback || 'Falls ein Konto mit dieser E-Mail existiert, erhalten Sie einen Link zum Zurücksetzen.'}
+                </p>
+                <div className="flex justify-end pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowForgotModal(false)}
+                    className="bg-emerald-500 text-slate-950 font-bold px-4 py-2 rounded-xl text-xs hover:bg-emerald-400"
+                  >
+                    Verstanden
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}

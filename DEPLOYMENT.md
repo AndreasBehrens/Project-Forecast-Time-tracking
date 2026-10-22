@@ -258,9 +258,16 @@ ALLOWED_ORIGINS=https://timetracking.insightarcs.com
 APP_URL=https://timetracking.insightarcs.com
 JWT_SECRET=<hier den generierten Wert eintragen>
 GEMINI_API_KEY=          # Optional: für KI-Features
+SMTP_HOST=<SMTP-Server des Mailproviders>
+SMTP_PORT=587
+SMTP_USER=<SMTP-Benutzer>
+SMTP_PASSWORD=<SMTP-Passwort oder App-Passwort>
+SMTP_FROM=<Absenderadresse>
 ```
 
 `JWT_SECRET` ist für den Serverstart erforderlich (mindestens 32 Bytes) und muss bei Neustarts sowie auf allen App-Instanzen unverändert identisch bleiben. Die Datei enthält Zugangsdaten und muss mit `chmod 600 /opt/timetracking/.env` geschützt sein. Secret-Verlust oder -Änderung macht alle bereits ausgestellten Login-Tokens ungültig; Nutzer müssen sich dann erneut anmelden. Beim ersten Aktivieren der JWT-Middleware werden bestehende Tokens aus dem bisherigen fest eingebauten Fallback ebenfalls ungültig.
+
+Für den Passwort-Reset müssen `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD` und `SMTP_FROM` mit den SMTP-Zugangsdaten des Mailproviders gesetzt sein. Ohne diese Werte antwortet die Reset-Anfrage mit einem Dienstfehler und versendet keine E-Mail. Reset-Tokens sind einmalig verwendbar, liegen nur im Arbeitsspeicher und laufen nach 30 Minuten ab; bei einem Serverneustart werden noch offene Tokens ungültig.
 
 Nach dem Eintragen die App neu starten und den Dienststatus prüfen:
 

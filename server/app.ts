@@ -3,6 +3,7 @@ import cors from 'cors';
 import path from 'path';
 import bcrypt from 'bcrypt';
 import { expressjwt } from 'express-jwt';
+import {EmailClient} from '@azure/communication-email';
 import { createServer as createViteServer } from 'vite';
 import { storage, localISODate } from './storage.js';
 import { isValidTimeZone } from '../src/utils/timeZone.js';
@@ -20,6 +21,7 @@ import { asyncHandler } from './http/asyncHandler.js';
 import { validateBody } from './http/validate.js';
 import { BadRequestError, ForbiddenError, NotFoundError } from './http/errors.js';
 import { createSessionContext } from './http/session.js';
+import { consumePasswordResetToken, createPasswordResetToken, clearPasswordResetToken } from './passwordResetTokens.js';
 import multer from 'multer';
 import pdfParse from 'pdf-parse/lib/pdf-parse.js';
 import { parseClockifyPdfText, mapDayType } from './clockifyPdfParser.js';
@@ -116,7 +118,9 @@ export async function createApp(options: CreateAppOptions = {}): Promise<express
   });
   const publicApiPaths = new Set([
     '/api/health',
-    '/api/auth/login'
+    '/api/auth/login',
+    '/api/auth/password-reset/request',
+    '/api/auth/password-reset/complete'
   ]);
   app.use('/api', (req, res, next) => {
     const requestPath = req.originalUrl.split('?')[0];
@@ -238,7 +242,7 @@ export async function createApp(options: CreateAppOptions = {}): Promise<express
   });
 
   app.post('/api/auth/login', (req, res) => {
-    const { email, userId, orgId } = req.body;
+    const { email, userId } = req.body;
     const lookupMethod = userId ? 'userId' : email ? 'email' : 'missing';
     const allUsers = storage.getUsers(true);
     let user = null;
@@ -317,20 +321,27 @@ export async function createApp(options: CreateAppOptions = {}): Promise<express
       });
     }
 
-    // Switch org if specified, or pick user's active org
-    if (orgId) {
-      storage.setActiveOrgId(orgId);
-    } else {
-      const userMemberships = user.memberships || [];
-      const hasCurrentOrg = user.orgId === storage.getActiveOrgId() || userMemberships.some(m => m.orgId === storage.getActiveOrgId());
-      if (!hasCurrentOrg && userMemberships.length > 0) {
-        storage.setActiveOrgId(userMemberships[0].orgId);
-      } else if (!hasCurrentOrg && user.orgId) {
-        storage.setActiveOrgId(user.orgId);
-      }
+    const firstMembership = user.memberships?.[0];
+    if (!firstMembership?.orgId) {
+      console.warn('[AUTH_TRACE] login rejected: account has no organization membership', { userId: user.id });
+      return res.status(403).json({
+        success: false,
+        error: 'Für dieses Konto ist keine Unternehmenszugehörigkeit eingerichtet.'
+      });
     }
 
-    const org = storage.getOrganization();
+    const org = storage.setActiveOrgId(firstMembership.orgId);
+    if (!org) {
+      console.warn('[AUTH_TRACE] login rejected: first membership organization not found', {
+        userId: user.id,
+        organizationId: firstMembership.orgId
+      });
+      return res.status(403).json({
+        success: false,
+        error: 'Die erste Unternehmenszugehörigkeit dieses Kontos ist ungültig.'
+      });
+    }
+
     const tokenData = generateJwtToken(user, org.id, org.name);
     console.info('[AUTH_TRACE] login succeeded', {
       userId: user.id,
@@ -345,6 +356,73 @@ export async function createApp(options: CreateAppOptions = {}): Promise<express
       token: tokenData.token,
       expiresAt: tokenData.payload.exp
     });
+  });
+
+  app.post('/api/auth/password-reset/request', asyncHandler(async (req, res) => {
+    const email = typeof req.body?.email === 'string' ? req.body.email.trim().toLowerCase() : '';
+    if (!email) {
+      return res.status(400).json({ success: false, error: 'Bitte geben Sie Ihre E-Mail-Adresse ein.' });
+    }
+
+    const connectionString = process.env['COMMUNICATION_SERVICES_CONNECTION_STRING'];
+    if (!connectionString) {
+      console.error('[AUTH_TRACE] password reset email unavailable: Azure Communication Services is not configured');
+      return res.status(503).json({ success: false, error: 'Der E-Mail-Versand ist derzeit nicht verfügbar.' });
+    }
+    const client = new EmailClient(connectionString);
+
+    const user = storage.getUsers(true).find(candidate => candidate.email.trim().toLowerCase() === email);
+    if (user) {
+      const { token } = createPasswordResetToken(user.id);
+      const appUrl = (process.env.APP_URL || 'https://timetracking.insightarcs.com').replace(/\/$/, '');
+      const resetUrl = `${appUrl}/#reset-password=${encodeURIComponent(token)}`;
+      const emailMessage = {
+        senderAddress: "DoNotReply@timetracking.insightarcs.com",
+        content: {
+          subject: 'Passwort zurücksetzen',
+          plainText: `Zum Zurücksetzen Ihres Passworts öffnen Sie innerhalb von 30 Minuten diesen Link:\n\n${resetUrl}\n\nFalls Sie die Rücksetzung nicht angefordert haben, ignorieren Sie diese E-Mail.`,
+          html: `<p>Zum Zurücksetzen Ihres Passworts öffnen Sie innerhalb von 30 Minuten diesen Link:</p><p><a href="${resetUrl}">Passwort zurücksetzen</a></p><p>Falls Sie die Rücksetzung nicht angefordert haben, ignorieren Sie diese E-Mail.</p>`,
+        },
+        recipients: {
+          to: [{ address: user.email, displayName: user.name || 'Benutzer' }],
+        },
+      };
+      try {
+        const poller = await client.beginSend(emailMessage);
+        const result = await poller.pollUntilDone();
+        console.log('[AUTH_TRACE] password reset email sent', result);
+      } catch (error) {
+        clearPasswordResetToken(user.id);
+        console.error('[AUTH_TRACE] password reset email delivery failed', {
+          userId: user.id,
+          errorName: error instanceof Error ? error.name : 'UnknownError'
+        });
+        return res.status(503).json({ success: false, error: 'Der E-Mail-Versand ist derzeit nicht verfügbar.' });
+      }
+    }
+
+    res.json({ success: true, message: 'Falls ein Konto mit dieser E-Mail existiert, wurde ein Link zum Zurücksetzen versandt.' });
+  }));
+
+  app.post('/api/auth/password-reset/complete', (req, res) => {
+    const { token, password } = req.body as { token?: string; password?: string };
+    if (typeof password !== 'string' || password.length < 12) {
+      return res.status(400).json({ success: false, error: 'Das neue Passwort muss mindestens 12 Zeichen lang sein.' });
+    }
+
+    const userId = consumePasswordResetToken(token || '');
+    if (!userId) {
+      return res.status(400).json({ success: false, error: 'Der Link ist ungültig oder abgelaufen. Fordern Sie einen neuen Link an.' });
+    }
+
+    const hash = bcrypt.hashSync(password, 12);
+    const updated = storage.updateUser(userId, { passwordHash: hash, requirePasswordChange: false }, userId);
+    if (!updated) {
+      return res.status(400).json({ success: false, error: 'Der Link ist ungültig oder abgelaufen. Fordern Sie einen neuen Link an.' });
+    }
+
+    console.info('[AUTH_TRACE] password reset completed', { userId });
+    res.json({ success: true, message: 'Passwort aktualisiert. Sie können sich jetzt anmelden.' });
   });
 
   // Passwort für einen Nutzer setzen (nur Superadmin). Der Superadmin
