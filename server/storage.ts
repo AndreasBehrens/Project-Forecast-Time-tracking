@@ -1781,6 +1781,18 @@ export class StorageService {
     };
     this.organizations.push(newOrg);
 
+    const internalClientId = `c-${newOrg.id}-internal`;
+    this.clients.push({
+      id: internalClientId,
+      orgId: newOrg.id,
+      name: `${newOrg.name} (Intern)`,
+      clientNumber: `INT-${newOrg.code}`,
+      contactPerson: 'Internal Operations',
+      email: `intern@${(newOrg.code || 'org').toLowerCase().replace(/[^a-z0-9.-]/g, '-')}.local`,
+      status: 'ACTIVE',
+      createdAt: new Date().toISOString()
+    });
+
     // Create default Job Roles for the new tenant
     this.jobRoles.push(
       { id: `role-${newOrg.id}-lead`, orgId: newOrg.id, name: 'Lead Consultant', standardBillingRate: 190, standardCostRate: 95, status: 'ACTIVE' },
@@ -2500,7 +2512,9 @@ export class StorageService {
     // For internal projects, if no client is specified, default to internal organization client
     let client = projectData.clientId ? this.clients.find(c => c.id === projectData.clientId) : undefined;
     if (!client && isInternal) {
-      client = this.clients.find(c => c.name.toLowerCase().includes('intern') || c.name.toLowerCase().includes(this.organization.name.toLowerCase()));
+      client = this.clients.find(c => c.orgId === this.activeOrgId && (
+        c.name.toLowerCase().includes('intern') || c.name.toLowerCase().includes(this.organization.name.toLowerCase())
+      ));
       if (!client) {
         // Create an internal client if none exists
         client = this.addClient({
