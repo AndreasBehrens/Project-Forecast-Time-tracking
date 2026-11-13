@@ -1,6 +1,6 @@
 # Konzept: Allgemeiner Datenimport aus unterschiedlichen Quellen
 
-Stand: 13.11.2026 · Status: Entwurf zur Abstimmung · Bereich: Menüpunkt „Import & Export“
+Stand: 13.11.2026 · Status: abgestimmt (Entscheidungen siehe 12), Phase 1 umgesetzt · Bereich: Menüpunkt „Import & Export“
 
 ---
 
@@ -65,14 +65,17 @@ export type ImportTarget = 'TIME_ENTRY' | 'WORKING_TIME' | 'ABSENCE' | 'MASTER_D
 export interface ImportRecord {
   rowNumber: number;            // Zeile/Position in der Quelldatei (für Fehlermeldungen)
   externalId?: string;          // ID im Quellsystem, falls vorhanden (stärkster Duplikatschutz)
+  target: ImportTarget;         // Projektzeit, Arbeitszeit, Abwesenheit oder Stammdaten
   userRef: string;              // Name oder E-Mail aus der Quelle
+  userEmail?: string;
+  userGroup?: string;
   clientRef?: string;
   projectRef?: string;
   taskRef?: string;
   date: string;                 // ISO YYYY-MM-DD, Pflichtfeld
   startTime?: string;           // HH:mm
   endTime?: string;             // HH:mm
-  durationMinutes?: number;     // Pflichtfeld, wenn keine Start-/Endzeit vorhanden ist
+  durationMinutes: number;      // aus Dauer-Spalte oder Start/Ende berechnet; nie ein Ersatzwert
   breakMinutes?: number;
   description?: string;
   isBillable?: boolean;
@@ -116,13 +119,79 @@ Eine `ColumnMapping` ordnet jedem kanonischen Feld eine Quellspalte zu und legt 
 | 3 | Jira / Tempo Worklogs | CSV oder API | Projektzeit | `externalId` = Worklog-ID |
 | 3 | HR-System (z. B. Personio) | CSV oder API | Abwesenheiten | Urlaub/Krankheit → `dayType` |
 
-**Zuordnungsprofile:** Für den allgemeinen CSV/Excel-Import wird eine einmal erstellte Spaltenzuordnung pro Mandant unter einem Namen gespeichert, z. B. „DATEV-Export Kunde X“. Beim nächsten Import wird das Profil automatisch erkannt, sobald die Spaltenköpfe übereinstimmen. Neue Quellen lassen sich so ganz **ohne Code** anbinden.
+**Zuordnungsprofile:** Technisch ist ein Zuordnungsprofil eine **Import-Schema-Datei** (siehe 3.4). Für den allgemeinen CSV/Excel-Import wird eine einmal erstellte Spaltenzuordnung pro Mandant unter einem Namen gespeichert, z. B. „DATEV-Export Kunde X“. Beim nächsten Import wird das Profil automatisch erkannt, sobald die Spaltenköpfe übereinstimmen. Neue Quellen lassen sich so ganz **ohne Code** anbinden.
+
+#### 3.4 Import-Schema / Musterdatei des Quellsystems
+
+Für jede Quelle – und bei Bedarf pro Mandant – wird beschrieben, **wie die Exportdatei des Quellsystems aufgebaut ist**. Diese Beschreibung ist eine **Schema-Datei im JSON-Format** (optional später auch YAML). Sie ersetzt fest einprogrammierte Spaltennamen: Eine neue Quelle wird angebunden, indem man ein Schema anlegt, nicht indem man Code ändert.
+
+**Inhalt einer Schema-Datei:**
+
+| Bereich | Inhalt |
+|---|---|
+| Kopf | `schemaVersion` (Format der Schema-Datei, aktuell `1`), `name`, `source` (Quellsystem, z. B. `clockify-csv`), `version` (Version dieses Schemas), Beschreibung |
+| Datei | Dateityp (`csv`), Trennzeichen (`,`, `;`, Tab oder `auto`), Zeichensatz, Zeile der Spaltenköpfe |
+| Ziel | `TIME_ENTRY` (Projektzeiten), `WORKING_TIME` (Arbeitszeit), `ABSENCE` (Abwesenheiten) oder `MASTER_DATA` (nur Stammdaten) |
+| Spaltenzuordnung | Quellspalte → kanonisches Feld (`userRef`, `userEmail`, `clientRef`, `projectRef`, `taskRef`, `date`, `startTime`, `endTime`, `duration`, `breakMinutes`, `description`, `isBillable`, `dayType`, Sätze, optional `externalId`). Mehrere Alternativen und `*` als Platzhalter sind erlaubt, z. B. `"Billable Rate*"` |
+| Formate | Datumsformat (`DD.MM.YYYY`, `YYYY-MM-DD`, `DD/MM/YYYY`, `MM/DD/YYYY` oder `auto`), Dauer (`HH:MM`, dezimal, Minuten), Dezimaltrennzeichen |
+| Abrechenbar | Wertelisten für „ja“ und „nein“ (z. B. `Yes`, `Ja`, `WAHR`), Standardwert |
+| Wertzuordnungen | Regeln wie „Projekt = Urlaub → Tagesart `VACATION`“ oder „Aufgabe enthält ‚intern‘ → nicht abrechenbar“ |
+| Duplikatschlüssel | `fingerprint` (Standard, siehe 6) oder `externalId` (dann ist die ID-Spalte Pflicht) |
+| Prüfregeln | z. B. maximale Dauer pro Eintrag (Warnung), Warnung bei Wochenendbuchungen |
+| Erkennung | `headerFingerprint`: Hash der Spaltenköpfe, um das passende Schema beim Hochladen automatisch zu erkennen |
+
+**Drei Wege, ein Schema zu erstellen:**
+
+1. **Musterdatei hochladen (empfohlen):** Ein Beispiel-Export des Quellsystems wird hochgeladen. Das System leitet aus Spaltenköpfen und Beispielwerten einen **Entwurf** ab: Trennzeichen, Spaltenzuordnung über Synonyme (DE/EN), Datums-, Dauer- und Dezimalformat, unbekannte Ja/Nein-Werte. Erkennt es ein eingebautes Schema (z. B. Clockify), wird das angezeigt. Die Benutzerin korrigiert den Entwurf anschließend in der Zuordnungsoberfläche.
+2. **Schema-Datei hochladen:** Eine von Hand geschriebene oder aus einer anderen Umgebung exportierte Schema-Datei wird hochgeladen und geprüft.
+3. **Vorlage herunterladen:** Eine Vorlage (auf Basis des eingebauten Schemas „Clockify CSV“) wird heruntergeladen, angepasst und wieder hochgeladen.
+
+**Versionierung, Erkennung und Prüfung:**
+
+- Jede Änderung erhöht `version`; ältere Versionen bleiben für die Nachvollziehbarkeit erhalten, der Import-Batch speichert die verwendete Schema-ID.
+- Beim Hochladen einer Datei wird über `headerFingerprint` das passende Schema vorgeschlagen.
+- Die Schema-Datei selbst wird gegen ein **JSON Schema** geprüft (herunterladbar unter `GET /api/import/schemas/template?format=jsonschema`). Fehler werden mit Pfad gemeldet, z. B. `columns.date: Pflichtfeld fehlt`. Zusätzlich gelten fachliche Regeln: Mitarbeitende und Datum sind Pflicht, außerdem Dauer oder Start + Ende; für Projektzeiten ist das Projekt Pflicht.
+
+**Beispiel (gekürzt):**
+
+```json
+{
+  "schemaVersion": 1,
+  "name": "HR-Export Abwesenheiten",
+  "source": "hr-csv",
+  "version": 1,
+  "fileType": "csv",
+  "delimiter": ";",
+  "encoding": "utf-8",
+  "headerRow": 1,
+  "target": "ABSENCE",
+  "columns": {
+    "externalId": "Antrags-ID",
+    "userEmail": "E-Mail",
+    "userRef": "Mitarbeiter",
+    "date": "Datum",
+    "duration": "Stunden",
+    "dayType": "Art"
+  },
+  "formats": { "date": "DD.MM.YYYY", "duration": "decimal", "decimalSeparator": "," },
+  "valueMappings": [
+    { "when": { "field": "dayType", "equals": "Urlaub" }, "set": { "dayType": "VACATION" } },
+    { "when": { "field": "dayType", "equals": "Krank" }, "set": { "dayType": "SICK" } }
+  ],
+  "duplicateKey": "externalId",
+  "validation": { "maxDurationHours": 10 }
+}
+```
+
+**Endpunkte (siehe auch 9):** `POST /api/import/schemas` (hochladen und prüfen, mandantenbezogen speichern), `POST /api/import/schemas/validate` (nur prüfen), `POST /api/import/schemas/derive` (Entwurf aus Musterdatei), `GET /api/import/schemas` (Liste je Mandant inkl. eingebauter Schemas), `GET /api/import/schemas/:id/download`, `GET /api/import/schemas/template`.
 
 ---
 
 ### 4. Stammdaten-Zuordnung (Mitarbeitende, Kunden, Projekte, Aufgaben)
 
-- **Mitarbeitende werden standardmäßig nie automatisch angelegt.** Jeder Name aus der Quelle wird einem vorhandenen Benutzer zugeordnet. Die Zuordnung wird zuerst über die E-Mail versucht, dann über den exakten Namen; unklare Fälle bleiben leer und müssen von Hand zugeordnet werden. Optional „überspringen“ oder (nur Superadmin) „neu anlegen“, dann mit Status `INVITED` und ohne Platzhalter-Adresse.
+- **Mitarbeitende werden nur von Superadmins angelegt** (Entscheidung, siehe 12). Jeder Name aus der Quelle wird einem vorhandenen Benutzer zugeordnet: zuerst über die E-Mail, dann über den exakten Namen.
+  - **Admins** dürfen nur zuordnen. Nicht zuordenbare Personen erscheinen im Probelauf als **Fehler** („nicht zugeordnet“) und werden nicht importiert.
+  - **Superadmins** dürfen fehlende Mitarbeitende beim Import anlegen – immer mit Status `INVITED` (eingeladen) und **ohne Platzhalter-Adresse**: Liefert die Quelle keine E-Mail, bleibt das Feld leer. Personen aus einem anderen Mandanten werden dem aktuellen Mandanten zugeordnet.
 - **Kunden, Projekte, Aufgaben:** Pro Eintrag lässt sich „vorhandenem zuordnen“, „neu anlegen“ oder „überspringen“ wählen. Ob neue Kunden und Projekte erlaubt sind, wird je Import festgelegt.
 - **Zuordnungen werden gemerkt.** Pro Mandant und Quelle wird eine Alias-Tabelle gespeichert, z. B. „A. Bilgin“ → Benutzer `u-1787309185924`. Beim nächsten Import ist die Zuordnung dann schon vorausgefüllt.
 
@@ -159,8 +228,8 @@ Der Fingerabdruck wird am Eintrag gespeichert. Ein Abgleich erfolgt auch mit **m
 - Jeder ausgeführte Import ist ein **Import-Batch**: ID, Quelle/Adapter, Dateiname, SHA-256 der Datei, Mandant, ausführende Person, Zeitpunkt sowie Anzahl importierter, übersprungener und fehlerhafter Zeilen.
 - Jeder Eintrag erhält `importBatchId` und `sourceRef` (Datei + Zeilennummer). So bleibt jederzeit nachvollziehbar, woher eine Buchung stammt.
 - **Audit-Log:** ein Eintrag „IMPORT“ pro Batch mit Zusammenfassung, eingehängt in die bestehende Hash-Kette.
-- **Freigabestatus wählbar:** importierte Projektzeiten gehen entweder als „freigegeben“ (Altdaten-Migration) oder „zur Freigabe“ in den bestehenden Freigabe-Workflow. Standard: zur Freigabe.
-- **Rückgängig machen:** Ein Batch lässt sich stornieren, solange der Zeitraum nicht gesperrt ist. Die Einträge werden dann über die normalen Lösch-/Storno-Funktionen entfernt, damit Audit-Log und Hash-Kette vollständig bleiben. Gesperrte Zeiträume werden nie verändert.
+- **Freigabestatus:** Importierte Projektzeiten erhalten immer den Status **„zur Freigabe“** (`SUBMITTED`, in der Oberfläche „Eingereicht“) und durchlaufen den bestehenden Freigabe-Workflow (Entscheidung, siehe 12).
+- **Rückgängig machen:** Ein Batch lässt sich **nur innerhalb von 5 Tagen nach dem Import** und **nur, solange kein betroffener Zeitraum gesperrt ist**, rückgängig machen (`DELETE /api/import/batches/:id`). Die Einträge werden über die normalen Löschfunktionen entfernt, damit das Audit-Log vollständig bleibt. Beim Import angelegte Stammdaten (Kunden, Projekte, Mitarbeitende) bleiben erhalten. Gesperrte Zeiträume werden nie verändert.
 - **Periodensperren** werden schon im Probelauf geprüft (siehe 5).
 
 ---
@@ -173,7 +242,7 @@ Der Menüpunkt heißt **„Import & Export“** (umgesetzt, siehe 11). Im Import
 2. **Datei hochladen**, per Drag & Drop. Die Dateitypen richten sich nach der Quelle.
 3. **Spalten zuordnen.** Bei bekannten Quellen ist alles vorausgefüllt, und der Schritt kann eingeklappt bleiben. Beim allgemeinen Import werden die kanonischen Felder links und eine Spaltenauswahl mit Beispielwerten rechts angezeigt. Dazu kommt die Option „als Profil speichern“.
 4. **Stammdaten zuordnen:** Mitarbeitende, Kunden und Projekte, vorausgefüllt aus Aliasen und der automatischen Zuordnung.
-5. **Vorschau und Prüfung:** Tabelle mit Status-Filter (OK / Warnung / Duplikat / Fehler), Summen pro Person und Monat, Optionen (Freigabestatus, Duplikate überspringen).
+5. **Vorschau und Prüfung:** Tabelle mit Status-Filter (OK / Warnung / Duplikat / Fehler), Summen pro Person und Monat, Option „Duplikate überspringen“. Der Freigabestatus ist fest „zur Freigabe“ (siehe 7).
 6. **Import ausführen und Bericht anzeigen**, mit Download des Fehlerprotokolls als CSV.
 
 Ergänzend gibt es eine **Import-Historie**: Liste aller Batches mit Details und der Schaltfläche „Rückgängig machen“. Der Export-Bereich (rechte Spalte) bleibt unverändert. Alle Texte laufen über `translations.ts` (DE/EN).
@@ -189,8 +258,15 @@ Ergänzend gibt es eine **Import-Historie**: Liste aller Batches mit Details und
 | PUT | `/api/import/preview/:previewId` | Zuordnungen ändern → neu prüfen |
 | POST | `/api/import/preview/:previewId/commit` | Import ausführen → Batch |
 | GET | `/api/import/batches` | Import-Historie |
-| POST | `/api/import/batches/:id/revert` | Batch rückgängig machen |
-| GET/POST/DELETE | `/api/import/profiles` | Zuordnungsprofile verwalten |
+| DELETE | `/api/import/batches/:id` | Batch rückgängig machen (nur ≤ 5 Tage, kein gesperrter Zeitraum; sonst 409 mit Grund) |
+| POST | `/api/import/dry-run` | Probelauf mit Status je Zeile (`NEW`/`DUPLICATE`/`ERROR`/`WARNING`), schreibt nichts. Body: `{ rows }` oder `{ csv, schema }` |
+| POST | `/api/import/execute` | Import mit beliebigem (geprüftem) Schema ausführen → Batch |
+| POST | `/api/import/schemas` | Schema-Datei hochladen, prüfen und mandantenbezogen speichern |
+| POST | `/api/import/schemas/validate` | Schema-Datei nur prüfen (JSON Schema + fachliche Regeln) |
+| POST | `/api/import/schemas/derive` | Schema-Entwurf aus Musterdatei (CSV) ableiten |
+| GET | `/api/import/schemas` | Schemas des Mandanten und eingebaute Schemas |
+| GET | `/api/import/schemas/:id/download` | Schema-Datei herunterladen |
+| GET | `/api/import/schemas/template` | Vorlage herunterladen; `?format=jsonschema` liefert das JSON Schema |
 
 - Das Parsen läuft immer **auf dem Server**, auch für CSV. So gibt es nur eine Wahrheit, und große Dateien werden nicht durch den Browser geschleust.
 - Berechtigung: Admin/Superadmin, Ziel ist der gewählte Mandant (wie heute).
@@ -205,15 +281,17 @@ server/import/
     clockifyCsv.ts
     clockifyPdf.ts        (aus server/clockifyPdfParser.ts)
     genericTabular.ts     (CSV + XLSX mit freier Zuordnung)
-  pipeline.ts             (Mapping → Validierung → Duplikate → Commit)
-  normalizers.ts          (Datum, Zeit, Dauer, Ja/Nein – aus storage.ts herausgelöst)
+  schema.ts               (Schema-Datei: Typ, Prüfung, CSV-Parser, Schema anwenden, Entwurf ableiten, eingebautes Schema „Clockify CSV“)
+  fingerprint.ts          (einheitlicher Duplikat-Fingerabdruck, Rückgängig-Regel)
+  pipeline.ts             (Mapping → Validierung → Duplikate → Commit; in Phase 1 noch in storage.ts)
+  normalizers.ts          (Datum, Zeit, Dauer, Dezimal, Ja/Nein – aus storage.ts herausgelöst)
   registry.ts             (Liste der Adapter)
 src/components/import/
   ImportWizard.tsx, SourceStep.tsx, ColumnMappingStep.tsx,
   MasterDataMappingStep.tsx, PreviewStep.tsx, ImportHistory.tsx
 ```
 
-**Datenbank:** neue Tabellen `import_batches`, `import_profiles`, `import_aliases`, im gleichen Muster wie bisher (`seq` + `data JSONB`). An `TimeEntry`/`WorkingTimeEntry` kommen die optionalen Felder `importBatchId`, `sourceRef` und `fingerprint` hinzu. Eine Migration ist nur für die neuen Tabellen nötig, bestehende Einträge bleiben unverändert.
+**Datenbank:** neue Tabellen `import_schemas`, `import_aliases` (und später ggf. `import_batches`), im gleichen Muster wie bisher (`seq` + `data JSONB`). In Phase 1 werden Import-Batches ohne Migration im JSONB-Datensatz der Organisation gespeichert (`importBatches`). An `TimeEntry`/`WorkingTimeEntry` kommen die optionalen Felder `importBatchId`, `sourceRef` und `fingerprint` hinzu. Eine Migration ist nur für die neuen Tabellen nötig, bestehende Einträge bleiben unverändert.
 
 ---
 
@@ -224,29 +302,49 @@ Aufwand als grobe Größenordnung: S = bis 1 Tag, M = 2–4 Tage, L = 1–2 Woch
 | Phase | Inhalt | Aufwand |
 |---|---|---|
 | **0 – Sofort** (erledigt) | Menüpunkt „Import & Export“, allgemeine Texte im CSV-Bereich (DE/EN) | S |
-| **1 – Fundament** | Kanonisches Format, Normalisierer, Pipeline mit Probelauf, einheitliche Duplikatlogik, **stille Ersatzwerte entfernen**; Clockify-CSV und -PDF als Adapter; alte Endpunkte umleiten; Tests | M |
-| **2 – Assistent** | Neue Oberfläche Schritte 1–6, Stammdaten-Zuordnung mit Aliasen, Freigabestatus wählbar | M–L |
-| **3 – Allgemeiner Import** | Adapter für CSV/Excel mit freier Spaltenzuordnung und Profilen | M |
-| **4 – Nachvollziehbarkeit** | Import-Batches, Historie, Rückgängig, Audit-Eintrag | M |
-| **5 – Weitere Quellen** | Toggl, Harvest, Tempo, HR-Abwesenheiten, je nach Bedarf | je S–M |
+| **1 – Fundament** (umgesetzt) | Kanonisches Format, Normalisierer, **stille Ersatzwerte entfernt**, Schema-Dateien (Prüfung, Anwenden, Entwurf aus Musterdatei, Vorlage, eingebautes Schema „Clockify CSV“), Probelauf, einheitlicher Fingerabdruck für CSV und PDF, Freigabestatus „zur Freigabe“, Anlegen von Mitarbeitenden nur durch Superadmins, **Batch und Rückgängig (5 Tage) teilweise** inkl. Import-Historie; Tests | M |
+| **2 – Assistent + Abwesenheiten** | Neue Oberfläche Schritte 1–6, Stammdaten-Zuordnung mit Aliasen, Schema-Verwaltung pro Mandant (`import_schemas`), **Abwesenheiten aus HR-Systemen** (Ziel `ABSENCE`, technisch in der Pipeline bereits vorhanden) | M–L |
+| **3 – Allgemeiner Import** | CSV/Excel (XLSX) mit freier Spaltenzuordnung, Schemas als Profile mit automatischer Erkennung | M |
+| **4 – Nachvollziehbarkeit** | Audit-Eintrag „IMPORT“ pro Batch in der Hash-Kette, SHA-256 der Datei, Fehlerprotokoll als CSV | S–M |
+| **5 – Weitere Quellen** | Toggl, Harvest, Tempo, je nach Bedarf | je S–M |
 
 Jede Phase wird gemäß Arbeitsweise auf dem Branch `test` entwickelt, nach GitHub gepusht und automatisch auf die Testumgebung deployt.
 
 ---
 
-### 11. Bereits umgesetzt (Phase 0)
+### 11. Bereits umgesetzt
+
+#### Phase 0
 
 - Menüpunkt **„Clockify-Import & Export“ → „Import & Export“** (DE und EN, Desktop-Sidebar und mobile Navigation).
 - Seitentitel „Datenimport & Export“ / „Data Import & Export“, Untertitel nicht mehr nur Clockify.
 - CSV-Bereich: „CSV-Datei importieren“, „Beispieldaten laden“, Hinweis auf erkannte deutsche und englische Spalten („kompatibel mit Clockify-Exporten“).
 - Der PDF-Import bleibt ausdrücklich als „Clockify Detailed Report“ beschriftet, weil der Parser nur dieses Format versteht.
 
+#### Phase 1 (Fundament)
+
+- **Kanonisches Format** `ImportRecord` und Typen für Probelauf und Batches in `src/types.ts`.
+- **Normalisierer** `server/import/normalizers.ts`: Datum, Uhrzeit, Dauer, Dezimalzahl, Ja/Nein. Ungültiges Datum oder ungültige Dauer ergeben einen **Zeilenfehler** statt „heute“ bzw. „60 Minuten“.
+- **Schema-Dateien** `server/import/schema.ts`: Prüfung (Zod + JSON Schema), Anwenden auf CSV-Zeilen, Entwurf aus Musterdatei, eingebautes Schema „Clockify CSV“. Endpunkte `POST /api/import/schemas/derive`, `POST /api/import/schemas/validate`, `GET /api/import/schemas/template`.
+- **Probelauf** `POST /api/import/dry-run` mit Status je Zeile; die CSV-Oberfläche hat eine Schaltfläche „Probelauf starten“ mit Zählern, neu anzulegenden Stammdaten und den Zeilen mit Hinweisen.
+- **Einheitlicher Fingerabdruck** `server/import/fingerprint.ts` für CSV und PDF (ohne Beschreibung), Abgleich auch mit manuell erfassten Einträgen.
+- **Freigabestatus „zur Freigabe“** (`SUBMITTED`) für importierte Projektzeiten (CSV und PDF).
+- **Mitarbeitende anlegen nur durch Superadmins** (Status `INVITED`, keine `@example.com`-Adresse); bei anderen Rollen Zuordnungsfehler.
+- **Import-Batches**: `importBatchId`, `fingerprint` und `sourceRef` an jedem Eintrag; Historie `GET /api/import/batches`, Rückgängig `DELETE /api/import/batches/:id` (≤ 5 Tage, kein gesperrter Zeitraum); Tabelle „Import-Historie“ mit „Rückgängig machen“.
+- Importendpunkte sind auf Admins und Superadmins beschränkt.
+
+**Noch offen aus Phase 1** (bewusst verschoben): mandantenbezogenes Speichern von Schemas (`POST /api/import/schemas`, `GET /api/import/schemas`, `GET /api/import/schemas/:id/download`) – benötigt eine neue Tabelle mit Migration und wird zusammen mit der Schema-Verwaltung in Phase 2 umgesetzt; Audit-Eintrag „IMPORT“ pro Batch und SHA-256 der Datei (Phase 4); serverseitiges Parsen auch der CSV-Datei in der bestehenden Oberfläche (die Oberfläche schickt weiterhin Zeilen, der Server prüft sie über das Clockify-Schema).
+
 ---
 
-### 12. Offene Fragen zur Entscheidung
+### 12. Entscheidungen
 
-1. **Welche Quellen** außer Clockify werden konkret gebraucht, und in welcher Reihenfolge? Davon hängt Phase 5 ab.
-2. Sollen **Mitarbeitende beim Import angelegt** werden dürfen (nur Superadmin), oder ist das immer ein separater Schritt vorab?
-3. **Standard-Freigabestatus** importierter Projektzeiten: „zur Freigabe“ (empfohlen) oder „freigegeben“ wie heute?
-4. Sollen auch **Abwesenheiten aus einem HR-System** importiert werden? Dann bekommt das Ziel „Abwesenheiten“ eine eigene Zuordnung.
-5. **Rückgängig machen:** zeitlich begrenzen (z. B. 7 Tage nach Import) oder unbegrenzt, solange der Zeitraum nicht gesperrt ist?
+Die offenen Fragen wurden am 13.11.2026 wie folgt entschieden:
+
+1. **Import-Schema / Musterdatei:** Ja. Pro Quelle und bei Bedarf pro Mandant gibt es eine Schema-Datei, die per Musterdatei abgeleitet, als Datei hochgeladen oder aus einer Vorlage erstellt wird (siehe 3.4).
+2. **Mitarbeitende beim Import anlegen:** Nur **Superadmins** dürfen Mitarbeitende importieren bzw. anlegen – mit Status `INVITED` und ohne Platzhalter-E-Mail. **Admins** dürfen Mitarbeitende nur zuordnen (siehe 4).
+3. **Freigabestatus:** Importierte Projektzeiten erhalten den Status **„zur Freigabe“** (siehe 7).
+4. **Abwesenheiten aus dem HR-System:** gehören zum Umfang und werden **in eine frühere Phase vorgezogen** (Phase 2, siehe 10).
+5. **Rückgängig machen:** nur **innerhalb von 5 Tagen** nach dem Import und nur, wenn der Zeitraum **nicht gesperrt** ist (siehe 7).
+
+Weiterhin offen: welche weiteren Quellen außer Clockify konkret gebraucht werden und in welcher Reihenfolge (Phase 5).
