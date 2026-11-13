@@ -28,6 +28,7 @@ import type {
   ForecastEntry,
   ApiKey,
   PeriodLock,
+  StoredImportSchema,
 } from '../src/types.js';
 
 export const prisma = new PrismaClient();
@@ -49,7 +50,37 @@ export interface AppStateSnapshot {
   forecasts: ForecastEntry[];
   apiKeys: ApiKey[];
   periodLocks: PeriodLock[];
+  /** Mandantenspezifische Import-Schemas (Tabelle import_schemas) */
+  importSchemas?: StoredImportSchema[];
   thresholdPercent: number;
+}
+
+/**
+ * Die Tabelle import_schemas kam nach der Erstmigration hinzu. Da das
+ * Deployment keine Prisma-Migrationen ausführt, wird sie hier idempotent
+ * angelegt. Schlägt das fehl (z. B. fehlende Rechte), bleibt die übrige
+ * Persistenz unberührt und Schemas werden nur im Speicher gehalten.
+ */
+let importSchemasTableReady: boolean | null = null;
+export async function ensureImportSchemasTable(): Promise<boolean> {
+  if (importSchemasTableReady !== null) return importSchemasTableReady;
+  try {
+    await prisma.$executeRawUnsafe(`CREATE TABLE IF NOT EXISTS "import_schemas" (
+      "seq" BIGSERIAL NOT NULL,
+      "id" TEXT NOT NULL,
+      "orgId" TEXT,
+      "data" JSONB NOT NULL,
+      "updatedAt" TIMESTAMP(3) NOT NULL,
+      CONSTRAINT "import_schemas_pkey" PRIMARY KEY ("seq")
+    )`);
+    await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "import_schemas_id_idx" ON "import_schemas"("id")`);
+    await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "import_schemas_orgId_idx" ON "import_schemas"("orgId")`);
+    importSchemasTableReady = true;
+  } catch (err) {
+    console.error('Tabelle import_schemas konnte nicht angelegt werden – Import-Schemas werden nicht dauerhaft gespeichert:', err);
+    importSchemasTableReady = false;
+  }
+  return importSchemasTableReady;
 }
 
 const APP_STATE_ACTIVE_ORG = 'activeOrgId';
@@ -61,6 +92,8 @@ const APP_STATE_THRESHOLD = 'thresholdPercent';
  * so the caller can fall back to seeding + saving the initial state.
  */
 export async function loadAll(): Promise<AppStateSnapshot | null> {
+  const schemasReady = await ensureImportSchemasTable();
+  const importSchemaRows = schemasReady ? await prisma.importSchemaRecord.findMany({ orderBy: { seq: 'asc' } }) : [];
   const [
     organizations,
     users,
@@ -122,6 +155,7 @@ export async function loadAll(): Promise<AppStateSnapshot | null> {
     forecasts: unwrap<ForecastEntry>(forecasts),
     apiKeys: unwrap<ApiKey>(apiKeys),
     periodLocks: unwrap<PeriodLock>(periodLocks),
+    importSchemas: unwrap<StoredImportSchema>(importSchemaRows),
     thresholdPercent,
   };
 }
@@ -135,8 +169,18 @@ export async function loadAll(): Promise<AppStateSnapshot | null> {
  */
 export async function saveAll(state: AppStateSnapshot): Promise<void> {
   const asData = (obj: any) => JSON.parse(JSON.stringify(obj));
+  const schemasReady = await ensureImportSchemasTable();
+  const schemaOps = schemasReady
+    ? [
+        prisma.importSchemaRecord.deleteMany({}),
+        prisma.importSchemaRecord.createMany({
+          data: (state.importSchemas || []).map((s) => ({ id: s.id, orgId: s.orgId ?? null, data: asData(s) })),
+        }),
+      ]
+    : [];
 
   await prisma.$transaction([
+    ...schemaOps,
     // Wipe existing rows.
     prisma.organization.deleteMany({}),
     prisma.user.deleteMany({}),

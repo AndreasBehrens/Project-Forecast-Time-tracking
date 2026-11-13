@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { User, EmployeeJobRole } from '../types';
 import { GERMAN_STATES, resolveUserHolidayState } from '../utils/holidays';
@@ -6,9 +6,7 @@ import {
   Users,
   Shield,
   Layers,
-  ArrowRight,
   UserPlus,
-  DollarSign,
   Briefcase,
   CheckCircle,
   HelpCircle,
@@ -43,12 +41,10 @@ export const RateHierarchyView: React.FC = () => {
     t,
     users,
     jobRoles,
-    projects,
     partners,
     organization,
     activeOrgId,
     timeEntries,
-    resolveRate,
     inviteUser,
     updateUser,
     deleteUser,
@@ -66,11 +62,6 @@ export const RateHierarchyView: React.FC = () => {
 
   // Rate Hierarchy Guidance collapsible state
   const [showHierarchyGuidance, setShowHierarchyGuidance] = useState(false);
-
-  // Rate Hierarchy Interactive Tester
-  const [testUserId, setTestUserId] = useState(users[0]?.id || 'u-1');
-  const [testProjectId, setTestProjectId] = useState(projects[0]?.id || 'p-1');
-  const [resolvedResult, setResolvedResult] = useState<any>(null);
 
   // Filter & Search States
   const [empTypeFilter, setEmpTypeFilter] = useState<'ALL' | 'INTERNAL' | 'EXTERNAL'>('ALL');
@@ -219,12 +210,6 @@ export const RateHierarchyView: React.FC = () => {
       setPwRemoving(false);
     }
   };
-
-  useEffect(() => {
-    if (testUserId) {
-      resolveRate(testUserId, testProjectId).then(data => setResolvedResult(data));
-    }
-  }, [testUserId, testProjectId]);
 
   const handleOpenCreateRole = () => {
     setEditingRole(null);
@@ -430,7 +415,7 @@ export const RateHierarchyView: React.FC = () => {
             <div className="flex items-center gap-2">
               <h2 className="text-xl font-bold text-slate-900 flex items-center gap-2">
                 <Layers className="w-5 h-5 text-emerald-600" />
-                {t.rateHierarchyTitle} &amp; Mandanten-Regeln
+                {t.navRatesTeam}
               </h2>
               <span className="bg-emerald-100 text-emerald-800 text-xs font-bold px-2 py-0.5 rounded">
                 Mandant: {organization?.name.split(' (')[0]}
@@ -631,85 +616,6 @@ export const RateHierarchyView: React.FC = () => {
             );
           })}
         </div>
-      </div>
-
-      {/* Interactive Rate Resolution Simulator */}
-      <div className="bg-gradient-to-r from-slate-900 to-slate-800 text-white rounded-2xl p-6 shadow-md space-y-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <DollarSign className="w-5 h-5 text-emerald-400" />
-            <h3 className="font-bold text-sm tracking-wide">{t.rateHierarchyTester}</h3>
-          </div>
-          <span className="text-xs bg-slate-800 text-slate-300 px-2.5 py-1 rounded-full border border-slate-700">
-            Live Satzhierarchie Resolver (4 Stufen)
-          </span>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-center">
-          <div className="md:col-span-5 space-y-1">
-            <label className="text-xs text-slate-400 font-medium">{t.selectUser}</label>
-            <select
-              id="select-sim-user"
-              value={testUserId}
-              onChange={e => setTestUserId(e.target.value)}
-              className="w-full bg-slate-800 border border-slate-700 text-white text-xs rounded-xl px-3 py-2"
-            >
-              {users.map(u => (
-                <option key={u.id} value={u.id}>
-                  {u.name} ({u.role} • {u.employmentType === 'EXTERNAL' ? (u.externalType === 'FREELANCER' ? 'Freelancer' : `Partner: ${u.partnerName || 'Extern'}`) : 'Intern'})
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div className="md:col-span-5 space-y-1">
-            <label className="text-xs text-slate-400 font-medium">{t.selectProject}</label>
-            <select
-              id="select-sim-proj"
-              value={testProjectId}
-              onChange={e => setTestProjectId(e.target.value)}
-              className="w-full bg-slate-800 border border-slate-700 text-white text-xs rounded-xl px-3 py-2"
-            >
-              {projects.map(p => (
-                <option key={p.id} value={p.id}>{p.name} ({p.clientName})</option>
-              ))}
-            </select>
-          </div>
-
-          <div className="md:col-span-2 text-center pt-3 md:pt-0">
-            <div className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-slate-800 border border-slate-700 text-emerald-400">
-              <ArrowRight className="w-4 h-4" />
-            </div>
-          </div>
-        </div>
-
-        {resolvedResult && (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-2 border-t border-slate-800/80">
-            <div className="bg-slate-800/60 border border-slate-700/60 rounded-xl p-3 flex items-center justify-between">
-              <div>
-                <div className="text-[10px] uppercase font-bold text-slate-400">{t.billingRate} (Kunde)</div>
-                <div className="text-xl font-extrabold text-emerald-400">{formatRate(resolvedResult.billingRate)}</div>
-              </div>
-              <div className="text-right">
-                <span className="text-[10px] font-semibold bg-emerald-950 text-emerald-300 border border-emerald-800 px-2 py-0.5 rounded">
-                  {resolvedResult.billingSource}
-                </span>
-              </div>
-            </div>
-
-            <div className="bg-slate-800/60 border border-slate-700/60 rounded-xl p-3 flex items-center justify-between">
-              <div>
-                <div className="text-[10px] uppercase font-bold text-slate-400">{t.costRate} (Kostensatz MA)</div>
-                <div className="text-xl font-extrabold text-purple-400">{formatRate(resolvedResult.costRate)}</div>
-              </div>
-              <div className="text-right">
-                <span className="text-[10px] font-semibold bg-purple-950 text-purple-300 border border-purple-800 px-2 py-0.5 rounded">
-                  {resolvedResult.costSource}
-                </span>
-              </div>
-            </div>
-          </div>
-        )}
       </div>
 
       {/* ========================================================================= */}

@@ -25,6 +25,8 @@ import { consumePasswordResetToken, createPasswordResetToken, clearPasswordReset
 import multer from 'multer';
 import pdfParse from 'pdf-parse/lib/pdf-parse.js';
 import { parseClockifyPdfText, mapDayType } from './clockifyPdfParser.js';
+import { BUILTIN_SCHEMAS, CLOCKIFY_CSV_SCHEMA, deriveSchemaFromCsv, deriveSchemaFromRows, resolveColumns, importSchemaJsonSchema, validateImportSchema, type ImportSchema } from './import/schema.js';
+import { parseImportFile, sha256 } from './import/fileParser.js';
 import { buildClockifyXlsx, buildTimesheetXlsx, aggregateByTask, safeFilePart, XLSX_MIME, generateDetailedTimeReport, normalizeDateParam } from './xlsxExports.js';
 
 export interface CreateAppOptions {
@@ -952,6 +954,258 @@ export async function createApp(options: CreateAppOptions = {}): Promise<express
     }
   });
 
+  // --- Allgemeiner Datenimport (docs/KONZEPT_DATENIMPORT.md, Phase 1) ---
+  /** Importe dürfen nur Admins und Superadmins ausführen. */
+  const resolveImportActor = (req: Request, res: Response): string | null => {
+    const actorId = getActorId(req);
+    if (!actorId) {
+      res.status(401).json({ error: 'Nicht authentifiziert.' });
+      return null;
+    }
+    const info = storage.getActorRoleInfo(actorId);
+    if (!info.user || !(info.isSuperAdmin || info.isAdmin)) {
+      res.status(403).json({ error: 'Keine Berechtigung für Importe.' });
+      return null;
+    }
+    return actorId;
+  };
+
+  /** Liest ein optionales Schema aus dem Body; ungültig → 400 mit Fehlerliste. */
+  const readImportSchema = (raw: unknown, res: Response, schemaId?: unknown): ImportSchema | null | undefined => {
+    if ((raw === undefined || raw === null || raw === '') && typeof schemaId === 'string' && schemaId) raw = schemaId;
+    if (raw === undefined || raw === null || raw === '') return undefined;
+    if (typeof raw === 'string') {
+      const found = storage.getImportSchemaById(raw);
+      if (found) return found;
+      res.status(404).json({ error: 'Schema nicht gefunden.' });
+      return null;
+    }
+    const v = validateImportSchema(raw);
+    if (v.valid === false) {
+      res.status(400).json({ error: 'Schema-Datei ist ungültig.', errors: v.errors });
+      return null;
+    }
+    return v.schema;
+  };
+
+  // Schema-Entwurf aus einer Musterdatei ableiten (Body: { csv, name?, source? } oder multipart „file")
+  const uploadSample = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
+  app.post('/api/import/schemas/derive', uploadSample.single('file'), async (req, res) => {
+    if (!resolveImportActor(req, res)) return;
+    try {
+      if (req.file) {
+        const parsed = await parseImportFile(req.file.buffer, req.file.originalname || '', { sheet: req.body?.sheet });
+        return res.json(deriveSchemaFromRows(parsed.headers, parsed.rows.map(r => r.data), {
+          name: req.body?.name, source: req.body?.source, delimiter: parsed.delimiter, fileType: parsed.fileType,
+        }));
+      }
+    } catch (err: any) {
+      return res.status(400).json({ error: 'Datei konnte nicht gelesen werden: ' + (err?.message || 'Unbekannter Fehler') });
+    }
+    const csv = req.body?.csv as string | undefined;
+    if (typeof csv !== 'string' || !csv.trim()) {
+      return res.status(400).json({ error: 'Keine Musterdatei (CSV/XLSX) übergeben.' });
+    }
+    res.json(deriveSchemaFromCsv(csv, { name: req.body?.name, source: req.body?.source }));
+  });
+
+  // Datei (CSV/XLSX) einlesen: Kopfzeile, Zeilen, Prüfsumme, automatische Schema-Erkennung
+  app.post('/api/import/parse', uploadSample.single('file'), async (req, res) => {
+    if (!resolveImportActor(req, res)) return;
+    if (!req.file) return res.status(400).json({ error: 'Keine Datei hochgeladen.' });
+    try {
+      const delimiter = [',', ';', '\t', 'auto'].includes(req.body?.delimiter) ? req.body.delimiter : 'auto';
+      const parsed = await parseImportFile(req.file.buffer, req.file.originalname || '', {
+        delimiter, sheet: typeof req.body?.sheet === 'string' && req.body.sheet ? req.body.sheet : undefined,
+      });
+      const detection = storage.detectImportSchema(parsed.headers);
+      const derived = deriveSchemaFromRows(parsed.headers, parsed.rows.map(r => r.data), {
+        name: (req.file.originalname || 'Import').replace(/\.[^.]+$/, ''), delimiter: parsed.delimiter, fileType: parsed.fileType,
+      });
+      const previous = storage.findBatchByChecksum(parsed.checksum);
+      // Spaltenzuordnung je verfügbarem Schema (für den Zuordnungs-Editor im Assistenten)
+      const available = storage.listImportSchemas();
+      const resolved: Record<string, Record<string, string>> = { __derived__: resolveColumns(derived.schema, parsed.headers) as Record<string, string> };
+      for (const sc of [...available.builtin, ...available.tenant.map(t => t.schema as ImportSchema)]) {
+        if (sc.id) resolved[sc.id] = resolveColumns(sc, parsed.headers) as Record<string, string>;
+      }
+      res.json({
+        fileName: req.file.originalname,
+        fileType: parsed.fileType,
+        checksum: parsed.checksum,
+        encoding: parsed.encoding,
+        delimiter: parsed.delimiter,
+        sheetNames: parsed.sheetNames,
+        sheet: parsed.sheet,
+        headers: parsed.headers,
+        rowCount: parsed.rows.length,
+        rows: parsed.rows.map(r => r.data),
+        lineNumbers: parsed.rows.map(r => r.lineNumber),
+        detection,
+        derived,
+        resolved,
+        fileAlreadyImported: previous ? { batchId: previous.id, createdAt: previous.createdAt, fileName: previous.fileName } : null,
+      });
+    } catch (err: any) {
+      res.status(400).json({ error: 'Datei konnte nicht gelesen werden: ' + (err?.message || 'Unbekannter Fehler') });
+    }
+  });
+
+  // Gespeicherte Schemas des Mandanten + eingebaute Schemas
+  app.get('/api/import/schemas', (req, res) => {
+    if (!resolveImportActor(req, res)) return;
+    res.json(storage.listImportSchemas());
+  });
+
+  // Schema speichern (neu oder neue Version bei gleicher ID). Body: { schema, headers? }
+  app.post('/api/import/schemas', (req, res) => {
+    const actorId = resolveImportActor(req, res);
+    if (!actorId) return;
+    const raw = req.body?.schema ?? req.body;
+    const v = validateImportSchema(raw);
+    if (v.valid === false) return res.status(400).json({ error: 'Schema-Datei ist ungültig.', errors: v.errors });
+    const headers = Array.isArray(req.body?.headers) ? req.body.headers.filter((h: unknown) => typeof h === 'string') : undefined;
+    res.status(201).json(storage.saveImportSchema(v.schema, actorId, { headers }));
+  });
+
+  // Schema als JSON-Datei herunterladen (eingebaut oder mandantenspezifisch)
+  app.get('/api/import/schemas/:id/download', (req, res) => {
+    if (!resolveImportActor(req, res)) return;
+    const schema = storage.getImportSchemaById(req.params.id);
+    if (!schema) return res.status(404).json({ error: 'Schema nicht gefunden.' });
+    const fileBase = String(schema.name || schema.id || 'schema').replace(/[^a-zA-Z0-9_-]+/g, '-').replace(/^-+|-+$/g, '') || 'schema';
+    res.setHeader('Content-Disposition', `attachment; filename="import-schema-${fileBase}.json"`);
+    res.json(schema);
+  });
+
+  app.delete('/api/import/schemas/:id', (req, res) => {
+    if (!resolveImportActor(req, res)) return;
+    if (!storage.deleteImportSchema(req.params.id)) return res.status(404).json({ error: 'Schema nicht gefunden.' });
+    res.json({ success: true });
+  });
+
+  // Gemerkte Stammdaten-Zuordnungen (Aliase)
+  app.get('/api/import/aliases', (req, res) => {
+    if (!resolveImportActor(req, res)) return;
+    res.json(storage.getImportAliases());
+  });
+
+  app.delete('/api/import/aliases', (req, res) => {
+    if (!resolveImportActor(req, res)) return;
+    const kind = (req.query.kind ?? req.body?.kind) as string;
+    const ref = (req.query.ref ?? req.body?.ref) as string;
+    if (!['user', 'project', 'client'].includes(kind) || typeof ref !== 'string' || !ref) {
+      return res.status(400).json({ error: 'kind (user|project|client) und ref erforderlich.' });
+    }
+    if (!storage.deleteImportAlias(kind as 'user' | 'project' | 'client', ref)) return res.status(404).json({ error: 'Zuordnung nicht gefunden.' });
+    res.json({ success: true });
+  });
+
+  // Schema-Datei prüfen (Body: das Schema-Objekt)
+  app.post('/api/import/schemas/validate', (req, res) => {
+    if (!resolveImportActor(req, res)) return;
+    const v = validateImportSchema(req.body);
+    if (v.valid === false) return res.json({ valid: false, errors: v.errors });
+    res.json({ valid: true, errors: [], schema: v.schema });
+  });
+
+  // Vorlage herunterladen (Standard: eingebautes Schema „Clockify CSV"); ?format=jsonschema liefert das JSON Schema
+  app.get('/api/import/schemas/template', (req, res) => {
+    if (!resolveImportActor(req, res)) return;
+    if (req.query.format === 'jsonschema') {
+      res.setHeader('Content-Disposition', 'attachment; filename="import-schema.schema.json"');
+      return res.json(importSchemaJsonSchema());
+    }
+    const builtin = BUILTIN_SCHEMAS.find(b => b.id === req.query.builtin) || CLOCKIFY_CSV_SCHEMA;
+    const { id: _id, ...template } = builtin;
+    res.setHeader('Content-Disposition', `attachment; filename="import-schema-${template.source}.json"`);
+    res.json({ ...template, name: `${template.name} (Vorlage)` });
+  });
+
+  /** Body → ImportInput (Zeilen, Zeilennummern, Zuordnungen, Prüfsumme). */
+  const buildImportInput = (body: any, schema: ImportSchema | undefined) => ({
+    rows: Array.isArray(body?.rows) ? body.rows : undefined,
+    csv: typeof body?.csv === 'string' ? body.csv : undefined,
+    lineNumbers: Array.isArray(body?.lineNumbers) ? body.lineNumbers.filter((n: unknown) => typeof n === 'number') : undefined,
+    schema,
+    mappings: body?.mappings && typeof body.mappings === 'object' ? body.mappings : undefined,
+    rememberMappings: body?.rememberMappings === true,
+    fileChecksum: typeof body?.fileChecksum === 'string' ? body.fileChecksum : undefined,
+  });
+
+  // Probelauf: Status je Zeile, schreibt nichts (Body: { rows } oder { csv, schema? })
+  app.post('/api/import/dry-run', (req, res) => {
+    const actorId = resolveImportActor(req, res);
+    if (!actorId) return;
+    const { rows, csv } = req.body || {};
+    if (!(Array.isArray(rows) && rows.length > 0) && !(typeof csv === 'string' && csv.trim())) {
+      return res.status(400).json({ error: 'Zeilen (rows) oder CSV-Inhalt (csv) erforderlich.' });
+    }
+    const schema = readImportSchema(req.body.schema, res, req.body.schemaId);
+    if (schema === null) return;
+    res.json(storage.dryRunImport(buildImportInput(req.body, schema), actorId));
+  });
+
+  // Stammdaten-Abgleich: welche Mitarbeitenden/Projekte/Kunden sind bekannt, per Alias oder unbekannt?
+  app.post('/api/import/master-data', (req, res) => {
+    const actorId = resolveImportActor(req, res);
+    if (!actorId) return;
+    const { rows, csv } = req.body || {};
+    if (!(Array.isArray(rows) && rows.length > 0) && !(typeof csv === 'string' && csv.trim())) {
+      return res.status(400).json({ error: 'Zeilen (rows) oder CSV-Inhalt (csv) erforderlich.' });
+    }
+    const schema = readImportSchema(req.body.schema, res, req.body.schemaId);
+    if (schema === null) return;
+    res.json(storage.analyzeImportMasterData(buildImportInput(req.body, schema), actorId));
+  });
+
+  // Import mit beliebigem Schema ausführen (Body: { csv | rows, schema?, fileName? })
+  app.post('/api/import/execute', (req, res) => {
+    const actorId = resolveImportActor(req, res);
+    if (!actorId) return;
+    const { rows, csv, fileName } = req.body || {};
+    if (!(Array.isArray(rows) && rows.length > 0) && !(typeof csv === 'string' && csv.trim())) {
+      return res.status(400).json({ error: 'Zeilen (rows) oder CSV-Inhalt (csv) erforderlich.' });
+    }
+    const schema = readImportSchema(req.body.schema, res, req.body.schemaId);
+    if (schema === null) return;
+    if (schema?.target === 'MASTER_DATA' && !storage.getActorRoleInfo(actorId).isSuperAdmin) {
+      return res.status(403).json({ error: 'Mitarbeitende dürfen nur Superadmins importieren.' });
+    }
+    res.json(storage.executeImport({
+      ...buildImportInput(req.body, schema),
+      fileName: typeof fileName === 'string' ? fileName : undefined,
+    }, actorId));
+  });
+
+  // Import-Historie
+  app.get('/api/import/batches', (req, res) => {
+    if (!resolveImportActor(req, res)) return;
+    res.json(storage.getImportBatches());
+  });
+
+  // Import rückgängig machen (nur innerhalb von 5 Tagen und ohne gesperrten Zeitraum)
+  app.delete('/api/import/batches/:id', (req, res, next) => {
+    const actorId = resolveImportActor(req, res);
+    if (!actorId) return;
+    try {
+      const r = storage.undoImportBatch(req.params.id, actorId);
+      if (r.ok === false) {
+        const messages: Record<string, string> = {
+          NOT_FOUND: 'Import nicht gefunden.',
+          ALREADY_REVERTED: 'Dieser Import wurde bereits rückgängig gemacht.',
+          EXPIRED: 'Ein Import kann nur innerhalb von 5 Tagen rückgängig gemacht werden.',
+          PERIOD_LOCKED: 'Der Import enthält Einträge in einem gesperrten Zeitraum und kann nicht rückgängig gemacht werden.',
+          NOT_SUPPORTED: 'Mitarbeitenden-Importe können nicht automatisch rückgängig gemacht werden.',
+        };
+        return res.status(r.reason === 'NOT_FOUND' ? 404 : 409).json({ error: messages[r.reason], reason: r.reason, lockedDates: r.lockedDates });
+      }
+      res.json(r);
+    } catch (err: any) {
+      next(new BadRequestError(err?.message || 'Fehler beim Rückgängigmachen des Imports'));
+    }
+  });
+
   // --- Clockify PDF Import (Section 22) ---
   const uploadMemory = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } });
 
@@ -965,7 +1219,7 @@ export async function createApp(options: CreateAppOptions = {}): Promise<express
       const entries = parseClockifyPdfText(pdfData.text);
       const users = [...new Set(entries.map(e => e.userName))].sort();
       const projects = [...new Set(entries.map(e => e.projectTask).filter(Boolean))].sort();
-      res.json({ entries, users, projects, totalEntries: entries.length });
+      res.json({ entries, users, projects, totalEntries: entries.length, checksum: sha256(req.file.buffer), fileName: req.file.originalname });
     } catch (err: any) {
       next(new BadRequestError('Fehler beim Parsen der PDF: ' + (err?.message || 'Unbekannter Fehler')));
     }
@@ -989,69 +1243,14 @@ export async function createApp(options: CreateAppOptions = {}): Promise<express
         skipDuplicates: boolean;
       };
 
-      let imported = 0;
-      let skipped = 0;
-      const errors: string[] = [];
-
-      for (const entry of entries) {
-        try {
-          const userId = userMapping[entry.userName];
-          if (!userId) { skipped++; continue; }
-
-          if (importType === 'working-time') {
-            const dayType = mapDayType(entry.projectTask);
-            if (skipDuplicates) {
-              const existing = storage.getWorkingTimeEntries({ from: entry.date, to: entry.date, userId }, actorId);
-              if (existing.some(e => e.date === entry.date && e.startTime === entry.startTime)) {
-                skipped++; continue;
-              }
-            }
-            storage.createOrUpdateWorkingTime({
-              userId,
-              date: entry.date,
-              dayType: dayType as any,
-              halfDay: false,
-              startTime: entry.startTime || undefined,
-              endTime: entry.endTime || undefined,
-              breakMinutes: 0,
-              note: entry.description + (entry.projectTask ? ` (${entry.projectTask})` : '')
-            }, actorId);
-            imported++;
-          } else {
-            // time-entries
-            const mapping = projectMapping?.[entry.projectTask];
-            if (!mapping?.projectId) { skipped++; continue; }
-            const project = storage.getProjects(actorId).find(p => p.id === mapping.projectId);
-            if (!project) { skipped++; continue; }
-            const [startH, startM] = (entry.startTime || '09:00').split(':').map(Number);
-            const [endH, endM] = (entry.endTime || '17:00').split(':').map(Number);
-            const durationMinutes = Math.max(0, (endH * 60 + endM) - (startH * 60 + startM));
-            if (skipDuplicates) {
-              const existing = storage.getTimeEntries({ from: entry.date, to: entry.date, userId }, actorId);
-              if (existing.data.some(e => e.userId === userId && e.date === entry.date && e.startTime === entry.startTime)) {
-                skipped++; continue;
-              }
-            }
-            storage.createTimeEntry({
-              userId,
-              projectId: mapping.projectId,
-              clientId: mapping.clientId || project.clientId,
-              date: entry.date,
-              startTime: entry.startTime,
-              endTime: entry.endTime,
-              durationMinutes,
-              description: entry.description,
-              isBillable: entry.isBillable,
-              breakMinutes: 0
-            }, actorId);
-            imported++;
-          }
-        } catch (e: any) {
-          errors.push(`${entry.date} ${entry.userName}: ${e?.message || 'Fehler'}`);
-        }
-      }
-
-      res.json({ imported, skipped, errors });
+      if (!resolveImportActor(req, res)) return;
+      const fileName = typeof (req.body as any).fileName === 'string' ? (req.body as any).fileName : undefined;
+      // Einheitlicher Fingerabdruck, Freigabestatus „zur Freigabe", Batch für Historie/Rückgängig
+      const result = storage.importClockifyPdfEntries(entries, {
+        importType, userMapping, projectMapping, skipDuplicates, fileName, mapDayType,
+        fileChecksum: typeof (req.body as any).fileChecksum === 'string' ? (req.body as any).fileChecksum : undefined,
+      }, actorId);
+      res.json(result);
     } catch (err: any) {
       next(new BadRequestError('Fehler beim Import: ' + (err?.message || 'Unbekannter Fehler')));
     }
@@ -1126,12 +1325,13 @@ export async function createApp(options: CreateAppOptions = {}): Promise<express
 
   // Clockify CSV Import (Section 10)
   app.post('/api/clockify/import', (req, res) => {
-    const actorId = getActorId(req);
-    const { rows } = req.body;
+    const actorId = resolveImportActor(req, res);
+    if (!actorId) return;
+    const { rows, fileName } = req.body;
     if (!Array.isArray(rows) || rows.length === 0) {
       return res.status(400).json({ error: 'Rows array is required' });
     }
-    const report = storage.importClockifyData(rows, actorId);
+    const report = storage.importClockifyData(rows, actorId, { fileName: typeof fileName === 'string' ? fileName : undefined });
     res.json(report);
   });
 

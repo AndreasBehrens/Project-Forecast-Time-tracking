@@ -216,3 +216,18 @@ model AppState {
 
   @@map("app_state")
 }
+
+// Mandantenspezifische Import-Schemas (Konzept Datenimport §3.4).
+// Die Tabelle wird zusätzlich beim Start per CREATE TABLE IF NOT EXISTS
+// angelegt (server/prismaStore.ts), weil das Deployment keine Migrationen ausführt.
+model ImportSchemaRecord {
+  seq       BigInt   @id @default(autoincrement())
+  id        String
+  orgId     String?
+  data      Json
+  updatedAt DateTime @updatedAt
+
+  @@index([id])
+  @@index([orgId])
+  @@map("import_schemas")
+}

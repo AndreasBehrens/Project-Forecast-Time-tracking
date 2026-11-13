@@ -18,6 +18,10 @@ export interface Organization {
   allowMobileWorkplaces?: boolean; // If true, fixed employees can define their own Bundesland
   logoColor?: string;
   createdAt: string;
+  /** Import-Historie (Konzept Datenimport §7); persistiert im JSONB der Organisation */
+  importBatches?: ImportBatch[];
+  /** Gemerkte Stammdaten-Zuordnungen (Aliase) für Importe (Konzept §4) */
+  importAliases?: ImportAlias[];
 }
 
 export type EmploymentType = 'INTERNAL' | 'EXTERNAL';
@@ -289,6 +293,10 @@ export interface TimeEntry {
   isCorrectedAfterApproval?: boolean;
   correctionNote?: string;
   isFavorite?: boolean;
+  /** Herkunft aus einem Datenimport (Batch-ID, Fingerabdruck, Quelle + Zeile) */
+  importBatchId?: string;
+  fingerprint?: string;
+  sourceRef?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -312,6 +320,10 @@ export interface WorkingTimeEntry {
   totalNetMinutes: number;
   totalNetHoursDecimal: number;
   note?: string;
+  /** Herkunft aus einem Datenimport (Batch-ID, Fingerabdruck, Quelle + Zeile) */
+  importBatchId?: string;
+  fingerprint?: string;
+  sourceRef?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -325,9 +337,9 @@ export interface AuditLogChange {
 export interface AuditLogEntry {
   id: string;
   orgId: string;
-  entityType: 'TIME_ENTRY' | 'WORKING_TIME' | 'FORECAST' | 'PROJECT' | 'USER' | 'RATE' | 'ORGANIZATION' | 'CLIENT' | 'TASK' | 'JOB_ROLE' | 'PARTNER' | 'PERIOD_LOCK';
+  entityType: 'TIME_ENTRY' | 'WORKING_TIME' | 'FORECAST' | 'PROJECT' | 'USER' | 'RATE' | 'ORGANIZATION' | 'CLIENT' | 'TASK' | 'JOB_ROLE' | 'PARTNER' | 'PERIOD_LOCK' | 'IMPORT_BATCH';
   entityId: string;
-  action: 'CREATE' | 'UPDATE' | 'DELETE' | 'APPROVE' | 'REJECT' | 'CORRECT_AFTER_APPROVAL' | 'LOCK_PERIOD' | 'UNLOCK_PERIOD';
+  action: 'CREATE' | 'UPDATE' | 'DELETE' | 'APPROVE' | 'REJECT' | 'CORRECT_AFTER_APPROVAL' | 'LOCK_PERIOD' | 'UNLOCK_PERIOD' | 'IMPORT' | 'REVERT_IMPORT';
   userId: string;
   userName: string;
   timestamp: string;
@@ -683,5 +695,148 @@ export interface ClockifyImportReport {
   createdTasks: string[];
   createdUsers: string[];
   timestamp: string;
+  /** Neu: ID des Import-Batches (für Historie / Rückgängig machen) */
+  batchId?: string;
+  /** Neu: Status je Zeile (neu / Duplikat / Fehler / Warnung) */
+  rowResults?: ImportRowResult[];
+}
+
+// =====================================================================
+// Allgemeiner Datenimport (Konzept docs/KONZEPT_DATENIMPORT.md, Phase 1)
+// =====================================================================
+
+export type ImportTarget = 'TIME_ENTRY' | 'WORKING_TIME' | 'ABSENCE' | 'MASTER_DATA';
+
+/** Kanonisches Zwischenformat: jede Quelle wird zuerst hierhin übersetzt. */
+export interface ImportRecord {
+  rowNumber: number;
+  target: ImportTarget;
+  externalId?: string;
+  userRef: string;
+  userEmail?: string;
+  userGroup?: string;
+  clientRef?: string;
+  projectRef?: string;
+  taskRef?: string;
+  date: string; // YYYY-MM-DD (bei Stammdaten leer)
+  /** Letzter Tag eines Abwesenheitszeitraums (inklusive), z. B. aus HR-Systemen */
+  dateTo?: string;
+  halfDay?: boolean;
+  startTime?: string; // HH:mm
+  endTime?: string; // HH:mm
+  durationMinutes: number;
+  breakMinutes?: number;
+  description?: string;
+  isBillable?: boolean;
+  dayType?: DayType;
+  hourlyBillingRate?: number;
+  hourlyCostRate?: number;
+  raw: Record<string, unknown>;
+}
+
+export type ImportRowStatus = 'NEW' | 'DUPLICATE' | 'ERROR' | 'WARNING' | 'SKIPPED';
+
+export interface ImportRowResult {
+  rowNumber: number;
+  status: ImportRowStatus;
+  messages: string[];
+  record?: ImportRecord;
+  fingerprint?: string;
+}
+
+export interface ImportDryRunResult {
+  totalRows: number;
+  counts: Record<ImportRowStatus, number>;
+  totalMinutes: number;
+  rows: ImportRowResult[];
+  /** Stammdaten, die beim Ausführen neu angelegt würden */
+  wouldCreate: { clients: string[]; projects: string[]; tasks: string[]; users: string[] };
+  /** Gleiche Datei (SHA-256) wurde bereits importiert und nicht rückgängig gemacht */
+  fileAlreadyImported?: { batchId: string; createdAt: string; fileName?: string };
+}
+
+/** Zuordnung je Quellwert (Kleinbuchstaben): ID eines vorhandenen Datensatzes, '__create__' (neu anlegen) oder '__skip__' (Zeilen überspringen) */
+export interface ImportMappings {
+  users?: Record<string, string>;
+  projects?: Record<string, string>;
+  clients?: Record<string, string>;
+}
+
+export type ImportAliasKind = 'user' | 'project' | 'client';
+
+export interface ImportAlias {
+  kind: ImportAliasKind;
+  /** Quellwert in Kleinbuchstaben (Name, E-Mail, Projektname) */
+  ref: string;
+  targetId: string;
+  createdAt: string;
+  createdBy: string;
+}
+
+export interface MasterDataRef {
+  ref: string;
+  label: string;
+  rowCount: number;
+  matchedId?: string;
+  matchType: 'exact' | 'alias' | 'none';
+}
+
+export interface MasterDataAnalysis {
+  users: MasterDataRef[];
+  projects: MasterDataRef[];
+  clients: MasterDataRef[];
+  canCreateUsers: boolean;
+}
+
+/** Mandantenspezifisch gespeichertes Import-Schema (Tabelle import_schemas) */
+export interface StoredImportSchema {
+  id: string;
+  orgId: string;
+  name: string;
+  source: string;
+  version: number;
+  headerFingerprint?: string;
+  schema: any;
+  createdAt: string;
+  createdBy: string;
+  updatedAt: string;
+  updatedBy: string;
+  previousVersions?: Array<{ version: number; schema: any; updatedAt: string; updatedBy: string }>;
+}
+
+export interface ImportBatch {
+  id: string;
+  orgId: string;
+  source: string; // z. B. 'clockify-csv', 'clockify-pdf'
+  schemaId?: string;
+  fileName?: string;
+  target: ImportTarget;
+  createdBy: string;
+  createdByName?: string;
+  createdAt: string;
+  /** Anzahl angelegter Projektzeiten / Arbeitszeit- bzw. Abwesenheitseinträge.
+   *  Die Einträge selbst tragen `importBatchId` (keine ID-Listen im Batch, damit die Organisation schlank bleibt). */
+  timeEntryCount: number;
+  workingTimeCount: number;
+  importedCount: number;
+  skippedCount: number;
+  errorCount: number;
+  /** Beim Stammdaten-Import angelegte Mitarbeitende */
+  createdUserCount?: number;
+  /** SHA-256 der importierten Datei */
+  fileChecksum?: string;
+  revertedAt?: string;
+  revertedBy?: string;
+  revertedByName?: string;
+}
+
+/** Batch inkl. berechneter Rückgängig-Information für die Import-Historie */
+export interface ImportBatchView extends ImportBatch {
+  /** Frühestes und spätestes Buchungsdatum der noch vorhandenen Einträge */
+  dateFrom?: string;
+  dateTo?: string;
+  canUndo: boolean;
+  undoBlockedReason?: 'ALREADY_REVERTED' | 'EXPIRED' | 'PERIOD_LOCKED' | 'NOT_SUPPORTED';
+  undoDeadline: string;
 }
 
