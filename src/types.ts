@@ -18,6 +18,8 @@ export interface Organization {
   allowMobileWorkplaces?: boolean; // If true, fixed employees can define their own Bundesland
   logoColor?: string;
   createdAt: string;
+  /** Import-Historie (Konzept Datenimport §7); persistiert im JSONB der Organisation */
+  importBatches?: ImportBatch[];
 }
 
 export type EmploymentType = 'INTERNAL' | 'EXTERNAL';
@@ -289,6 +291,10 @@ export interface TimeEntry {
   isCorrectedAfterApproval?: boolean;
   correctionNote?: string;
   isFavorite?: boolean;
+  /** Herkunft aus einem Datenimport (Batch-ID, Fingerabdruck, Quelle + Zeile) */
+  importBatchId?: string;
+  fingerprint?: string;
+  sourceRef?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -312,6 +318,10 @@ export interface WorkingTimeEntry {
   totalNetMinutes: number;
   totalNetHoursDecimal: number;
   note?: string;
+  /** Herkunft aus einem Datenimport (Batch-ID, Fingerabdruck, Quelle + Zeile) */
+  importBatchId?: string;
+  fingerprint?: string;
+  sourceRef?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -683,5 +693,90 @@ export interface ClockifyImportReport {
   createdTasks: string[];
   createdUsers: string[];
   timestamp: string;
+  /** Neu: ID des Import-Batches (für Historie / Rückgängig machen) */
+  batchId?: string;
+  /** Neu: Status je Zeile (neu / Duplikat / Fehler / Warnung) */
+  rowResults?: ImportRowResult[];
+}
+
+// =====================================================================
+// Allgemeiner Datenimport (Konzept docs/KONZEPT_DATENIMPORT.md, Phase 1)
+// =====================================================================
+
+export type ImportTarget = 'TIME_ENTRY' | 'WORKING_TIME' | 'ABSENCE' | 'MASTER_DATA';
+
+/** Kanonisches Zwischenformat: jede Quelle wird zuerst hierhin übersetzt. */
+export interface ImportRecord {
+  rowNumber: number;
+  target: ImportTarget;
+  externalId?: string;
+  userRef: string;
+  userEmail?: string;
+  userGroup?: string;
+  clientRef?: string;
+  projectRef?: string;
+  taskRef?: string;
+  date: string; // YYYY-MM-DD
+  startTime?: string; // HH:mm
+  endTime?: string; // HH:mm
+  durationMinutes: number;
+  breakMinutes?: number;
+  description?: string;
+  isBillable?: boolean;
+  dayType?: DayType;
+  hourlyBillingRate?: number;
+  hourlyCostRate?: number;
+  raw: Record<string, unknown>;
+}
+
+export type ImportRowStatus = 'NEW' | 'DUPLICATE' | 'ERROR' | 'WARNING';
+
+export interface ImportRowResult {
+  rowNumber: number;
+  status: ImportRowStatus;
+  messages: string[];
+  record?: ImportRecord;
+  fingerprint?: string;
+}
+
+export interface ImportDryRunResult {
+  totalRows: number;
+  counts: Record<ImportRowStatus, number>;
+  totalMinutes: number;
+  rows: ImportRowResult[];
+  /** Stammdaten, die beim Ausführen neu angelegt würden */
+  wouldCreate: { clients: string[]; projects: string[]; tasks: string[]; users: string[] };
+}
+
+export interface ImportBatch {
+  id: string;
+  orgId: string;
+  source: string; // z. B. 'clockify-csv', 'clockify-pdf'
+  schemaId?: string;
+  fileName?: string;
+  target: ImportTarget;
+  createdBy: string;
+  createdByName?: string;
+  createdAt: string;
+  /** Anzahl angelegter Projektzeiten / Arbeitszeit- bzw. Abwesenheitseinträge.
+   *  Die Einträge selbst tragen `importBatchId` (keine ID-Listen im Batch, damit die Organisation schlank bleibt). */
+  timeEntryCount: number;
+  workingTimeCount: number;
+  importedCount: number;
+  skippedCount: number;
+  errorCount: number;
+  revertedAt?: string;
+  revertedBy?: string;
+  revertedByName?: string;
+}
+
+/** Batch inkl. berechneter Rückgängig-Information für die Import-Historie */
+export interface ImportBatchView extends ImportBatch {
+  /** Frühestes und spätestes Buchungsdatum der noch vorhandenen Einträge */
+  dateFrom?: string;
+  dateTo?: string;
+  canUndo: boolean;
+  undoBlockedReason?: 'ALREADY_REVERTED' | 'EXPIRED' | 'PERIOD_LOCKED';
+  undoDeadline: string;
 }
 

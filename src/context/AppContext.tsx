@@ -1026,7 +1026,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       },
       body: JSON.stringify({ rows })
     });
-    const report = await res.json();
+    const report = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new Error(report.error || report.message || `HTTP ${res.status}`);
+    }
     await refreshAllData();
     return report;
   };

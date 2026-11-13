@@ -29,12 +29,21 @@ import {
   BillableUserSummary,
   PeriodLock,
   AuditHashVerificationReport,
-  GoBDComplianceCertificate
+  GoBDComplianceCertificate,
+  ImportRecord,
+  ImportTarget,
+  ImportRowStatus,
+  ImportDryRunResult,
+  ImportBatch,
+  ImportBatchView
 } from '../src/types.js';
 import { getGermanHolidays, getWorkingDaysInRange, GERMAN_STATES, HolidayInfo } from './holidays.js';
 import * as prismaStore from './prismaStore.js';
 import { DEFAULT_TIME_ZONE, endOfNextMonth, isValidTimeZone, todayInZone, userTimeZone } from '../src/utils/timeZone.js';
 import type { AppStateSnapshot } from './prismaStore.js';
+import { applySchema, parseCsvObjects, CLOCKIFY_CSV_SCHEMA, type ImportSchema, type SchemaRowResult } from './import/schema.js';
+import { computeFingerprint, fingerprintOfTimeEntry, fingerprintOfWorkingTime, canUndoImportBatch, IMPORT_UNDO_WINDOW_DAYS } from './import/fingerprint.js';
+import { parseDate, parseTime, minutesBetween } from './import/normalizers.js';
 
 /** Heutiges Datum (YYYY-MM-DD) in der angegebenen Zeitzone (Standard: deutsche Zeit) – nicht UTC. */
 export function localISODate(d: Date = new Date(), tz: string = DEFAULT_TIME_ZONE): string {
@@ -4413,248 +4422,470 @@ export class StorageService {
     };
   }
 
-  // --- Clockify CSV Importer (Section 10) ---
-  public importClockifyData(rows: any[], actorId: string): ClockifyImportReport {
-    const currentOrg = this.organization;
-    const currentOrgId = currentOrg.id;
+  // --- Datenimport (Konzept docs/KONZEPT_DATENIMPORT.md, Phase 1) ---
+
+  /** Sucht Mitarbeitende zu einem Import-Datensatz (E-Mail vor Name; zuerst in der aktiven Organisation). */
+  private findImportUser(rec: ImportRecord): { user?: User; inOrg: boolean } {
+    const orgId = this.organization.id;
+    const ref = rec.userRef.trim().toLowerCase();
+    const email = (rec.userEmail || '').trim().toLowerCase();
+    const byEmail = (u: User) => !!email && !!u.email && u.email.toLowerCase() === email;
+    const byName = (u: User) => u.name.toLowerCase() === ref || (!!u.email && u.email.toLowerCase() === ref);
+    const inOrgUsers = this.users.filter(u => u.orgId === orgId || u.memberships?.some(m => m.orgId === orgId));
+    const inOrg = inOrgUsers.find(byEmail) || inOrgUsers.find(byName);
+    if (inOrg) return { user: inOrg, inOrg: true };
+    return { user: this.users.find(byEmail) || this.users.find(byName), inOrg: false };
+  }
+
+  /**
+   * Gemeinsame Import-Pipeline für Probelauf und Ausführung.
+   * - Probelauf (`dryRun`): schreibt nichts, liefert Status je Zeile.
+   * - Ausführung: legt Einträge mit Freigabestatus „zur Freigabe" (SUBMITTED) an und protokolliert einen Batch.
+   */
+  private processImportRows(
+    rowResults: SchemaRowResult[],
+    actorId: string,
+    opts: { source: string; schemaId?: string; fileName?: string; dryRun: boolean; target?: ImportTarget }
+  ): { result: ImportDryRunResult; report: ClockifyImportReport } {
+    const org = this.organization;
+    const orgId = org.id;
+    const actor = this.getActorRoleInfo(actorId);
+    const batchId = `imp-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`;
 
     const report: ClockifyImportReport = {
-      totalRows: rows.length,
-      importedEntries: 0,
-      skippedDuplicates: 0,
-      errors: [],
-      createdClients: [],
-      createdProjects: [],
-      createdTasks: [],
-      createdUsers: [],
-      timestamp: new Date().toISOString()
+      totalRows: 0, importedEntries: 0, skippedDuplicates: 0, errors: [],
+      createdClients: [], createdProjects: [], createdTasks: [], createdUsers: [],
+      timestamp: new Date().toISOString(),
     };
-
-    // Helper: Normalize date string (DD.MM.YYYY, DD/MM/YYYY, YYYY-MM-DD) to ISO YYYY-MM-DD
-    const normalizeDate = (rawDate: any): string => {
-      if (!rawDate || typeof rawDate !== 'string') {
-        return new Date().toISOString().split('T')[0];
-      }
-      const clean = rawDate.trim().replace(/^["']|["']$/g, '');
-
-      // DD.MM.YYYY or D.M.YYYY (e.g. 18.08.2026)
-      if (/^\d{1,2}\.\d{1,2}\.\d{4}$/.test(clean)) {
-        const [d, m, y] = clean.split('.');
-        return `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
-      }
-
-      // YYYY-MM-DD
-      if (/^\d{4}-\d{1,2}-\d{1,2}$/.test(clean)) {
-        const [y, m, d] = clean.split('-');
-        return `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
-      }
-
-      // DD/MM/YYYY or MM/DD/YYYY
-      if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(clean)) {
-        const parts = clean.split('/');
-        if (parseInt(parts[0], 10) > 12) {
-          return `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
-        }
-        if (parseInt(parts[1], 10) > 12) {
-          return `${parts[2]}-${parts[0].padStart(2, '0')}-${parts[1].padStart(2, '0')}`;
-        }
-        return `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
-      }
-
-      const parsed = new Date(clean);
-      if (!isNaN(parsed.getTime())) {
-        return parsed.toISOString().split('T')[0];
-      }
-      return new Date().toISOString().split('T')[0];
+    const result: ImportDryRunResult = {
+      totalRows: 0,
+      counts: { NEW: 0, DUPLICATE: 0, ERROR: 0, WARNING: 0 },
+      totalMinutes: 0,
+      rows: [],
+      wouldCreate: { clients: [], projects: [], tasks: [], users: [] },
     };
+    const addUnique = (list: string[], v: string) => { if (!list.includes(v)) list.push(v); };
 
-    // Helper: Normalize time string (HH:mm:ss -> HH:mm)
-    const normalizeTime = (rawTime: any): string | undefined => {
-      if (!rawTime || typeof rawTime !== 'string') return undefined;
-      const clean = rawTime.trim().replace(/^["']|["']$/g, '');
-      if (!clean) return undefined;
-      const m = clean.match(/^(\d{1,2}):(\d{2})(?::\d{2})?$/);
-      if (m) {
-        return `${m[1].padStart(2, '0')}:${m[2]}`;
-      }
-      return clean;
-    };
+    // Fingerabdrücke bestehender Einträge (gespeichert oder berechnet – auch für manuell erfasste Zeiten)
+    const existingTe = new Set<string>();
+    for (const e of this.timeEntries) {
+      if (e.orgId !== orgId) continue;
+      if (e.fingerprint) existingTe.add(e.fingerprint);
+      existingTe.add(fingerprintOfTimeEntry(e));
+    }
+    const existingWt = new Set<string>();
+    for (const w of this.workingTimeEntries) {
+      if (w.orgId !== orgId) continue;
+      if (w.fingerprint) existingWt.add(w.fingerprint);
+      existingWt.add(fingerprintOfWorkingTime(w));
+    }
+    const seenInFile = new Set<string>();
+    const pendingUsers = new Map<string, string>();
+    let timeEntryCount = 0;
+    let workingTimeCount = 0;
 
-    rows.forEach((row, index) => {
+    for (const r of rowResults) {
+      if (r.ignored) continue;
+      result.totalRows++;
+      report.totalRows++;
+
+      const pushError = (messages: string[], raw?: unknown) => {
+        result.rows.push({ rowNumber: r.rowNumber, status: 'ERROR', messages });
+        result.counts.ERROR++;
+        report.errors.push({ row: r.rowNumber, error: messages.join('; '), data: raw });
+      };
+
+      if (!r.record || r.errors.length > 0) { pushError(r.errors.length ? r.errors : ['Zeile konnte nicht gelesen werden']); continue; }
+      const rec = r.record;
+      const warnings = [...r.warnings];
+
       try {
-        const clientName = String(row['Client'] || row['Kunde'] || 'Standard Kunde').trim();
-        const projectName = String(row['Project'] || row['Projekt'] || 'Standard Projekt').trim();
-
-        // Skip potential header rows
-        if (clientName.toLowerCase() === 'client' && projectName.toLowerCase() === 'project') {
-          return;
+        if (rec.target === 'MASTER_DATA') throw new Error('Der Import reiner Stammdaten ist in Phase 1 noch nicht verfügbar');
+        if (this.isPeriodLocked(rec.date).isLocked) {
+          throw new Error(`Der Monat ${rec.date.slice(0, 7)} ist abgeschlossen und gesperrt`);
         }
 
-        const userName = String(row['User'] || row['Benutzer'] || row['Mitarbeiter'] || 'Importierter Mitarbeiter').trim();
-        const userEmail = String(row['Email'] || row['E-Mail'] || `${userName.toLowerCase().replace(/\s+/g, '.')}@example.com`).trim();
-        const userGroup = String(row['Group'] || row['Gruppe'] || '').trim();
-        const taskName = row['Task'] || row['Aufgabe'] ? String(row['Task'] || row['Aufgabe']).trim() : undefined;
-        const description = row['Description'] || row['Beschreibung'] || '';
-        
-        const rawDate = row['Start Date'] || row['Datum'] || row['Date'];
-        const date = normalizeDate(rawDate);
-        const startTime = normalizeTime(row['Start Time'] || row['Startzeit']);
-        const endTime = normalizeTime(row['End Time'] || row['Endzeit']);
-
-        // Duration parsing
-        let durationMinutes = 60;
-        if (row['Duration (decimal)']) {
-          durationMinutes = Math.round(parseFloat(String(row['Duration (decimal)']).replace(',', '.')) * 60);
-        } else if (row['Duration (h)']) {
-          const parts = String(row['Duration (h)']).split(':');
-          if (parts.length >= 2) {
-            durationMinutes = parseInt(parts[0], 10) * 60 + parseInt(parts[1], 10);
-          }
-        } else if (startTime && endTime) {
-          durationMinutes = this.calculateMinutes(startTime, endTime);
-        }
-
-        if (durationMinutes <= 0) {
-          durationMinutes = 60;
-        }
-
-        // Billable Rate extraction
-        let hourlyBillingRate: number | undefined = undefined;
-        let hourlyCostRate: number | undefined = undefined;
-        for (const key of Object.keys(row)) {
-          const k = key.toLowerCase();
-          if ((k.includes('billable rate') || k.includes('stundensatz') || k.includes('hourly rate')) && row[key]) {
-            const val = parseFloat(String(row[key]).replace(',', '.').trim());
-            if (!isNaN(val) && val > 0) {
-              hourlyBillingRate = val;
-            }
-          }
-          if ((k.includes('cost rate') || k.includes('kostensatz')) && row[key]) {
-            const val = parseFloat(String(row[key]).replace(',', '.').trim());
-            if (!isNaN(val) && val > 0) {
-              hourlyCostRate = val;
-            }
-          }
-        }
-
-        const isBillable = String(row['Billable'] || row['Abrechenbar'] || 'Yes').toLowerCase().includes('y') ||
-                           String(row['Billable'] || '').toLowerCase().includes('ja') ||
-                           row['Billable'] === true;
-
-        const isExternal = !!(userGroup && !userGroup.toLowerCase().includes('insight arcs'));
-        if (hourlyCostRate === undefined && isExternal && hourlyBillingRate) {
-          hourlyCostRate = hourlyBillingRate;
-        }
-
-        // 1. Ensure Client exists in current organization
-        let client = this.clients.find(c => c.orgId === currentOrgId && c.name.toLowerCase() === clientName.toLowerCase());
-        if (!client) {
-          client = this.addClient({ name: clientName });
-          report.createdClients.push(clientName);
-        }
-
-        // 2. Ensure Project exists in current organization
-        let project = this.projects.find(p => p.orgId === currentOrgId && p.name.toLowerCase() === projectName.toLowerCase());
-        if (!project) {
-          project = this.addProject({ name: projectName, clientId: client.id, billingModel: 'TIME_AND_MATERIAL' }, actorId);
-          report.createdProjects.push(projectName);
-        }
-
-        // 3. Ensure Task exists if provided
-        let task: Task | undefined;
-        if (taskName) {
-          task = this.tasks.find(t => t.projectId === project!.id && t.name.toLowerCase() === taskName.toLowerCase());
-          if (!task) {
-            task = this.addTask({ projectId: project.id, name: taskName, isBillableDefault: isBillable });
-            report.createdTasks.push(taskName);
-          }
-        }
-
-        // 4. Ensure User exists and has membership in current organization
-        let user = this.users.find(u => 
-          (u.orgId === currentOrgId || (u.memberships && u.memberships.some(m => m.orgId === currentOrgId))) &&
-          (u.email.toLowerCase() === userEmail.toLowerCase() || u.name.toLowerCase() === userName.toLowerCase())
-        );
-
-        if (!user) {
-          // Check if user exists globally in another org
-          const existingGlobalUser = this.users.find(u => 
-            u.email.toLowerCase() === userEmail.toLowerCase() || u.name.toLowerCase() === userName.toLowerCase()
-          );
-
-          if (existingGlobalUser) {
-            user = existingGlobalUser;
-            if (!user.memberships) user.memberships = [];
-            if (!user.memberships.some(m => m.orgId === currentOrgId)) {
-              user.memberships.push({
-                orgId: currentOrgId,
-                orgName: currentOrg.name,
-                role: 'EMPLOYEE',
+        // 1. Mitarbeitende zuordnen (nur Superadmins dürfen neue Mitarbeitende anlegen)
+        const userKey = (rec.userEmail || rec.userRef).trim().toLowerCase();
+        const isExternal = !!(rec.userGroup && !rec.userGroup.toLowerCase().includes('insight arcs'));
+        let costRate = rec.hourlyCostRate ?? (isExternal ? rec.hourlyBillingRate : undefined);
+        let userId: string;
+        let tzUserId: string | undefined;
+        const found = this.findImportUser(rec);
+        if (found.user && found.inOrg) {
+          userId = found.user.id; tzUserId = userId;
+        } else if (pendingUsers.has(userKey)) {
+          userId = pendingUsers.get(userKey)!;
+          tzUserId = userId.startsWith('new-user:') ? undefined : userId;
+        } else if (!actor.isSuperAdmin) {
+          throw new Error(`Mitarbeitende „${rec.userRef}" sind in dieser Organisation nicht vorhanden. Bitte zuerst anlegen bzw. zuordnen – nur Superadmins dürfen beim Import neue Mitarbeitende anlegen.`);
+        } else if (found.user) {
+          // Bestehende Person aus einer anderen Organisation: Mitgliedschaft ergänzen
+          userId = found.user.id; tzUserId = userId;
+          if (opts.dryRun) {
+            addUnique(result.wouldCreate.users, `${found.user.name} (Zuordnung)`);
+          } else {
+            const u = found.user;
+            if (!u.memberships) u.memberships = [];
+            if (!u.memberships.some(m => m.orgId === orgId)) {
+              u.memberships.push({
+                orgId, orgName: org.name, role: 'EMPLOYEE',
                 employmentType: isExternal ? 'EXTERNAL' : 'INTERNAL',
-                individualBillingRate: hourlyBillingRate,
-                individualCostRate: hourlyCostRate || (isExternal ? hourlyBillingRate : undefined),
-                isDefault: false
+                individualBillingRate: rec.hourlyBillingRate, individualCostRate: costRate, isDefault: false,
               });
             }
-          } else {
-            user = this.addUser({
-              name: userName,
-              email: userEmail,
-              role: 'EMPLOYEE',
-              status: 'ACTIVE',
-              employmentType: isExternal ? 'EXTERNAL' : 'INTERNAL',
-              companyName: isExternal ? userGroup : undefined,
-              individualBillingRate: hourlyBillingRate,
-              individualCostRate: hourlyCostRate || (isExternal ? hourlyBillingRate : undefined)
-            }, actorId);
-            report.createdUsers.push(userName);
           }
+          pendingUsers.set(userKey, userId);
+        } else if (opts.dryRun) {
+          userId = `new-user:${userKey}`;
+          addUnique(result.wouldCreate.users, rec.userRef);
+          pendingUsers.set(userKey, userId);
+        } else {
+          const created = this.addUser({
+            name: rec.userRef,
+            email: rec.userEmail || '',
+            role: 'EMPLOYEE',
+            status: 'INVITED',
+            employmentType: isExternal ? 'EXTERNAL' : 'INTERNAL',
+            companyName: isExternal ? rec.userGroup : undefined,
+            individualBillingRate: rec.hourlyBillingRate,
+            individualCostRate: costRate,
+          }, actorId);
+          userId = created.id; tzUserId = userId;
+          report.createdUsers.push(created.name);
+          pendingUsers.set(userKey, userId);
         }
+        const tz = this.timeZoneFor(tzUserId || actorId, actorId);
+        const sourceRef = `${opts.source}${opts.fileName ? ':' + opts.fileName : ''}#${rec.rowNumber}`;
 
-        // 5. Duplicate Check within current organization
-        const isDuplicate = this.timeEntries.some(e =>
-          e.orgId === currentOrgId &&
-          e.userId === user!.id &&
-          e.projectId === project!.id &&
-          e.date === date &&
-          e.startTime === startTime &&
-          e.durationMinutes === durationMinutes &&
-          e.description === description
-        );
+        if (rec.target === 'TIME_ENTRY') {
+          this.assertBookingDateAllowed(rec.date, 'REGULAR', tz);
+          // 2. Kunde / Projekt / Aufgabe (fehlende Stammdaten werden wie bisher angelegt)
+          const clientName = (rec.clientRef || 'Standard Kunde').trim();
+          if (!rec.clientRef) warnings.push('Kunde fehlt – „Standard Kunde" wird verwendet');
+          let client = this.clients.find(c => c.orgId === orgId && c.name.toLowerCase() === clientName.toLowerCase());
+          let clientId = client?.id || `new-client:${clientName.toLowerCase()}`;
+          if (!client) {
+            if (opts.dryRun) addUnique(result.wouldCreate.clients, clientName);
+            else { client = this.addClient({ name: clientName }); clientId = client.id; report.createdClients.push(clientName); }
+          }
+          const projectName = rec.projectRef!.trim();
+          let project = this.projects.find(p => p.orgId === orgId && p.name.toLowerCase() === projectName.toLowerCase());
+          let projectId = project?.id || `new-project:${projectName.toLowerCase()}`;
+          if (project && (project.status === 'ARCHIVED' || project.status === 'COMPLETED')) {
+            throw new Error(`Das Projekt „${project.name}" ist ${project.status === 'ARCHIVED' ? 'archiviert' : 'abgeschlossen'} und für neue Buchungen gesperrt`);
+          }
+          if (!project) {
+            if (opts.dryRun) addUnique(result.wouldCreate.projects, projectName);
+            else {
+              project = this.addProject({ name: projectName, clientId, billingModel: 'TIME_AND_MATERIAL' }, actorId);
+              projectId = project.id;
+              report.createdProjects.push(projectName);
+            }
+          }
+          let task: Task | undefined;
+          if (rec.taskRef) {
+            task = project ? this.tasks.find(t => t.projectId === project!.id && t.name.toLowerCase() === rec.taskRef!.toLowerCase()) : undefined;
+            if (!task) {
+              if (opts.dryRun) addUnique(result.wouldCreate.tasks, `${projectName} / ${rec.taskRef}`);
+              else {
+                task = this.addTask({ projectId, name: rec.taskRef, isBillableDefault: rec.isBillable });
+                report.createdTasks.push(rec.taskRef);
+              }
+            }
+          }
 
-        if (isDuplicate) {
-          report.skippedDuplicates++;
-          return;
+          // 3. Duplikatprüfung (einheitlicher Fingerabdruck)
+          const fpBase = { userId, date: rec.date, startTime: rec.startTime, durationMinutes: rec.durationMinutes, projectId };
+          const fingerprint = computeFingerprint({ ...fpBase, source: opts.source, externalId: rec.externalId });
+          const legacyFp = computeFingerprint(fpBase);
+          if (existingTe.has(fingerprint) || existingTe.has(legacyFp) || seenInFile.has(fingerprint) || seenInFile.has(legacyFp)) {
+            result.rows.push({ rowNumber: r.rowNumber, status: 'DUPLICATE', messages: ['Eintrag ist bereits vorhanden'], fingerprint });
+            result.counts.DUPLICATE++;
+            report.skippedDuplicates++;
+            continue;
+          }
+          seenInFile.add(fingerprint); seenInFile.add(legacyFp);
+
+          if (!opts.dryRun) {
+            const entry = this.createTimeEntry({
+              userId,
+              projectId,
+              clientId: project?.clientId || clientId,
+              taskId: task?.id,
+              date: rec.date,
+              startTime: rec.startTime,
+              endTime: rec.endTime,
+              durationMinutes: rec.durationMinutes,
+              breakMinutes: rec.breakMinutes,
+              description: rec.description || '',
+              isBillable: rec.isBillable,
+              hourlyBillingRate: rec.hourlyBillingRate,
+              hourlyCostRate: costRate,
+              approvalStatus: 'SUBMITTED',
+            }, actorId);
+            entry.importBatchId = batchId;
+            entry.fingerprint = fingerprint;
+            entry.sourceRef = sourceRef;
+            timeEntryCount++;
+            report.importedEntries++;
+          }
+          this.pushImportRow(result, r.rowNumber, warnings, rec, fingerprint);
+        } else {
+          // Arbeitszeit oder Abwesenheit
+          const dayType: DayType | undefined = rec.target === 'ABSENCE'
+            ? (rec.dayType && rec.dayType !== 'REGULAR' ? rec.dayType : undefined)
+            : 'REGULAR';
+          if (!dayType) throw new Error('Abwesenheitsart fehlt (z. B. Urlaub, Krankheit)');
+          if (dayType === 'REGULAR' && !(rec.startTime && rec.endTime)) throw new Error('Für Arbeitszeit sind Start- und Endzeit erforderlich');
+          this.assertBookingDateAllowed(rec.date, dayType, tz);
+          const net = dayType === 'REGULAR' ? Math.max(0, minutesBetween(rec.startTime!, rec.endTime!) - (rec.breakMinutes || 0)) : 0;
+          const legacyFp = fingerprintOfWorkingTime({ userId, date: rec.date, startTime: rec.startTime, totalNetMinutes: net, dayType });
+          const fingerprint = rec.externalId
+            ? computeFingerprint({ source: opts.source, externalId: rec.externalId, userId, date: rec.date, durationMinutes: net })
+            : legacyFp;
+          if (existingWt.has(fingerprint) || existingWt.has(legacyFp) || seenInFile.has(fingerprint) || seenInFile.has(legacyFp)) {
+            result.rows.push({ rowNumber: r.rowNumber, status: 'DUPLICATE', messages: ['Eintrag ist bereits vorhanden'], fingerprint });
+            result.counts.DUPLICATE++;
+            report.skippedDuplicates++;
+            continue;
+          }
+          seenInFile.add(fingerprint); seenInFile.add(legacyFp);
+
+          if (!opts.dryRun) {
+            const wt = this.createOrUpdateWorkingTime({
+              userId,
+              date: rec.date,
+              dayType,
+              halfDay: false,
+              startTime: rec.startTime,
+              endTime: rec.endTime,
+              breakMinutes: rec.breakMinutes || 0,
+              note: rec.description || undefined,
+            }, actorId);
+            wt.importBatchId = batchId;
+            wt.fingerprint = fingerprint;
+            wt.sourceRef = sourceRef;
+            workingTimeCount++;
+            report.importedEntries++;
+          }
+          this.pushImportRow(result, r.rowNumber, warnings, rec, fingerprint);
         }
-
-        // 6. Create Entry
-        this.createTimeEntry({
-          userId: user.id,
-          userName: user.name,
-          projectId: project.id,
-          projectName: project.name,
-          clientId: client.id,
-          clientName: client.name,
-          taskId: task?.id,
-          taskName: task?.name,
-          date,
-          startTime,
-          endTime,
-          durationMinutes,
-          description,
-          isBillable,
-          hourlyBillingRate,
-          hourlyCostRate: hourlyCostRate || (isExternal ? hourlyBillingRate : undefined),
-          approvalStatus: 'APPROVED'
-        }, actorId);
-
-        report.importedEntries++;
       } catch (err: any) {
-        report.errors.push({ row: index + 1, error: err.message || 'Parsing error', data: row });
+        pushError([err?.message || 'Unbekannter Fehler'], rec.raw);
+      }
+    }
+
+    if (!opts.dryRun) {
+      if (timeEntryCount + workingTimeCount > 0) {
+        const batch: ImportBatch = {
+          id: batchId,
+          orgId,
+          source: opts.source,
+          schemaId: opts.schemaId,
+          fileName: opts.fileName,
+          target: opts.target || (timeEntryCount > 0 ? 'TIME_ENTRY' : 'WORKING_TIME'),
+          createdBy: actorId,
+          createdByName: actor.user?.name,
+          createdAt: new Date().toISOString(),
+          timeEntryCount,
+          workingTimeCount,
+          importedCount: timeEntryCount + workingTimeCount,
+          skippedCount: report.skippedDuplicates,
+          errorCount: report.errors.length,
+        };
+        org.importBatches = [...(org.importBatches || []), batch];
+        report.batchId = batchId;
+      }
+      this.saveToFile();
+    }
+    report.rowResults = result.rows;
+    return { result, report };
+  }
+
+  private pushImportRow(result: ImportDryRunResult, rowNumber: number, warnings: string[], rec: ImportRecord, fingerprint: string) {
+    const status: ImportRowStatus = warnings.length > 0 ? 'WARNING' : 'NEW';
+    const { raw: _raw, ...recordWithoutRaw } = rec;
+    result.rows.push({ rowNumber, status, messages: warnings, record: recordWithoutRaw as ImportRecord, fingerprint });
+    result.counts[status]++;
+    result.totalMinutes += rec.durationMinutes || 0;
+  }
+
+  /** Wandelt Zeilen (Objekte aus dem Frontend) oder CSV-Text anhand eines Schemas in Zeilenergebnisse um. */
+  private toSchemaRows(input: { rows?: Array<Record<string, unknown>>; csv?: string; schema?: ImportSchema }): { schema: ImportSchema; rows: SchemaRowResult[] } {
+    const schema = input.schema || CLOCKIFY_CSV_SCHEMA;
+    if (typeof input.csv === 'string') {
+      const parsed = parseCsvObjects(input.csv, schema.delimiter || 'auto', schema.headerRow || 1);
+      return { schema, rows: applySchema(schema, parsed.rows) };
+    }
+    const rows = (input.rows || []).map((data, i) => ({ lineNumber: i + 2, data: data || {} }));
+    return { schema, rows: applySchema(schema, rows) };
+  }
+
+  /** Probelauf: prüft alle Zeilen, ohne etwas zu speichern. */
+  public dryRunImport(input: { rows?: Array<Record<string, unknown>>; csv?: string; schema?: ImportSchema }, actorId: string): ImportDryRunResult {
+    const { schema, rows } = this.toSchemaRows(input);
+    return this.processImportRows(rows, actorId, { source: schema.source, schemaId: schema.id, dryRun: true, target: schema.target }).result;
+  }
+
+  /** Ausführung mit beliebigem (validiertem) Schema. */
+  public executeImport(input: { rows?: Array<Record<string, unknown>>; csv?: string; schema?: ImportSchema; fileName?: string }, actorId: string): ClockifyImportReport {
+    const { schema, rows } = this.toSchemaRows(input);
+    return this.processImportRows(rows, actorId, { source: schema.source, schemaId: schema.id, fileName: input.fileName, dryRun: false, target: schema.target }).report;
+  }
+
+  // --- Clockify CSV Importer (Section 10) – nutzt jetzt das eingebaute Schema „Clockify CSV" ---
+  public importClockifyData(rows: any[], actorId: string, opts: { fileName?: string } = {}): ClockifyImportReport {
+    return this.executeImport({ rows, schema: CLOCKIFY_CSV_SCHEMA, fileName: opts.fileName }, actorId);
+  }
+
+  /** Clockify-PDF-Import mit expliziter Mitarbeitenden-/Projektzuordnung (einheitlicher Fingerabdruck + Batch). */
+  public importClockifyPdfEntries(
+    entries: Array<{ userName: string; date: string; startTime?: string; endTime?: string; description?: string; projectTask?: string; isBillable?: boolean }>,
+    opts: {
+      importType: 'working-time' | 'time-entries';
+      userMapping: Record<string, string>;
+      projectMapping: Record<string, { projectId: string; clientId?: string }>;
+      skipDuplicates: boolean;
+      fileName?: string;
+      mapDayType: (projectTask: string) => string;
+    },
+    actorId: string
+  ): { imported: number; skipped: number; errors: string[]; batchId?: string } {
+    const org = this.organization;
+    const orgId = org.id;
+    const batchId = `imp-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`;
+    const source = 'clockify-pdf';
+    let imported = 0;
+    let skipped = 0;
+    const errors: string[] = [];
+    const existing = new Set<string>();
+    if (opts.importType === 'working-time') {
+      for (const w of this.workingTimeEntries) if (w.orgId === orgId) { existing.add(fingerprintOfWorkingTime(w)); if (w.fingerprint) existing.add(w.fingerprint); }
+    } else {
+      for (const e of this.timeEntries) if (e.orgId === orgId) { existing.add(fingerprintOfTimeEntry(e)); if (e.fingerprint) existing.add(e.fingerprint); }
+    }
+
+    entries.forEach((entry, idx) => {
+      const label = `${entry.date} ${entry.userName}`;
+      try {
+        const userId = opts.userMapping[entry.userName];
+        if (!userId) { skipped++; return; }
+        const date = parseDate(entry.date, 'auto');
+        if (!date.ok) throw new Error(date.error);
+        const start = parseTime(entry.startTime);
+        const end = parseTime(entry.endTime);
+        if (!start.ok) throw new Error(start.error);
+        if (!end.ok) throw new Error(end.error);
+        const sourceRef = `${source}${opts.fileName ? ':' + opts.fileName : ''}#${idx + 1}`;
+
+        if (opts.importType === 'working-time') {
+          const dayType = (opts.mapDayType(entry.projectTask || '') || 'REGULAR') as DayType;
+          if (dayType === 'REGULAR' && !(start.value && end.value)) throw new Error('Start- und Endzeit fehlen');
+          const net = dayType === 'REGULAR' ? minutesBetween(start.value!, end.value!) : 0;
+          const fingerprint = fingerprintOfWorkingTime({ userId, date: date.value, startTime: start.value, totalNetMinutes: net, dayType });
+          if (opts.skipDuplicates && existing.has(fingerprint)) { skipped++; return; }
+          existing.add(fingerprint);
+          const wt = this.createOrUpdateWorkingTime({
+            userId, date: date.value, dayType, halfDay: false,
+            startTime: start.value, endTime: end.value, breakMinutes: 0,
+            note: (entry.description || '') + (entry.projectTask ? ` (${entry.projectTask})` : ''),
+          }, actorId);
+          wt.importBatchId = batchId; wt.fingerprint = fingerprint; wt.sourceRef = sourceRef;
+          imported++;
+        } else {
+          const mapping = opts.projectMapping?.[entry.projectTask || ''];
+          if (!mapping?.projectId) { skipped++; return; }
+          const project = this.projects.find(p => p.id === mapping.projectId && p.orgId === orgId);
+          if (!project) { skipped++; return; }
+          if (!(start.value && end.value)) throw new Error('Start- und Endzeit fehlen');
+          const durationMinutes = minutesBetween(start.value, end.value);
+          if (durationMinutes <= 0) throw new Error('Ende liegt nicht nach dem Start');
+          const fingerprint = computeFingerprint({ userId, date: date.value, startTime: start.value, durationMinutes, projectId: project.id });
+          if (opts.skipDuplicates && existing.has(fingerprint)) { skipped++; return; }
+          existing.add(fingerprint);
+          const te = this.createTimeEntry({
+            userId, projectId: project.id, clientId: mapping.clientId || project.clientId,
+            date: date.value, startTime: start.value, endTime: end.value, durationMinutes,
+            description: entry.description || '', isBillable: entry.isBillable, breakMinutes: 0,
+            approvalStatus: 'SUBMITTED',
+          }, actorId);
+          te.importBatchId = batchId; te.fingerprint = fingerprint; te.sourceRef = sourceRef;
+          imported++;
+        }
+      } catch (e: any) {
+        errors.push(`${label}: ${e?.message || 'Fehler'}`);
       }
     });
 
-    return report;
+    let recordedBatchId: string | undefined;
+    if (imported > 0) {
+      const actor = this.getActorRoleInfo(actorId);
+      const isWt = opts.importType === 'working-time';
+      org.importBatches = [...(org.importBatches || []), {
+        id: batchId, orgId, source, fileName: opts.fileName,
+        target: isWt ? 'WORKING_TIME' : 'TIME_ENTRY',
+        createdBy: actorId, createdByName: actor.user?.name, createdAt: new Date().toISOString(),
+        timeEntryCount: isWt ? 0 : imported, workingTimeCount: isWt ? imported : 0,
+        importedCount: imported, skippedCount: skipped, errorCount: errors.length,
+      }];
+      recordedBatchId = batchId;
+    }
+    this.saveToFile();
+    return { imported, skipped, errors, batchId: recordedBatchId };
+  }
+
+  /** Import-Historie der aktiven Organisation (neueste zuerst) inkl. Rückgängig-Status. */
+  public getImportBatches(now: Date = new Date()): ImportBatchView[] {
+    const org = this.organization;
+    return [...(org.importBatches || [])]
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+      .map(batch => {
+        const dates = [
+          ...this.timeEntries.filter(e => e.importBatchId === batch.id).map(e => e.date),
+          ...this.workingTimeEntries.filter(w => w.importBatchId === batch.id).map(w => w.date),
+        ].sort();
+        const check = canUndoImportBatch(batch, dates, d => this.isPeriodLocked(d).isLocked, now);
+        return {
+          ...batch,
+          dateFrom: dates[0],
+          dateTo: dates[dates.length - 1],
+          canUndo: check.allowed,
+          undoBlockedReason: check.allowed === false ? check.reason : undefined,
+          undoDeadline: new Date(new Date(batch.createdAt).getTime() + IMPORT_UNDO_WINDOW_DAYS * 86400000).toISOString(),
+        };
+      });
+  }
+
+  /**
+   * Macht einen Import rückgängig: löscht alle Einträge des Batches (mit Audit-Log).
+   * Nur innerhalb von 5 Tagen und nur, wenn kein betroffener Zeitraum gesperrt ist.
+   * Beim Import angelegte Stammdaten (Kunden, Projekte, Mitarbeitende) bleiben erhalten.
+   */
+  public undoImportBatch(batchId: string, actorId: string, now: Date = new Date()):
+    { ok: true; batch: ImportBatch; deletedTimeEntries: number; deletedWorkingTimes: number }
+    | { ok: false; reason: 'NOT_FOUND' | 'ALREADY_REVERTED' | 'EXPIRED' | 'PERIOD_LOCKED'; lockedDates?: string[] } {
+    const org = this.organization;
+    const batch = (org.importBatches || []).find(b => b.id === batchId);
+    if (!batch) return { ok: false, reason: 'NOT_FOUND' };
+    const teIds = this.timeEntries.filter(e => e.importBatchId === batchId).map(e => e.id);
+    const wtIds = this.workingTimeEntries.filter(w => w.importBatchId === batchId).map(w => w.id);
+    const dates = [
+      ...this.timeEntries.filter(e => e.importBatchId === batchId).map(e => e.date),
+      ...this.workingTimeEntries.filter(w => w.importBatchId === batchId).map(w => w.date),
+    ];
+    const check = canUndoImportBatch(batch, dates, d => this.isPeriodLocked(d).isLocked, now);
+    if (check.allowed === false) return { ok: false, reason: check.reason, lockedDates: check.lockedDates };
+
+    let deletedTimeEntries = 0;
+    let deletedWorkingTimes = 0;
+    for (const id of teIds) if (this.deleteTimeEntry(id, actorId)) deletedTimeEntries++;
+    for (const id of wtIds) if (this.deleteWorkingTimeEntry(id, actorId)) deletedWorkingTimes++;
+    batch.revertedAt = now.toISOString();
+    batch.revertedBy = actorId;
+    batch.revertedByName = this.users.find(u => u.id === actorId)?.name;
+    this.saveToFile();
+    return { ok: true, batch, deletedTimeEntries, deletedWorkingTimes };
   }
 
   /**

@@ -25,6 +25,7 @@ import { consumePasswordResetToken, createPasswordResetToken, clearPasswordReset
 import multer from 'multer';
 import pdfParse from 'pdf-parse/lib/pdf-parse.js';
 import { parseClockifyPdfText, mapDayType } from './clockifyPdfParser.js';
+import { BUILTIN_SCHEMAS, CLOCKIFY_CSV_SCHEMA, deriveSchemaFromCsv, importSchemaJsonSchema, validateImportSchema, type ImportSchema } from './import/schema.js';
 import { buildClockifyXlsx, buildTimesheetXlsx, aggregateByTask, safeFilePart, XLSX_MIME, generateDetailedTimeReport, normalizeDateParam } from './xlsxExports.js';
 
 export interface CreateAppOptions {
@@ -952,6 +953,124 @@ export async function createApp(options: CreateAppOptions = {}): Promise<express
     }
   });
 
+  // --- Allgemeiner Datenimport (docs/KONZEPT_DATENIMPORT.md, Phase 1) ---
+  /** Importe dürfen nur Admins und Superadmins ausführen. */
+  const resolveImportActor = (req: Request, res: Response): string | null => {
+    const actorId = getActorId(req);
+    if (!actorId) {
+      res.status(401).json({ error: 'Nicht authentifiziert.' });
+      return null;
+    }
+    const info = storage.getActorRoleInfo(actorId);
+    if (!info.user || !(info.isSuperAdmin || info.isAdmin)) {
+      res.status(403).json({ error: 'Keine Berechtigung für Importe.' });
+      return null;
+    }
+    return actorId;
+  };
+
+  /** Liest ein optionales Schema aus dem Body; ungültig → 400 mit Fehlerliste. */
+  const readImportSchema = (raw: unknown, res: Response): ImportSchema | null | undefined => {
+    if (raw === undefined || raw === null || raw === '') return undefined;
+    if (typeof raw === 'string' && BUILTIN_SCHEMAS.some(b => b.id === raw)) return BUILTIN_SCHEMAS.find(b => b.id === raw)!;
+    const v = validateImportSchema(raw);
+    if (v.valid === false) {
+      res.status(400).json({ error: 'Schema-Datei ist ungültig.', errors: v.errors });
+      return null;
+    }
+    return v.schema;
+  };
+
+  // Schema-Entwurf aus einer Musterdatei ableiten (Body: { csv, name?, source? } oder multipart „file")
+  const uploadSample = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
+  app.post('/api/import/schemas/derive', uploadSample.single('file'), (req, res) => {
+    if (!resolveImportActor(req, res)) return;
+    const csv = req.file ? req.file.buffer.toString('utf-8') : (req.body?.csv as string | undefined);
+    if (typeof csv !== 'string' || !csv.trim()) {
+      return res.status(400).json({ error: 'Keine Musterdatei (CSV) übergeben.' });
+    }
+    res.json(deriveSchemaFromCsv(csv, { name: req.body?.name, source: req.body?.source }));
+  });
+
+  // Schema-Datei prüfen (Body: das Schema-Objekt)
+  app.post('/api/import/schemas/validate', (req, res) => {
+    if (!resolveImportActor(req, res)) return;
+    const v = validateImportSchema(req.body);
+    if (v.valid === false) return res.json({ valid: false, errors: v.errors });
+    res.json({ valid: true, errors: [], schema: v.schema });
+  });
+
+  // Vorlage herunterladen (Standard: eingebautes Schema „Clockify CSV"); ?format=jsonschema liefert das JSON Schema
+  app.get('/api/import/schemas/template', (req, res) => {
+    if (!resolveImportActor(req, res)) return;
+    if (req.query.format === 'jsonschema') {
+      res.setHeader('Content-Disposition', 'attachment; filename="import-schema.schema.json"');
+      return res.json(importSchemaJsonSchema());
+    }
+    const builtin = BUILTIN_SCHEMAS.find(b => b.id === req.query.builtin) || CLOCKIFY_CSV_SCHEMA;
+    const { id: _id, ...template } = builtin;
+    res.setHeader('Content-Disposition', `attachment; filename="import-schema-${template.source}.json"`);
+    res.json({ ...template, name: `${template.name} (Vorlage)` });
+  });
+
+  // Probelauf: Status je Zeile, schreibt nichts (Body: { rows } oder { csv, schema? })
+  app.post('/api/import/dry-run', (req, res) => {
+    const actorId = resolveImportActor(req, res);
+    if (!actorId) return;
+    const { rows, csv } = req.body || {};
+    if (!(Array.isArray(rows) && rows.length > 0) && !(typeof csv === 'string' && csv.trim())) {
+      return res.status(400).json({ error: 'Zeilen (rows) oder CSV-Inhalt (csv) erforderlich.' });
+    }
+    const schema = readImportSchema(req.body.schema, res);
+    if (schema === null) return;
+    res.json(storage.dryRunImport({ rows: Array.isArray(rows) ? rows : undefined, csv: typeof csv === 'string' ? csv : undefined, schema }, actorId));
+  });
+
+  // Import mit beliebigem Schema ausführen (Body: { csv | rows, schema?, fileName? })
+  app.post('/api/import/execute', (req, res) => {
+    const actorId = resolveImportActor(req, res);
+    if (!actorId) return;
+    const { rows, csv, fileName } = req.body || {};
+    if (!(Array.isArray(rows) && rows.length > 0) && !(typeof csv === 'string' && csv.trim())) {
+      return res.status(400).json({ error: 'Zeilen (rows) oder CSV-Inhalt (csv) erforderlich.' });
+    }
+    const schema = readImportSchema(req.body.schema, res);
+    if (schema === null) return;
+    res.json(storage.executeImport({
+      rows: Array.isArray(rows) ? rows : undefined,
+      csv: typeof csv === 'string' ? csv : undefined,
+      schema,
+      fileName: typeof fileName === 'string' ? fileName : undefined,
+    }, actorId));
+  });
+
+  // Import-Historie
+  app.get('/api/import/batches', (req, res) => {
+    if (!resolveImportActor(req, res)) return;
+    res.json(storage.getImportBatches());
+  });
+
+  // Import rückgängig machen (nur innerhalb von 5 Tagen und ohne gesperrten Zeitraum)
+  app.delete('/api/import/batches/:id', (req, res, next) => {
+    const actorId = resolveImportActor(req, res);
+    if (!actorId) return;
+    try {
+      const r = storage.undoImportBatch(req.params.id, actorId);
+      if (r.ok === false) {
+        const messages: Record<string, string> = {
+          NOT_FOUND: 'Import nicht gefunden.',
+          ALREADY_REVERTED: 'Dieser Import wurde bereits rückgängig gemacht.',
+          EXPIRED: 'Ein Import kann nur innerhalb von 5 Tagen rückgängig gemacht werden.',
+          PERIOD_LOCKED: 'Der Import enthält Einträge in einem gesperrten Zeitraum und kann nicht rückgängig gemacht werden.',
+        };
+        return res.status(r.reason === 'NOT_FOUND' ? 404 : 409).json({ error: messages[r.reason], reason: r.reason, lockedDates: r.lockedDates });
+      }
+      res.json(r);
+    } catch (err: any) {
+      next(new BadRequestError(err?.message || 'Fehler beim Rückgängigmachen des Imports'));
+    }
+  });
+
   // --- Clockify PDF Import (Section 22) ---
   const uploadMemory = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } });
 
@@ -989,69 +1108,13 @@ export async function createApp(options: CreateAppOptions = {}): Promise<express
         skipDuplicates: boolean;
       };
 
-      let imported = 0;
-      let skipped = 0;
-      const errors: string[] = [];
-
-      for (const entry of entries) {
-        try {
-          const userId = userMapping[entry.userName];
-          if (!userId) { skipped++; continue; }
-
-          if (importType === 'working-time') {
-            const dayType = mapDayType(entry.projectTask);
-            if (skipDuplicates) {
-              const existing = storage.getWorkingTimeEntries({ from: entry.date, to: entry.date, userId }, actorId);
-              if (existing.some(e => e.date === entry.date && e.startTime === entry.startTime)) {
-                skipped++; continue;
-              }
-            }
-            storage.createOrUpdateWorkingTime({
-              userId,
-              date: entry.date,
-              dayType: dayType as any,
-              halfDay: false,
-              startTime: entry.startTime || undefined,
-              endTime: entry.endTime || undefined,
-              breakMinutes: 0,
-              note: entry.description + (entry.projectTask ? ` (${entry.projectTask})` : '')
-            }, actorId);
-            imported++;
-          } else {
-            // time-entries
-            const mapping = projectMapping?.[entry.projectTask];
-            if (!mapping?.projectId) { skipped++; continue; }
-            const project = storage.getProjects(actorId).find(p => p.id === mapping.projectId);
-            if (!project) { skipped++; continue; }
-            const [startH, startM] = (entry.startTime || '09:00').split(':').map(Number);
-            const [endH, endM] = (entry.endTime || '17:00').split(':').map(Number);
-            const durationMinutes = Math.max(0, (endH * 60 + endM) - (startH * 60 + startM));
-            if (skipDuplicates) {
-              const existing = storage.getTimeEntries({ from: entry.date, to: entry.date, userId }, actorId);
-              if (existing.data.some(e => e.userId === userId && e.date === entry.date && e.startTime === entry.startTime)) {
-                skipped++; continue;
-              }
-            }
-            storage.createTimeEntry({
-              userId,
-              projectId: mapping.projectId,
-              clientId: mapping.clientId || project.clientId,
-              date: entry.date,
-              startTime: entry.startTime,
-              endTime: entry.endTime,
-              durationMinutes,
-              description: entry.description,
-              isBillable: entry.isBillable,
-              breakMinutes: 0
-            }, actorId);
-            imported++;
-          }
-        } catch (e: any) {
-          errors.push(`${entry.date} ${entry.userName}: ${e?.message || 'Fehler'}`);
-        }
-      }
-
-      res.json({ imported, skipped, errors });
+      if (!resolveImportActor(req, res)) return;
+      const fileName = typeof (req.body as any).fileName === 'string' ? (req.body as any).fileName : undefined;
+      // Einheitlicher Fingerabdruck, Freigabestatus „zur Freigabe", Batch für Historie/Rückgängig
+      const result = storage.importClockifyPdfEntries(entries, {
+        importType, userMapping, projectMapping, skipDuplicates, fileName, mapDayType,
+      }, actorId);
+      res.json(result);
     } catch (err: any) {
       next(new BadRequestError('Fehler beim Import: ' + (err?.message || 'Unbekannter Fehler')));
     }
@@ -1126,12 +1189,13 @@ export async function createApp(options: CreateAppOptions = {}): Promise<express
 
   // Clockify CSV Import (Section 10)
   app.post('/api/clockify/import', (req, res) => {
-    const actorId = getActorId(req);
-    const { rows } = req.body;
+    const actorId = resolveImportActor(req, res);
+    if (!actorId) return;
+    const { rows, fileName } = req.body;
     if (!Array.isArray(rows) || rows.length === 0) {
       return res.status(400).json({ error: 'Rows array is required' });
     }
-    const report = storage.importClockifyData(rows, actorId);
+    const report = storage.importClockifyData(rows, actorId, { fileName: typeof fileName === 'string' ? fileName : undefined });
     res.json(report);
   });
 

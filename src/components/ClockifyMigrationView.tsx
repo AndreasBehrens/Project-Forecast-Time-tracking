@@ -1,6 +1,6 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { useApp } from '../context/AppContext';
-import { ClockifyImportReport } from '../types';
+import { ClockifyImportReport, ImportDryRunResult, ImportBatchView, ImportRowStatus } from '../types';
 import {
   UploadCloud,
   FileSpreadsheet,
@@ -17,7 +17,10 @@ import {
   Eye,
   AlertTriangle,
   RefreshCw,
-  Sparkles
+  Sparkles,
+  Undo2,
+  History,
+  SearchCheck
 } from 'lucide-react';
 
 export const ClockifyMigrationView: React.FC = () => {
@@ -42,6 +45,30 @@ export const ClockifyMigrationView: React.FC = () => {
   const [showResetModal, setShowResetModal] = useState(false);
   const [isResetting, setIsResetting] = useState(false);
   const [resetMessage, setResetMessage] = useState<string | null>(null);
+
+  // --- Probelauf & Import-Historie (Datenimport Phase 1) ---
+  const [dryRun, setDryRun] = useState<ImportDryRunResult | null>(null);
+  const [dryRunLoading, setDryRunLoading] = useState(false);
+  const [dryRunError, setDryRunError] = useState<string | null>(null);
+  const [batches, setBatches] = useState<ImportBatchView[] | null>(null);
+  const [batchesLoading, setBatchesLoading] = useState(false);
+  const [undoingId, setUndoingId] = useState<string | null>(null);
+  const [historyMessage, setHistoryMessage] = useState<{ kind: 'ok' | 'error'; text: string } | null>(null);
+
+  const loadBatches = useCallback(async () => {
+    setBatchesLoading(true);
+    try {
+      const res = await fetch('/api/import/batches');
+      if (res.ok) setBatches(await res.json());
+      else setBatches(null); // z. B. 403 für Rollen ohne Importrecht
+    } catch {
+      setBatches(null);
+    } finally {
+      setBatchesLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { loadBatches(); }, [loadBatches, activeOrgId]);
 
   // Export filters
   const [exportFrom, setExportFrom] = useState('2025-01-01');
@@ -132,6 +159,7 @@ export const ClockifyMigrationView: React.FC = () => {
       });
       setPdfResult(result);
       setPdfStep(3);
+      loadBatches();
     } catch (err: any) {
       setPdfError(err?.message || 'Fehler beim Import');
     } finally {
@@ -309,6 +337,53 @@ Banking Core Cloud Migration,FinSecure Bank SE,Markus Weber,markus.weber@insight
     };
   }, [csvContent]);
 
+  useEffect(() => { setDryRun(null); setDryRunError(null); }, [csvContent, activeOrgId]);
+
+  const handleDryRun = async () => {
+    if (!csvContent.trim()) return;
+    const rows = parseCsvToObjects(csvContent);
+    if (rows.length === 0) { setDryRunError(t.impRowErrors); return; }
+    setDryRunLoading(true);
+    setDryRunError(null);
+    try {
+      const res = await fetch('/api/import/dry-run', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ rows })
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+      setDryRun(data);
+    } catch (err: any) {
+      setDryRunError(err?.message || 'Error');
+    } finally {
+      setDryRunLoading(false);
+    }
+  };
+
+  const handleUndoBatch = async (batch: ImportBatchView) => {
+    if (!window.confirm(t.impUndoConfirm.replace('{count}', String(batch.importedCount)))) return;
+    setUndoingId(batch.id);
+    setHistoryMessage(null);
+    try {
+      const res = await fetch(`/api/import/batches/${encodeURIComponent(batch.id)}`, { method: 'DELETE' });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+      const count = (data.deletedTimeEntries || 0) + (data.deletedWorkingTimes || 0);
+      setHistoryMessage({ kind: 'ok', text: t.impUndoDone.replace('{count}', String(count)) });
+      await refreshAllData();
+    } catch (err: any) {
+      setHistoryMessage({ kind: 'error', text: `${t.impUndoFailed}: ${err?.message || ''}` });
+    } finally {
+      setUndoingId(null);
+      loadBatches();
+    }
+  };
+
+  const statusLabel = (s: ImportRowStatus) => ({
+    NEW: t.impStatusNew, DUPLICATE: t.impStatusDuplicate, ERROR: t.impStatusError, WARNING: t.impStatusWarning
+  }[s]);
+
   const handleExecuteImport = async () => {
     if (!csvContent.trim()) return;
     try {
@@ -320,7 +395,9 @@ Banking Core Cloud Migration,FinSecure Bank SE,Markus Weber,markus.weber@insight
       }
       const report = await importClockify(rows);
       setImportReport(report);
+      setDryRun(null);
       await refreshAllData();
+      loadBatches();
     } catch (err: any) {
       alert('Importfehler: ' + err.message);
     } finally {
@@ -557,6 +634,83 @@ Banking Core Cloud Migration,FinSecure Bank SE,Markus Weber,markus.weber@insight
           )}
 
           <button
+            id="btn-dry-run-import"
+            type="button"
+            disabled={!csvContent.trim() || dryRunLoading || isProcessing}
+            onClick={handleDryRun}
+            className={`w-full py-2.5 rounded-xl text-xs font-semibold flex items-center justify-center gap-2 border transition-all ${
+              !csvContent.trim() || dryRunLoading || isProcessing
+                ? 'bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed'
+                : 'bg-white text-slate-800 border-slate-300 hover:bg-slate-50'
+            }`}
+          >
+            <SearchCheck className="w-4 h-4" />
+            {dryRunLoading ? t.impDryRunRunning : t.impDryRunButton}
+          </button>
+
+          {dryRunError && (
+            <div className="bg-rose-50 border border-rose-200 text-rose-700 rounded-xl p-3 text-xs flex items-start gap-2">
+              <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" /> {dryRunError}
+            </div>
+          )}
+
+          {dryRun && (
+            <div id="dry-run-result" className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-3 text-xs">
+              <div className="font-bold text-slate-900 flex items-center gap-1.5">
+                <Eye className="w-4 h-4 text-indigo-600" /> {t.impDryRunTitle}
+              </div>
+              <p className="text-[11px] text-slate-500">{t.impDryRunHint} {t.impPendingApprovalHint}</p>
+              <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 text-center">
+                {([
+                  ['NEW', 'text-emerald-600'],
+                  ['WARNING', 'text-amber-600'],
+                  ['DUPLICATE', 'text-slate-500'],
+                  ['ERROR', 'text-rose-600'],
+                ] as Array<[ImportRowStatus, string]>).map(([k, cls]) => (
+                  <div key={k} className="bg-white p-2 rounded-lg border border-slate-200">
+                    <div className="text-slate-400 text-[10px]">{statusLabel(k)}</div>
+                    <div className={`text-base font-bold ${cls}`}>{dryRun.counts[k]}</div>
+                  </div>
+                ))}
+                <div className="bg-white p-2 rounded-lg border border-slate-200">
+                  <div className="text-slate-400 text-[10px]">{t.impTotalHours}</div>
+                  <div className="text-base font-bold text-slate-800">{(dryRun.totalMinutes / 60).toFixed(2)} h</div>
+                </div>
+              </div>
+              {(dryRun.wouldCreate.clients.length + dryRun.wouldCreate.projects.length + dryRun.wouldCreate.tasks.length + dryRun.wouldCreate.users.length) > 0 && (
+                <div className="text-[11px] text-slate-600 space-y-0.5 border-t border-slate-200 pt-2">
+                  <div className="font-semibold text-slate-700">{t.impWouldCreate}:</div>
+                  {dryRun.wouldCreate.clients.length > 0 && <div>{t.impWouldCreateClients}: <strong>{dryRun.wouldCreate.clients.join(', ')}</strong></div>}
+                  {dryRun.wouldCreate.projects.length > 0 && <div>{t.impWouldCreateProjects}: <strong>{dryRun.wouldCreate.projects.join(', ')}</strong></div>}
+                  {dryRun.wouldCreate.tasks.length > 0 && <div>{t.impWouldCreateTasks}: <strong>{dryRun.wouldCreate.tasks.join(', ')}</strong></div>}
+                  {dryRun.wouldCreate.users.length > 0 && <div>{t.impWouldCreateUsers}: <strong>{dryRun.wouldCreate.users.join(', ')}</strong></div>}
+                </div>
+              )}
+              {(() => {
+                const problems = dryRun.rows.filter(r => r.status !== 'NEW');
+                if (problems.length === 0) return null;
+                return (
+                  <div className="border-t border-slate-200 pt-2 space-y-1">
+                    <div className="font-semibold text-slate-700">{t.impProblemRows}:</div>
+                    <div className="max-h-48 overflow-y-auto space-y-1">
+                      {problems.slice(0, 100).map(r => (
+                        <div key={r.rowNumber} className="flex items-start gap-2 bg-white border border-slate-200 rounded-lg px-2 py-1">
+                          <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded shrink-0 ${
+                            r.status === 'ERROR' ? 'bg-rose-100 text-rose-700' : r.status === 'WARNING' ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-600'
+                          }`}>{statusLabel(r.status)}</span>
+                          <span className="text-[11px] text-slate-500 shrink-0">{t.impRow} {r.rowNumber}</span>
+                          <span className="text-[11px] text-slate-700">{r.messages.join(' · ')}</span>
+                        </div>
+                      ))}
+                      {problems.length > 100 && <div className="text-[11px] text-slate-400">+ {problems.length - 100} {t.impMoreRows}</div>}
+                    </div>
+                  </div>
+                );
+              })()}
+            </div>
+          )}
+
+          <button
             id="btn-run-clockify-import"
             type="button"
             disabled={!csvContent.trim() || isProcessing}
@@ -591,6 +745,18 @@ Banking Core Cloud Migration,FinSecure Bank SE,Markus Weber,markus.weber@insight
                   <div className="text-base font-bold text-rose-600">{importReport.errors.length}</div>
                 </div>
               </div>
+
+              {importReport.errors.length > 0 && (
+                <div className="text-[11px] space-y-1 pt-1 border-t border-slate-200">
+                  <div className="font-semibold text-slate-700">{t.impRowErrors}:</div>
+                  <div className="max-h-40 overflow-y-auto space-y-0.5">
+                    {importReport.errors.slice(0, 100).map((e, i) => (
+                      <div key={i} className="text-rose-700">{t.impRow} {e.row}: {e.error}</div>
+                    ))}
+                    {importReport.errors.length > 100 && <div className="text-slate-400">+ {importReport.errors.length - 100} {t.impMoreRows}</div>}
+                  </div>
+                </div>
+              )}
 
               {(importReport.createdClients.length > 0 || importReport.createdProjects.length > 0 || importReport.createdUsers.length > 0) && (
                 <div className="text-[11px] text-slate-600 space-y-1 pt-1 border-t border-slate-200">
@@ -887,6 +1053,92 @@ Banking Core Cloud Migration,FinSecure Bank SE,Markus Weber,markus.weber@insight
           </div>
         )}
       </div>
+      )}
+
+      {/* Import-Historie mit „Rückgängig machen" (Datenimport Phase 1) */}
+      {batches !== null && (
+        <div id="import-history" className="bg-white rounded-2xl border border-slate-200/90 shadow-xs p-6 space-y-3">
+          <div className="flex items-start justify-between gap-3 flex-wrap">
+            <div>
+              <h3 className="font-bold text-sm text-slate-900 flex items-center gap-2">
+                <History className="w-4 h-4 text-emerald-600" /> {t.impHistoryTitle}
+              </h3>
+              <p className="text-xs text-slate-500 mt-1">{t.impHistorySubtitle}</p>
+            </div>
+            <button
+              type="button"
+              onClick={loadBatches}
+              disabled={batchesLoading}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-600 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-xl transition-colors"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${batchesLoading ? 'animate-spin' : ''}`} /> {t.impHistoryRefresh}
+            </button>
+          </div>
+          {historyMessage && (
+            <div className={`rounded-xl p-2.5 text-xs border ${historyMessage.kind === 'ok' ? 'bg-emerald-50 border-emerald-200 text-emerald-700' : 'bg-rose-50 border-rose-200 text-rose-700'}`}>
+              {historyMessage.text}
+            </div>
+          )}
+          {batches.length === 0 ? (
+            <div className="text-xs text-slate-400">{t.impHistoryEmpty}</div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="text-left text-slate-400 border-b border-slate-200">
+                    <th className="py-2 pr-3 font-semibold">{t.impColDate}</th>
+                    <th className="py-2 pr-3 font-semibold">{t.impColSource}</th>
+                    <th className="py-2 pr-3 font-semibold">{t.impColBy}</th>
+                    <th className="py-2 pr-3 font-semibold">{t.impColEntries}</th>
+                    <th className="py-2 pr-3 font-semibold">{t.impColPeriod}</th>
+                    <th className="py-2 pr-3 font-semibold">{t.impColStatus}</th>
+                    <th className="py-2 font-semibold"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {batches.map(b => (
+                    <tr key={b.id} className="border-b border-slate-100 last:border-0">
+                      <td className="py-2 pr-3 whitespace-nowrap">{new Date(b.createdAt).toLocaleString()}</td>
+                      <td className="py-2 pr-3">
+                        <div className="font-semibold text-slate-800">{b.source}</div>
+                        {b.fileName && <div className="text-[10px] text-slate-400">{b.fileName}</div>}
+                      </td>
+                      <td className="py-2 pr-3">{b.createdByName || b.createdBy}</td>
+                      <td className="py-2 pr-3">
+                        <span className="font-bold text-emerald-600">{b.importedCount}</span>
+                        <span className="text-slate-400"> / {b.skippedCount} {t.impStatusDuplicate} / {b.errorCount} {t.impStatusError}</span>
+                      </td>
+                      <td className="py-2 pr-3 whitespace-nowrap">{b.dateFrom ? `${b.dateFrom}${b.dateTo && b.dateTo !== b.dateFrom ? ` – ${b.dateTo}` : ''}` : '—'}</td>
+                      <td className="py-2 pr-3 whitespace-nowrap">
+                        {b.revertedAt ? (
+                          <span className="text-slate-500">{t.impReverted} ({new Date(b.revertedAt).toLocaleDateString()})</span>
+                        ) : b.canUndo ? (
+                          <span className="text-slate-500">{t.impUndoUntil.replace('{date}', new Date(b.undoDeadline).toLocaleString())}</span>
+                        ) : b.undoBlockedReason === 'PERIOD_LOCKED' ? (
+                          <span className="text-amber-600">{t.impUndoLocked}</span>
+                        ) : (
+                          <span className="text-slate-400">{t.impUndoExpired}</span>
+                        )}
+                      </td>
+                      <td className="py-2 text-right">
+                        {b.canUndo && (
+                          <button
+                            type="button"
+                            onClick={() => handleUndoBatch(b)}
+                            disabled={undoingId !== null}
+                            className="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-semibold text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 rounded-lg transition-colors disabled:opacity-50"
+                          >
+                            <Undo2 className="w-3.5 h-3.5" /> {undoingId === b.id ? t.impUndoing : t.impUndo}
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
       )}
 
       {/* Reset Confirmation Modal */}
