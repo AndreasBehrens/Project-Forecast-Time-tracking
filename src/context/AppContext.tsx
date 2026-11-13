@@ -23,6 +23,7 @@ import {
   AuditHashVerificationReport,
   GoBDComplianceCertificate
 } from '../types';
+import { performLogin, type LoginCredentials, type LoginResult } from './authActions';
 import { translations } from '../i18n/translations';
 
 interface ActiveTimer {
@@ -435,37 +436,22 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     return newOrg;
   };
 
-  // Login Action
-  const login = async (credentials: { email?: string; password?: string; userId?: string }): Promise<{ success: boolean; error?: string }> => {
-    try {
-      setIsLoading(true);
-      const res = await fetch('/api/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(credentials)
-      });
-      const data = await res.json();
-      if (data.success && data.user) {
-        setCurrentUser(data.user);
-        if (data.token) {
-          setAuthToken(data.token);
-          localStorage.setItem('insight_arcs_auth_jwt_token', data.token);
-        }
-        if (data.user.language) setLanguageState(data.user.language);
-        if (data.activeOrgId) setActiveOrgId(data.activeOrgId);
-        if (data.organization) setOrganization(data.organization);
-        localStorage.setItem('insight_arcs_logged_in_user', data.user.id);
-        await refreshAllData();
-        return { success: true };
-      } else {
-        return { success: false, error: data.error || 'Anmeldung fehlgeschlagen' };
+  // Login Action (ohne globalen Ladezustand – siehe performLogin)
+  const login = (credentials: LoginCredentials): Promise<LoginResult> => performLogin(credentials, {
+    fetchFn: (input, init) => fetch(input, init),
+    onAuthenticated: (data) => {
+      setCurrentUser(data.user);
+      if (data.token) {
+        setAuthToken(data.token);
+        localStorage.setItem('insight_arcs_auth_jwt_token', data.token);
       }
-    } catch (err: any) {
-      return { success: false, error: err.message || 'Verbindungsfehler beim Anmelden' };
-    } finally {
-      setIsLoading(false);
-    }
-  };
+      if (data.user.language) setLanguageState(data.user.language);
+      if (data.activeOrgId) setActiveOrgId(data.activeOrgId);
+      if (data.organization) setOrganization(data.organization);
+      localStorage.setItem('insight_arcs_logged_in_user', data.user.id);
+    },
+    refreshAllData,
+  });
 
   const requestPasswordReset = async (email: string): Promise<{ success: boolean; error?: string; message?: string }> => {
     try {
