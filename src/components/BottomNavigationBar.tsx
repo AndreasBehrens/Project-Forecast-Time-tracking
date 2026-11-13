@@ -152,7 +152,7 @@ export const BottomNavigationBar: React.FC<BottomNavigationBarProps> = ({
     },
     {
       id: 'clockifyMigration',
-      label: t.navClockifyMigration || 'Clockify-Import & Export',
+      label: t.navClockifyMigration || 'Import & Export',
       icon: Database,
       badge: null,
       visible: isAdmin

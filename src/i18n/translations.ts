@@ -27,7 +27,7 @@ export const translations = {
     navForecast: 'Forecast (Plan vs. Ist)',
     navProjectForecast: 'Projekt-Forecast',
     navExport: 'Exporte',
-    navClockifyMigration: 'Clockify-Import & Export',
+    navClockifyMigration: 'Import & Export',
     navApiDocs: 'REST-API & Dokumentation',
     navOrganizations: 'Mandanten',
 
@@ -493,8 +493,8 @@ export const translations = {
     hoursFormulaHint: 'Hochrechnung = Ist-Stunden × (Arbeitstage Monat / verstrichene Arbeitstage)',
 
     // Clockify Import & Export
-    clockifyImportTitle: 'Clockify Datenmigration & Export',
-    clockifyImportSubtitle: 'Import von Kunden, Projekten, Aufgaben und Zeiteinträgen aus Clockify-CSV-Dateien.',
+    clockifyImportTitle: 'Datenimport & Export',
+    clockifyImportSubtitle: 'Import von Kunden, Projekten, Aufgaben und Zeiteinträgen aus externen Quellen (z. B. Clockify, CSV-Exporte anderer Systeme).',
     // Clockify PDF-Import
     csvImportTab: 'CSV-Import',
     pdfImportTab: 'PDF-Import',
@@ -529,10 +529,10 @@ export const translations = {
     pdfSkippedCount: 'übersprungen',
     pdfErrorsCount: 'Fehler',
     pdfImportAnother: 'Weitere PDF importieren',
-    importClockifyCsvTitle: 'Clockify CSV-Datei importieren',
-    loadSampleClockifyData: 'Clockify-Musterdaten laden',
-    dragDropCsv: 'Clockify CSV-Datei hier ablegen oder klicken zum Auswählen',
-    supportedClockifyFieldsHint: 'Unterstützt offizielle Clockify-Exportfelder (Project, Client, User, Duration, etc.)',
+    importClockifyCsvTitle: 'CSV-Datei importieren',
+    loadSampleClockifyData: 'Beispieldaten laden',
+    dragDropCsv: 'CSV-Datei hier ablegen oder klicken zum Auswählen',
+    supportedClockifyFieldsHint: 'Erkennt Spalten auf Deutsch oder Englisch (z. B. Projekt/Project, Kunde/Client, Benutzer/User, Datum/Start Date, Dauer) – kompatibel mit Clockify-Exporten',
     csvPreviewOrDirectInput: 'CSV-Vorschau / Direkteingabe:',
     runImport: 'Import durchführen',
     importResults: 'Importergebnis',
@@ -842,7 +842,7 @@ export const translations = {
     navForecast: 'Forecast (Plan vs Actual)',
     navProjectForecast: 'Project Forecast',
     navExport: 'Exports',
-    navClockifyMigration: 'Clockify Import & Export',
+    navClockifyMigration: 'Import & Export',
     navApiDocs: 'REST API & Documentation',
     navOrganizations: 'Tenants',
 
@@ -1308,7 +1308,7 @@ export const translations = {
     hoursFormulaHint: 'Extrapolation = Actual Hours × (Period Workdays / Passed Workdays)',
 
     // Clockify Import & Export
-    clockifyImportTitle: 'Clockify Migration & Export',
+    clockifyImportTitle: 'Data Import & Export',
     // Clockify PDF Import
     csvImportTab: 'CSV Import',
     pdfImportTab: 'PDF Import',
@@ -1343,11 +1343,11 @@ export const translations = {
     pdfSkippedCount: 'skipped',
     pdfErrorsCount: 'errors',
     pdfImportAnother: 'Import another PDF',
-    clockifyImportSubtitle: 'Import clients, projects, tasks, and historical time records from Clockify CSV.',
-    importClockifyCsvTitle: 'Import Clockify CSV File',
-    loadSampleClockifyData: 'Load Clockify Sample Data',
-    dragDropCsv: 'Drop Clockify CSV file here or click to select',
-    supportedClockifyFieldsHint: 'Supports official Clockify export fields (Project, Client, User, Duration, etc.)',
+    clockifyImportSubtitle: 'Import clients, projects, tasks, and historical time records from external sources (e.g. Clockify, CSV exports from other systems).',
+    importClockifyCsvTitle: 'Import CSV File',
+    loadSampleClockifyData: 'Load Sample Data',
+    dragDropCsv: 'Drop CSV file here or click to select',
+    supportedClockifyFieldsHint: 'Recognizes German or English columns (e.g. Project/Projekt, Client/Kunde, User/Benutzer, Start Date/Datum, Duration) – compatible with Clockify exports',
     csvPreviewOrDirectInput: 'CSV Preview / Direct Input:',
     runImport: 'Execute Import',
     importResults: 'Import Summary',
