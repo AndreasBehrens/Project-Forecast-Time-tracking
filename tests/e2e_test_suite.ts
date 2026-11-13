@@ -232,10 +232,10 @@ async function runAllTests() {
   const parsedCsv1 = parseCsvFull(CSV_1_CONTENT);
   assert(parsedCsv1.length === 12, `CSV 1 RFC-4180 Parsing: ${parsedCsv1.length} Zeilen erkannt`);
 
-  const import1Res = await fetch(`${BASE_URL}/api/clockify/import`, {
+  const import1Res = await fetch(`${BASE_URL}/api/import/execute`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ rows: parsedCsv1 })
+    body: JSON.stringify({ schemaId: 'builtin-clockify-csv', rows: parsedCsv1 })
   }).then(r => r.json());
 
   assert(import1Res.importedEntries === 12, `12 Zeiteinträge importiert (Ergebnis: ${import1Res.importedEntries})`);
@@ -244,10 +244,10 @@ async function runAllTests() {
   assert(import1Res.createdUsers.some((u: string) => u.includes('lypham') || u.includes('truongnv')), 'Mitarbeiter (u.lypham, truongnv) angelegt');
 
   // 5.2 Duplikatsprüfung bei erneutem Import von CSV 1
-  const reimport1Res = await fetch(`${BASE_URL}/api/clockify/import`, {
+  const reimport1Res = await fetch(`${BASE_URL}/api/import/execute`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ rows: parsedCsv1 })
+    body: JSON.stringify({ schemaId: 'builtin-clockify-csv', rows: parsedCsv1 })
   }).then(r => r.json());
   assert(reimport1Res.skippedDuplicates === 12, `Duplikatsprüfung: Alle ${reimport1Res.skippedDuplicates} Zeilen als Duplikat übersprungen`);
   assert(reimport1Res.importedEntries === 0, 'Keine doppelten Zeiteinträge erstellt');
@@ -259,10 +259,10 @@ async function runAllTests() {
   const parsedCsv2 = parseCsvFull(CSV_2_CONTENT);
   assert(parsedCsv2.length === 12, `CSV 2 RFC-4180 Parsing: ${parsedCsv2.length} Zeilen erkannt`);
 
-  const import2Res = await fetch(`${BASE_URL}/api/clockify/import`, {
+  const import2Res = await fetch(`${BASE_URL}/api/import/execute`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ rows: parsedCsv2 })
+    body: JSON.stringify({ schemaId: 'builtin-clockify-csv', rows: parsedCsv2 })
   }).then(r => r.json());
 
   assert(import2Res.importedEntries === 12, `12 Zeiteinträge importiert (Ergebnis: ${import2Res.importedEntries})`);

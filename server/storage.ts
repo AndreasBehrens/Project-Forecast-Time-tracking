@@ -5053,11 +5053,6 @@ export class StorageService {
     }).report;
   }
 
-  // --- Clockify CSV Importer (Section 10) – nutzt jetzt das eingebaute Schema „Clockify CSV" ---
-  public importClockifyData(rows: any[], actorId: string, opts: { fileName?: string } = {}): ClockifyImportReport {
-    return this.executeImport({ rows, schema: CLOCKIFY_CSV_SCHEMA, fileName: opts.fileName }, actorId);
-  }
-
   /** Clockify-PDF-Import mit expliziter Mitarbeitenden-/Projektzuordnung (einheitlicher Fingerabdruck + Batch). */
   public importClockifyPdfEntries(
     entries: Array<{ userName: string; date: string; startTime?: string; endTime?: string; description?: string; projectTask?: string; isBillable?: boolean }>,

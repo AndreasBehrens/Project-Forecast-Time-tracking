@@ -359,7 +359,7 @@ Jede Phase wird gemäß Arbeitsweise auf dem Branch `test` entwickelt, nach GitH
 - Der Tab „CSV-Import (Clockify)“ ist entfernt. Clockify-CSV-Dateien laufen jetzt über den **Import-Assistenten**: Das eingebaute Schema „Clockify CSV“ (`builtin-clockify-csv`) wird über die Spaltenköpfe automatisch erkannt; Probelauf, Status „Eingereicht“ (zur Freigabe), Import-Historie und Rückgängigmachen funktionieren wie bisher, zusätzlich mit Stammdaten-Zuordnung, Prüfsumme und Hinweis auf bereits importierte Dateien.
 - Entfernt wurden auch das Einlesen der CSV im Browser (`parseCsvToObjects`), die Aktion `importClockify` im `AppContext` und die nur dort verwendeten Texte (DE/EN). Der Hinweis „Importierte Projektzeiten erhalten den Status ‚Eingereicht‘“ steht jetzt im Probelauf des Assistenten.
 - Import-Historie, Werksreset und Mandantenwahl lagen schon vorher außerhalb des Tabs und bleiben unverändert.
-- Der Server-Endpunkt `POST /api/clockify/import` bleibt aus Kompatibilitätsgründen bestehen (Skripte und Tests nutzen ihn), wird von der Oberfläche aber nicht mehr aufgerufen.
+- Der alte Server-Endpunkt `POST /api/clockify/import` und die Methode `storage.importClockifyData()` sind ebenfalls entfernt. Ersatz ist `POST /api/import/execute` mit `schemaId: 'builtin-clockify-csv'` (ohne `schemaId` gilt ebenfalls Clockify CSV); die Antwort hat dasselbe Format (`batchId`, `importedEntries`, `skippedDuplicates`, `errors`, ...). Integrationstests und die Skripte `tests/e2e_test_suite.ts` und `tests/test_full_csv_imports.ts` nutzen jetzt diesen Endpunkt.
 
 #### Menü „Exporte“ in „Import & Export“ integriert
 
@@ -376,7 +376,7 @@ Jede Phase wird gemäß Arbeitsweise auf dem Branch `test` entwickelt, nach GitH
 - **Archivierung der Originaldatei** (GoBD-Volltext) – gespeichert wird nur die SHA-256-Prüfsumme an Batch und Audit-Eintrag; eine Dateiablage braucht Speicherplatz- und Aufbewahrungsregeln.
 - **Wiederherstellen alter Schema-Versionen** in der Oberfläche – Vorversionen werden gespeichert, aber noch nicht angezeigt.
 - **Eigene Tabellen `import_aliases`/`import_batches`** – Aliase und Batches liegen weiterhin im JSONB-Datensatz der Organisation; bei der aktuellen Datenmenge reicht das.
-- **Adapter-Struktur `server/import/adapters/`** und Umleitung der alten Endpunkte `/api/clockify/import` und `/api/import/clockify-pdf/*` – die alten Endpunkte bleiben bestehen, damit die Clockify-Abläufe unverändert funktionieren.
+- **Adapter-Struktur `server/import/adapters/`** und Umleitung der PDF-Endpunkte `/api/import/clockify-pdf/*` – diese bleiben bestehen, damit der PDF-Import unverändert funktioniert (`/api/clockify/import` ist inzwischen entfernt, siehe oben).
 - **Formale Migrationsausführung im Deployment** – die Tabelle `import_schemas` wird zur Laufzeit angelegt (siehe oben).
 
 ---

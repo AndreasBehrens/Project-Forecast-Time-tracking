@@ -82,10 +82,10 @@ async function testFullImports() {
   const allRows = parseCsvFull(fileData);
   console.log(`Total rows parsed from user CSV input: ${allRows.length}`);
 
-  const importRes = await fetch(`${BASE_URL}/api/clockify/import`, {
+  const importRes = await fetch(`${BASE_URL}/api/import/execute`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ rows: allRows })
+    body: JSON.stringify({ schemaId: 'builtin-clockify-csv', rows: allRows })
   }).then(r => r.json());
 
   console.log('Import Report:', {
