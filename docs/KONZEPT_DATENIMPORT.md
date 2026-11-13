@@ -342,7 +342,7 @@ Jede Phase wird gemäß Arbeitsweise auf dem Branch `test` entwickelt, nach GitH
 
 #### Phasen 2–4 (Assistent, Abwesenheiten, allgemeiner Import, Nachvollziehbarkeit)
 
-- **Import-Assistent** (`src/components/ImportWizard.tsx`, Tab „Import-Assistent“, nur Admins/Superadmins) mit sieben Schritten: Quelle → Datei → Spalten → Stammdaten → Probelauf → Ausführen → Bericht. Die bisherigen Tabs „CSV-Import (Clockify)“ und „PDF-Import (Clockify)“ bleiben unverändert erhalten.
+- **Import-Assistent** (`src/components/ImportWizard.tsx`, Tab „Import-Assistent“, nur Admins/Superadmins) mit sieben Schritten: Quelle → Datei → Spalten → Stammdaten → Probelauf → Ausführen → Bericht. Der Tab „PDF-Import (Clockify)“ bleibt erhalten; der frühere Tab „CSV-Import (Clockify)“ ist entfernt (siehe unten).
 - **Quelle wählen:** Kacheln für die eingebauten Schemas (Clockify CSV, HR-Abwesenheiten, Mitarbeitende – letzteres nur für Superadmins sichtbar), für gespeicherte Mandanten-Schemas, „Automatisch erkennen“ und „Schema-Datei hochladen“ (JSON). Schemas lassen sich herunterladen und (Mandanten-Schemas) löschen.
 - **Datei einlesen auf dem Server** (`server/import/fileParser.ts`, `POST /api/import/parse`): CSV (UTF-8, automatischer Rückfall auf Latin-1, Trennzeichen-Erkennung) und **XLSX** (über das bereits vorhandene Paket `exceljs`, Auswahl des Tabellenblatts, Datums-/Uhrzeitzellen werden in Text umgewandelt). Höchstens 20 000 Zeilen, 10 MB.
 - **Automatische Schema-Erkennung** über die Spaltenköpfe: zuerst exakter Fingerabdruck gespeicherter Schemas, sonst das Schema, dessen Pflichtspalten vorhanden sind und das die meisten Spalten zuordnet.
@@ -354,9 +354,16 @@ Jede Phase wird gemäß Arbeitsweise auf dem Branch `test` entwickelt, nach GitH
 - **Audit-Eintrag pro Batch:** `IMPORT` beim Ausführen (CSV, PDF, Assistent) und `REVERT_IMPORT` beim Rückgängigmachen, Entitätstyp `IMPORT_BATCH`, in der bestehenden Hash-Kette.
 - **SHA-256 der Datei** am Batch und im Audit-Eintrag; wurde dieselbe Datei bereits importiert (und nicht rückgängig gemacht), zeigen Einlesen und Probelauf einen Hinweis.
 
+#### Tab „CSV-Import“ entfernt
+
+- Der Tab „CSV-Import (Clockify)“ ist entfernt. Clockify-CSV-Dateien laufen jetzt über den **Import-Assistenten**: Das eingebaute Schema „Clockify CSV“ (`builtin-clockify-csv`) wird über die Spaltenköpfe automatisch erkannt; Probelauf, Status „Eingereicht“ (zur Freigabe), Import-Historie und Rückgängigmachen funktionieren wie bisher, zusätzlich mit Stammdaten-Zuordnung, Prüfsumme und Hinweis auf bereits importierte Dateien.
+- Entfernt wurden auch das Einlesen der CSV im Browser (`parseCsvToObjects`), die Aktion `importClockify` im `AppContext` und die nur dort verwendeten Texte (DE/EN). Der Hinweis „Importierte Projektzeiten erhalten den Status ‚Eingereicht‘“ steht jetzt im Probelauf des Assistenten.
+- Import-Historie, Werksreset und Mandantenwahl lagen schon vorher außerhalb des Tabs und bleiben unverändert.
+- Der Server-Endpunkt `POST /api/clockify/import` bleibt aus Kompatibilitätsgründen bestehen (Skripte und Tests nutzen ihn), wird von der Oberfläche aber nicht mehr aufgerufen.
+
 #### Menü „Exporte“ in „Import & Export“ integriert
 
-- Der eigene Menüpunkt „Exporte“ (Desktop und mobil) und die Komponente `ExportView.tsx` sind entfernt. Alle Funktionen liegen jetzt im Tab **„Export“** der Seite „Import & Export“ (`src/components/ExportPanel.tsx`): Abrechnungs-Export (XLSX) und Stundennachweis (XLSX) sowie der Rohdaten-Export (CSV/JSON), der bisher in der rechten Spalte des CSV-Tabs lag.
+- Der eigene Menüpunkt „Exporte“ (Desktop und mobil) und die Komponente `ExportView.tsx` sind entfernt. Alle Funktionen liegen jetzt im Tab **„Export“** der Seite „Import & Export“ (`src/components/ExportPanel.tsx`): Abrechnungs-Export (XLSX) und Stundennachweis (XLSX) sowie der Rohdaten-Export (CSV/JSON), der bisher in der rechten Spalte des früheren CSV-Tabs lag.
 - Rollen wie bisher: Die Seite sehen Admins sowie **interne Projektleitende**. Imports, Import-Historie, Werksreset und Mandantenwechsel bleiben Admins vorbehalten; XLSX-Exporte für Admins und Projektleitende (jeweils intern); der Rohdaten-Export nur für Admins. Projektleitende landen direkt im Tab „Export“.
 - Alte Navigationsziele („export“) werden auf „Import & Export“ umgeleitet (`src/utils/navigation.ts`).
 

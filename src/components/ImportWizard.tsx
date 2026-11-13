@@ -700,6 +700,7 @@ export const ImportWizard: React.FC<{ onImported?: () => void }> = ({ onImported
             ))}
             <span className="px-2.5 py-1 rounded-lg border font-semibold bg-white text-slate-600 border-slate-200">{t.wizTotalHours}: {(dryRun.totalMinutes / 60).toFixed(2)} h</span>
           </div>
+          {target === 'TIME_ENTRY' && <p className="text-[11px] text-slate-500">{t.impPendingApprovalHint}</p>}
           {dryRun.fileAlreadyImported && (
             <div className="rounded-xl p-3 text-xs border bg-amber-50 border-amber-200 text-amber-800 flex items-start gap-2">
               <AlertTriangle className="w-4 h-4 shrink-0" />

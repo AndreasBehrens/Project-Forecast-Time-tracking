@@ -14,7 +14,6 @@ import {
   ForecastEntry,
   ApiKey,
   Language,
-  ClockifyImportReport,
   ForecastComparisonItem,
   ProjectForecastSummary,
   EmployeeCapacitySummaryItem,
@@ -118,7 +117,6 @@ interface AppContextType {
   deleteUser: (id: string) => Promise<{ success: boolean; error?: string }>;
   createApiKey: (name: string) => Promise<ApiKey>;
   revokeApiKey: (id: string) => Promise<void>;
-  importClockify: (rows: any[]) => Promise<ClockifyImportReport>;
   createJobRole: (roleData: Partial<EmployeeJobRole>) => Promise<EmployeeJobRole>;
   updateJobRole: (id: string, updates: Partial<EmployeeJobRole>) => Promise<EmployeeJobRole>;
   deleteJobRole: (id: string) => Promise<{ success: boolean; error?: string }>;
@@ -1003,23 +1001,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     await refreshAllData();
   };
 
-  const importClockify = async (rows: any[]): Promise<ClockifyImportReport> => {
-    const res = await fetch('/api/clockify/import', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-user-id': currentUser?.id || 'u-1'
-      },
-      body: JSON.stringify({ rows })
-    });
-    const report = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      throw new Error(report.error || report.message || `HTTP ${res.status}`);
-    }
-    await refreshAllData();
-    return report;
-  };
-
   const resolveRate = async (userId: string, projectId?: string) => {
     const params = new URLSearchParams({ userId });
     if (projectId) params.set('projectId', projectId);
@@ -1294,7 +1275,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         deleteUser,
         createApiKey,
         revokeApiKey,
-        importClockify,
         createJobRole,
         updateJobRole,
         deleteJobRole,
