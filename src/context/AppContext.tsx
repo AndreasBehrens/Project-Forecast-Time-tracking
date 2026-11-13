@@ -91,8 +91,8 @@ interface AppContextType {
   approveTimeEntries: (ids: string[], status: 'APPROVED' | 'REJECTED') => Promise<void>;
   saveWorkingTime: (entry: Partial<WorkingTimeEntry>) => Promise<void>;
   deleteWorkingTime: (id: string) => Promise<void>;
-  parseClockifyPdf: (file: File) => Promise<{ entries: any[]; users: string[]; projects: string[]; totalEntries: number }>;
-  executeClockifyPdfImport: (params: { entries: any[]; importType: string; userMapping: Record<string, string>; projectMapping: Record<string, { projectId: string; clientId: string }>; skipDuplicates: boolean }) => Promise<{ imported: number; skipped: number; errors: string[] }>;
+  parseClockifyPdf: (file: File) => Promise<{ entries: any[]; users: string[]; projects: string[]; totalEntries: number; checksum?: string; fileName?: string }>;
+  executeClockifyPdfImport: (params: { entries: any[]; importType: string; userMapping: Record<string, string>; projectMapping: Record<string, { projectId: string; clientId: string }>; skipDuplicates: boolean; fileName?: string; fileChecksum?: string }) => Promise<{ imported: number; skipped: number; errors: string[] }>;
   saveForecast: (entry: Partial<ForecastEntry>) => Promise<void>;
   // GoBD & Revisionssicherheit Actions
   lockPeriod: (periodKey: string, reason?: string) => Promise<{ success: boolean; error?: string }>;
@@ -752,7 +752,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     return response.json();
   };
 
-  const executeClockifyPdfImport = async (params: { entries: any[]; importType: string; userMapping: Record<string, string>; projectMapping: Record<string, { projectId: string; clientId: string }>; skipDuplicates: boolean }) => {
+  const executeClockifyPdfImport = async (params: { entries: any[]; importType: string; userMapping: Record<string, string>; projectMapping: Record<string, { projectId: string; clientId: string }>; skipDuplicates: boolean; fileName?: string; fileChecksum?: string }) => {
     const response = await fetch('/api/import/clockify-pdf/execute', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-user-id': currentUser?.id || 'u-1' },

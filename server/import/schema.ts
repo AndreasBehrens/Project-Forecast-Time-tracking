@@ -21,8 +21,8 @@ import {
 
 export const CANONICAL_FIELDS = [
   'externalId', 'userRef', 'userEmail', 'userGroup', 'clientRef', 'projectRef', 'taskRef',
-  'date', 'startTime', 'endTime', 'duration', 'breakMinutes', 'description', 'isBillable',
-  'dayType', 'hourlyBillingRate', 'hourlyCostRate'
+  'date', 'dateTo', 'startTime', 'endTime', 'duration', 'breakMinutes', 'description', 'isBillable',
+  'dayType', 'halfDay', 'hourlyBillingRate', 'hourlyCostRate'
 ] as const;
 export type CanonicalField = typeof CANONICAL_FIELDS[number];
 
@@ -41,7 +41,8 @@ export const ImportSchemaZ = z.object({
   source: z.string().min(1),
   version: z.number().int().min(1).optional(),
   description: z.string().optional(),
-  fileType: z.enum(['csv']).optional(),
+  fileType: z.enum(['csv', 'xlsx']).optional(),
+  sheet: z.string().optional(),
   delimiter: z.enum([',', ';', '\t', 'auto']).optional(),
   encoding: z.enum(['utf-8', 'latin1']).optional(),
   headerRow: z.number().int().min(1).optional(),
@@ -70,6 +71,7 @@ export const ImportSchemaZ = z.object({
 }).strict().superRefine((s, ctx) => {
   const c = s.columns;
   if (!c.userRef && !c.userEmail) ctx.addIssue({ code: 'custom', path: ['columns', 'userRef'], message: 'Spalte für Mitarbeitende (userRef oder userEmail) ist erforderlich' });
+  if (s.target === 'MASTER_DATA') return; // Stammdaten (Mitarbeitende): weder Datum noch Dauer nötig
   if (!c.date) ctx.addIssue({ code: 'custom', path: ['columns', 'date'], message: 'Spalte für das Datum (date) ist erforderlich' });
   const target = s.target || 'TIME_ENTRY';
   if (target !== 'ABSENCE' && !c.duration && !(c.startTime && c.endTime)) {
@@ -130,7 +132,55 @@ export const CLOCKIFY_CSV_SCHEMA: ImportSchema = {
   validation: { maxDurationHours: 12 },
 };
 
-export const BUILTIN_SCHEMAS: ImportSchema[] = [CLOCKIFY_CSV_SCHEMA];
+/** Eingebautes Schema: Abwesenheiten aus einem HR-System (z. B. Personio-/HR-Export als CSV/XLSX). */
+export const HR_ABSENCE_SCHEMA: ImportSchema = {
+  schemaVersion: 1,
+  id: 'builtin-hr-absences',
+  name: 'HR-Abwesenheiten',
+  source: 'hr-absences',
+  version: 1,
+  description: 'Abwesenheiten (Urlaub, Krankheit, Sonderurlaub, Elternzeit) mit Von-/Bis-Datum; Zeiträume werden auf Arbeitstage aufgeteilt.',
+  delimiter: 'auto',
+  encoding: 'utf-8',
+  headerRow: 1,
+  target: 'ABSENCE',
+  columns: {
+    externalId: ['ID', 'Absence ID', 'Abwesenheits-ID'],
+    userRef: ['Mitarbeiter', 'Mitarbeitende', 'Employee', 'Name'],
+    userEmail: ['E-Mail', 'Email'],
+    date: ['Von', 'Start', 'Startdatum', 'From', 'Start date', 'Datum', 'Date'],
+    dateTo: ['Bis', 'Ende', 'Enddatum', 'To', 'End date'],
+    dayType: ['Art', 'Abwesenheitsart', 'Typ', 'Type', 'Absence type'],
+    halfDay: ['Halber Tag', 'Halbtags', 'Half day'],
+    description: ['Kommentar', 'Notiz', 'Comment', 'Note'],
+  },
+  formats: { date: 'auto', duration: 'auto', decimalSeparator: 'auto' },
+  duplicateKey: 'auto',
+};
+
+/** Eingebautes Schema: Mitarbeitende (Stammdaten) – nur für Superadmins ausführbar. */
+export const EMPLOYEE_SCHEMA: ImportSchema = {
+  schemaVersion: 1,
+  id: 'builtin-employees',
+  name: 'Mitarbeitende (Stammdaten)',
+  source: 'employees',
+  version: 1,
+  description: 'Legt Mitarbeitende mit Status „Eingeladen“ an. Nur Superadmins.',
+  delimiter: 'auto',
+  encoding: 'utf-8',
+  headerRow: 1,
+  target: 'MASTER_DATA',
+  columns: {
+    userRef: ['Name', 'Mitarbeiter', 'Mitarbeitende', 'Employee'],
+    userEmail: ['E-Mail', 'Email'],
+    userGroup: ['Firma', 'Company', 'Gruppe', 'Group'],
+    hourlyBillingRate: ['Stundensatz', 'Billable Rate', 'Hourly Rate'],
+    hourlyCostRate: ['Kostensatz', 'Cost Rate'],
+  },
+  formats: { decimalSeparator: 'auto' },
+};
+
+export const BUILTIN_SCHEMAS: ImportSchema[] = [CLOCKIFY_CSV_SCHEMA, HR_ABSENCE_SCHEMA, EMPLOYEE_SCHEMA];
 
 // ---------------------------------------------------------------------------
 // CSV-Parser (serverseitig, mit Anführungszeichen, BOM, CRLF)
@@ -287,8 +337,44 @@ export function applySchema(schema: ImportSchema, rows: Array<{ lineNumber: numb
     const userRef = get('userRef') || get('userEmail');
     if (!userRef) errors.push('Mitarbeitende fehlen');
 
+    if (target === 'MASTER_DATA') {
+      const email = get('userEmail');
+      if (email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) errors.push(`E-Mail "${email}" ist ungültig`);
+      const rateOf = (f: 'hourlyBillingRate' | 'hourlyCostRate'): number | undefined => {
+        if (!get(f)) return undefined;
+        const r = parseDecimal(get(f), decSep);
+        if (r.ok && r.value >= 0) return r.value || undefined;
+        errors.push(`Satz "${get(f)}" ist ungültig`);
+        return undefined;
+      };
+      const hourlyBillingRate = rateOf('hourlyBillingRate');
+      const hourlyCostRate = rateOf('hourlyCostRate');
+      if (errors.length > 0) return { rowNumber: lineNumber, errors, warnings };
+      return {
+        rowNumber: lineNumber, errors, warnings,
+        record: {
+          rowNumber: lineNumber, target, userRef, userEmail: email || undefined, userGroup: get('userGroup') || undefined,
+          date: '', durationMinutes: 0, hourlyBillingRate, hourlyCostRate, raw: data,
+        },
+      };
+    }
+
     const date = parseDate(get('date'), dateFmt);
     if (!date.ok) errors.push(date.error);
+    let dateTo: string | undefined;
+    if (get('dateTo')) {
+      const dt = parseDate(get('dateTo'), dateFmt);
+      if (!dt.ok) errors.push(dt.error);
+      else if (date.ok && dt.value < date.value) errors.push('Bis-Datum liegt vor dem Von-Datum');
+      else if (date.ok && (Date.parse(dt.value) - Date.parse(date.value)) > 366 * 86400000) errors.push('Zeitraum ist länger als ein Jahr');
+      else if (dt.ok && date.ok && dt.value !== date.value) dateTo = dt.value;
+    }
+    let halfDay: boolean | undefined;
+    if (get('halfDay')) {
+      const h = parseBoolean(get('halfDay'), DEFAULT_TRUE_VALUES, DEFAULT_FALSE_VALUES);
+      if (h.ok) halfDay = h.value || undefined; else errors.push(h.error);
+    }
+    if (halfDay && dateTo) errors.push('Halbe Tage sind nur für einzelne Tage möglich');
 
     const start = parseTime(get('startTime'));
     if (!start.ok) errors.push(start.error);
@@ -354,6 +440,8 @@ export function applySchema(schema: ImportSchema, rows: Array<{ lineNumber: numb
       projectRef: get('projectRef') || undefined,
       taskRef: get('taskRef') || undefined,
       date: date.value,
+      dateTo,
+      halfDay,
       startTime,
       endTime,
       durationMinutes,
@@ -382,6 +470,8 @@ const SYNONYMS: Record<CanonicalField, string[]> = {
   projectRef: ['project', 'projekt', 'project name', 'projektname'],
   taskRef: ['task', 'aufgabe', 'activity', 'tätigkeit', 'taetigkeit'],
   date: ['start date', 'date', 'datum', 'tag', 'day', 'startdatum', 'von datum'],
+  dateTo: ['end date', 'enddatum', 'bis datum', 'bis-datum', 'datum bis', 'to date', 'date to'],
+  halfDay: ['half day', 'halber tag', 'halbtags', 'halbtag'],
   startTime: ['start time', 'startzeit', 'von', 'start', 'beginn', 'from', 'kommen'],
   endTime: ['end time', 'endzeit', 'bis', 'ende', 'end', 'to', 'gehen'],
   duration: ['duration (decimal)', 'duration (h)', 'duration', 'dauer', 'dauer (h)', 'dauer (dezimal)', 'stunden', 'hours', 'time (decimal)', 'zeit'],
@@ -426,8 +516,17 @@ function detectDateFormat(samples: string[]): { format: DateFormat; ambiguous: b
 
 export function deriveSchemaFromCsv(text: string, opts: { name?: string; source?: string; sampleSize?: number } = {}): DerivedSchemaResult {
   const parsed = parseCsvObjects(text, 'auto', 1);
-  const { headers } = parsed;
-  const sample = parsed.rows.slice(0, opts.sampleSize ?? 50).map(r => r.data);
+  return deriveSchemaFromRows(parsed.headers, parsed.rows.map(r => r.data as Record<string, string>), { ...opts, delimiter: parsed.delimiter, fileType: 'csv' });
+}
+
+/** Entwurf aus bereits gelesenen Zeilen (CSV oder XLSX). */
+export function deriveSchemaFromRows(
+  headers: string[],
+  rows: Array<Record<string, string>>,
+  opts: { name?: string; source?: string; sampleSize?: number; delimiter?: ',' | ';' | '\t'; fileType?: 'csv' | 'xlsx' } = {}
+): DerivedSchemaResult {
+  const parsed = { delimiter: opts.delimiter || (',' as const) };
+  const sample = rows.slice(0, opts.sampleSize ?? 50);
   const fp = headerFingerprint(headers);
 
   const builtin = BUILTIN_SCHEMAS.find(b => {
@@ -463,14 +562,17 @@ export function deriveSchemaFromCsv(text: string, opts: { name?: string; source?
   const billVals = [...new Set(values(columns.isBillable).map(v => v.toLowerCase()))];
   const unknownBillableValues = billVals.filter(v => !DEFAULT_TRUE_VALUES.includes(v) && !DEFAULT_FALSE_VALUES.includes(v));
 
-  const target: ImportTarget = columns.projectRef ? 'TIME_ENTRY' : columns.dayType ? 'ABSENCE' : 'WORKING_TIME';
+  const target: ImportTarget = columns.projectRef ? 'TIME_ENTRY'
+    : columns.dayType ? 'ABSENCE'
+    : (!columns.date && (columns.userRef || columns.userEmail)) ? 'MASTER_DATA'
+    : 'WORKING_TIME';
 
   const schema: ImportSchema = {
     schemaVersion: 1,
     name: opts.name || 'Entwurf aus Musterdatei',
     source: opts.source || 'custom-csv',
     version: 1,
-    fileType: 'csv',
+    fileType: opts.fileType || 'csv',
     delimiter: parsed.delimiter,
     encoding: 'utf-8',
     headerRow: 1,
@@ -499,4 +601,54 @@ export function deriveSchemaFromCsv(text: string, opts: { name?: string; source?
     },
     validation: validateImportSchema(schema),
   };
+}
+
+// ---------------------------------------------------------------------------
+// Schema-Erkennung über die Spaltenköpfe (Konzept §3.4)
+// ---------------------------------------------------------------------------
+
+/** Ordnet jedem kanonischen Feld die tatsächlich passende Spalte der Datei zu. */
+export function resolveColumns(schema: ImportSchema, headers: string[]): Partial<Record<CanonicalField, string>> {
+  const out: Partial<Record<CanonicalField, string>> = {};
+  for (const f of CANONICAL_FIELDS) {
+    const hit = resolveColumn(headers, schema.columns[f]);
+    if (hit) out[f] = hit;
+  }
+  return out;
+}
+
+function requiredFieldsResolved(schema: ImportSchema, cols: Partial<Record<CanonicalField, string>>): boolean {
+  if (!cols.userRef && !cols.userEmail) return false;
+  const target = schema.target || 'TIME_ENTRY';
+  if (target === 'MASTER_DATA') return true;
+  if (!cols.date) return false;
+  if (target !== 'ABSENCE' && !cols.duration && !(cols.startTime && cols.endTime)) return false;
+  if (target === 'TIME_ENTRY' && !cols.projectRef) return false;
+  return true;
+}
+
+export interface SchemaDetection {
+  schemaId?: string;
+  schemaName: string;
+  method: 'fingerprint' | 'columns';
+  matchedColumns: number;
+}
+
+/**
+ * Sucht das passende Schema für eine Datei:
+ * 1. exakter Fingerabdruck der Spaltenköpfe (gespeicherte Schemas),
+ * 2. sonst das Schema, dessen Pflichtspalten alle vorhanden sind und das die meisten Spalten zuordnet.
+ */
+export function detectSchema(headers: string[], candidates: ImportSchema[]): SchemaDetection | null {
+  const fp = headerFingerprint(headers);
+  const exact = candidates.find(c => c.headerFingerprint && c.headerFingerprint === fp);
+  if (exact) return { schemaId: exact.id, schemaName: exact.name, method: 'fingerprint', matchedColumns: Object.keys(resolveColumns(exact, headers)).length };
+  let best: SchemaDetection | null = null;
+  for (const c of candidates) {
+    const cols = resolveColumns(c, headers);
+    if (!requiredFieldsResolved(c, cols)) continue;
+    const n = Object.keys(cols).length;
+    if (!best || n > best.matchedColumns) best = { schemaId: c.id, schemaName: c.name, method: 'columns', matchedColumns: n };
+  }
+  return best;
 }

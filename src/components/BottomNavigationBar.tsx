@@ -19,8 +19,7 @@ import {
   ChevronRight,
   Globe,
   MapPin,
-  Sparkles,
-  FileDown
+  Sparkles
 } from 'lucide-react';
 import { CompanyLocationModal } from './CompanyLocationModal';
 
@@ -144,18 +143,11 @@ export const BottomNavigationBar: React.FC<BottomNavigationBarProps> = ({
       visible: isAdmin || isPM
     },
     {
-      id: 'export',
-      label: t.navExport || 'Exporte',
-      icon: FileDown,
-      badge: 'XLSX',
-      visible: (isAdmin || isPM) && isInternal
-    },
-    {
       id: 'clockifyMigration',
       label: t.navClockifyMigration || 'Import & Export',
       icon: Database,
       badge: null,
-      visible: isAdmin
+      visible: isAdmin || (isPM && isInternal)
     },
     {
       id: 'apiDocs',

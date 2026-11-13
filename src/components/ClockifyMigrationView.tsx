@@ -20,8 +20,11 @@ import {
   Sparkles,
   Undo2,
   History,
-  SearchCheck
+  SearchCheck,
+  Wand2
 } from 'lucide-react';
+import { ImportWizard } from './ImportWizard';
+import { ExportPanel } from './ExportPanel';
 
 export const ClockifyMigrationView: React.FC = () => {
   const {
@@ -36,8 +39,16 @@ export const ClockifyMigrationView: React.FC = () => {
     users,
     projects,
     parseClockifyPdf,
-    executeClockifyPdfImport
+    executeClockifyPdfImport,
+    currentUser
   } = useApp();
+
+  // Rollen: Importe (inkl. Historie, Werksreset, Mandantenwahl) nur Admins;
+  // XLSX-Exporte für Admins und interne Projektmanager; Rohdatenexport nur Admins.
+  const isAdmin = currentUser?.role === 'SUPERADMIN' || currentUser?.role === 'ADMIN' || currentUser?.id === 'u-1';
+  const isPM = currentUser?.role === 'PROJECT_MANAGER';
+  const isInternal = currentUser?.employmentType === 'INTERNAL' || (!currentUser?.employmentType && !currentUser?.companyName);
+  const canXlsxExport = (isAdmin || isPM) && isInternal;
 
   const [csvContent, setCsvContent] = useState<string>('');
   const [importReport, setImportReport] = useState<ClockifyImportReport | null>(null);
@@ -56,6 +67,7 @@ export const ClockifyMigrationView: React.FC = () => {
   const [historyMessage, setHistoryMessage] = useState<{ kind: 'ok' | 'error'; text: string } | null>(null);
 
   const loadBatches = useCallback(async () => {
+    if (!isAdmin) { setBatches(null); return; }
     setBatchesLoading(true);
     try {
       const res = await fetch('/api/import/batches');
@@ -66,16 +78,15 @@ export const ClockifyMigrationView: React.FC = () => {
     } finally {
       setBatchesLoading(false);
     }
-  }, []);
+  }, [isAdmin]);
 
   useEffect(() => { loadBatches(); }, [loadBatches, activeOrgId]);
 
-  // Export filters
-  const [exportFrom, setExportFrom] = useState('2025-01-01');
-  const [exportTo, setExportTo] = useState('2026-12-31');
-
-  // --- Import-Quelle: CSV oder PDF ---
-  const [importSource, setImportSource] = useState<'csv' | 'pdf'>('csv');
+  // --- Bereich: Import-Assistent, Clockify CSV, Clockify PDF oder Export (PMs landen direkt im Export) ---
+  type PageTab = 'wizard' | 'csv' | 'pdf' | 'export';
+  const [importSource, setImportSource] = useState<PageTab>(isAdmin ? 'wizard' : 'export');
+  useEffect(() => { if (!isAdmin && importSource !== 'export') setImportSource('export'); }, [isAdmin, importSource]);
+  const [pdfChecksum, setPdfChecksum] = useState<string | undefined>(undefined);
 
   // --- PDF-Import Workflow ---
   const [pdfFile, setPdfFile] = useState<File | null>(null);
@@ -118,6 +129,7 @@ export const ClockifyMigrationView: React.FC = () => {
         return;
       }
       setPdfEntries(result.entries);
+      setPdfChecksum(result.checksum);
       setPdfUsers(result.users);
       setPdfProjects(result.projects);
       // Auto-Mapping: Clockify-Name -> App-User mit exakt gleichem Namen
@@ -155,7 +167,9 @@ export const ClockifyMigrationView: React.FC = () => {
         importType: pdfImportType,
         userMapping: pdfUserMapping,
         projectMapping,
-        skipDuplicates: pdfSkipDuplicates
+        skipDuplicates: pdfSkipDuplicates,
+        fileName: pdfFile?.name,
+        fileChecksum: pdfChecksum
       });
       setPdfResult(result);
       setPdfStep(3);
@@ -381,7 +395,7 @@ Banking Core Cloud Migration,FinSecure Bank SE,Markus Weber,markus.weber@insight
   };
 
   const statusLabel = (s: ImportRowStatus) => ({
-    NEW: t.impStatusNew, DUPLICATE: t.impStatusDuplicate, ERROR: t.impStatusError, WARNING: t.impStatusWarning
+    NEW: t.impStatusNew, DUPLICATE: t.impStatusDuplicate, ERROR: t.impStatusError, WARNING: t.impStatusWarning, SKIPPED: t.impStatusSkipped
   }[s]);
 
   const handleExecuteImport = async () => {
@@ -421,11 +435,6 @@ Banking Core Cloud Migration,FinSecure Bank SE,Markus Weber,markus.weber@insight
     }
   };
 
-  const handleDownloadExport = (format: 'csv' | 'json') => {
-    const url = `/api/export/time-entries?from=${exportFrom}&to=${exportTo}&format=${format}`;
-    window.location.href = url;
-  };
-
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -441,7 +450,7 @@ Banking Core Cloud Migration,FinSecure Bank SE,Markus Weber,markus.weber@insight
             </p>
           </div>
 
-          <button
+          {isAdmin && <button
             id="btn-trigger-factory-reset"
             type="button"
             onClick={() => setShowResetModal(true)}
@@ -449,7 +458,7 @@ Banking Core Cloud Migration,FinSecure Bank SE,Markus Weber,markus.weber@insight
           >
             <AlertTriangle className="w-3.5 h-3.5" />
             Datenbank auf Werkseinstellungen zurücksetzen
-          </button>
+          </button>}
         </div>
 
         {resetMessage && (
@@ -460,7 +469,7 @@ Banking Core Cloud Migration,FinSecure Bank SE,Markus Weber,markus.weber@insight
         )}
 
         {/* Active Mandant Info & Switcher */}
-        <div className="mt-4 p-3.5 bg-emerald-50/70 border border-emerald-200/80 rounded-xl flex flex-wrap items-center justify-between gap-3">
+        {isAdmin && <div className="mt-4 p-3.5 bg-emerald-50/70 border border-emerald-200/80 rounded-xl flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-lg bg-emerald-600 text-white flex items-center justify-center font-bold text-sm shadow-xs shrink-0">
               <Building2 className="w-5 h-5" />
@@ -496,11 +505,20 @@ Banking Core Cloud Migration,FinSecure Bank SE,Markus Weber,markus.weber@insight
               ))}
             </select>
           </div>
-        </div>
+        </div>}
       </div>
 
-      {/* Import-Quelle Tabs: CSV | PDF */}
-      <div className="bg-white rounded-2xl border border-slate-200/90 shadow-xs p-1.5 flex gap-1.5 w-fit">
+      {/* Bereiche: Import-Assistent | Clockify CSV | Clockify PDF | Export */}
+      <div className="bg-white rounded-2xl border border-slate-200/90 shadow-xs p-1.5 flex flex-wrap gap-1.5 w-fit">
+        {isAdmin && <>
+        <button
+          type="button"
+          id="tab-import-wizard"
+          onClick={() => setImportSource('wizard')}
+          className={`px-4 py-2 text-sm font-semibold rounded-xl transition-colors flex items-center gap-2 ${importSource === 'wizard' ? 'bg-emerald-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100'}`}
+        >
+          <Wand2 className="w-4 h-4" /> {t.tabImportWizard}
+        </button>
         <button
           type="button"
           onClick={() => setImportSource('csv')}
@@ -515,12 +533,25 @@ Banking Core Cloud Migration,FinSecure Bank SE,Markus Weber,markus.weber@insight
         >
           <FileText className="w-4 h-4" /> {t.pdfImportTab}
         </button>
+        </>}
+        <button
+          type="button"
+          id="tab-export"
+          onClick={() => setImportSource('export')}
+          className={`px-4 py-2 text-sm font-semibold rounded-xl transition-colors flex items-center gap-2 ${importSource === 'export' ? 'bg-emerald-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100'}`}
+        >
+          <Download className="w-4 h-4" /> {t.tabExport}
+        </button>
       </div>
 
-      {importSource === 'csv' && (
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        {/* Left Column: Clockify CSV Importer */}
-        <div className="lg:col-span-7 bg-white rounded-2xl border border-slate-200/90 shadow-xs p-6 space-y-4">
+      {importSource === 'wizard' && isAdmin && <ImportWizard onImported={loadBatches} />}
+
+      {importSource === 'export' && <ExportPanel showXlsxExports={canXlsxExport} showRawExport={isAdmin} />}
+
+      {importSource === 'csv' && isAdmin && (
+      <div className="grid grid-cols-1 gap-6">
+        {/* Clockify CSV Importer (Rohdatenexport befindet sich jetzt im Bereich „Export") */}
+        <div className="bg-white rounded-2xl border border-slate-200/90 shadow-xs p-6 space-y-4">
           <div className="flex items-center justify-between">
             <h3 className="font-bold text-sm text-slate-900 flex items-center gap-2">
               <UploadCloud className="w-4 h-4 text-emerald-600" />
@@ -775,71 +806,10 @@ Banking Core Cloud Migration,FinSecure Bank SE,Markus Weber,markus.weber@insight
           )}
         </div>
 
-        {/* Right Column: Manual Raw Data Export (Section 11) */}
-        <div className="lg:col-span-5 bg-white rounded-2xl border border-slate-200/90 shadow-xs p-6 space-y-4">
-          <h3 className="font-bold text-sm text-slate-900 flex items-center gap-2">
-            <Download className="w-4 h-4 text-emerald-600" />
-            {t.exportTitle}
-          </h3>
-          <p className="text-xs text-slate-500">
-            {t.exportSubtitle}
-          </p>
-
-          <div className="space-y-3 text-xs">
-            <div>
-              <label className="font-semibold text-slate-700 block mb-1">{t.fromDate}</label>
-              <input
-                id="input-export-from"
-                type="date"
-                value={exportFrom}
-                onChange={e => setExportFrom(e.target.value)}
-                className="w-full border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold"
-              />
-            </div>
-
-            <div>
-              <label className="font-semibold text-slate-700 block mb-1">{t.toDate}</label>
-              <input
-                id="input-export-to"
-                type="date"
-                value={exportTo}
-                onChange={e => setExportTo(e.target.value)}
-                className="w-full border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold"
-              />
-            </div>
-
-            <div className="pt-2 grid grid-cols-2 gap-2">
-              <button
-                id="btn-export-csv"
-                type="button"
-                onClick={() => handleDownloadExport('csv')}
-                className="bg-slate-900 hover:bg-slate-800 text-white font-semibold py-2.5 rounded-xl text-xs flex items-center justify-center gap-1.5 shadow-xs transition-colors"
-              >
-                <FileSpreadsheet className="w-4 h-4" />
-                {t.exportCsv}
-              </button>
-
-              <button
-                id="btn-export-json"
-                type="button"
-                onClick={() => handleDownloadExport('json')}
-                className="bg-slate-100 hover:bg-slate-200 text-slate-800 font-semibold py-2.5 rounded-xl text-xs flex items-center justify-center gap-1.5 transition-colors"
-              >
-                <FileText className="w-4 h-4" />
-                {t.exportJson}
-              </button>
-            </div>
-
-            <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 text-[11px] text-slate-500 space-y-1">
-              <div className="font-semibold text-slate-700">Audit / Export Format:</div>
-              <p>ID, Datum, Benutzer, Kunde, Projekt, Aufgabe, Beschreibung, Dauer, Abrechenbar, Stundensatz, Status.</p>
-            </div>
-          </div>
-        </div>
       </div>
       )}
 
-      {importSource === 'pdf' && (
+      {importSource === 'pdf' && isAdmin && (
       <div className="bg-white rounded-2xl border border-slate-200/90 shadow-xs p-6 space-y-5">
         <div className="flex items-center justify-between flex-wrap gap-3">
           <div>
@@ -1056,7 +1026,7 @@ Banking Core Cloud Migration,FinSecure Bank SE,Markus Weber,markus.weber@insight
       )}
 
       {/* Import-Historie mit „Rückgängig machen" (Datenimport Phase 1) */}
-      {batches !== null && (
+      {isAdmin && batches !== null && (
         <div id="import-history" className="bg-white rounded-2xl border border-slate-200/90 shadow-xs p-6 space-y-3">
           <div className="flex items-start justify-between gap-3 flex-wrap">
             <div>
@@ -1106,7 +1076,7 @@ Banking Core Cloud Migration,FinSecure Bank SE,Markus Weber,markus.weber@insight
                       <td className="py-2 pr-3">{b.createdByName || b.createdBy}</td>
                       <td className="py-2 pr-3">
                         <span className="font-bold text-emerald-600">{b.importedCount}</span>
-                        <span className="text-slate-400"> / {b.skippedCount} {t.impStatusDuplicate} / {b.errorCount} {t.impStatusError}</span>
+                        <span className="text-slate-400"> / {b.skippedCount} {t.impStatusSkippedOrDuplicate} / {b.errorCount} {t.impStatusError}</span>
                       </td>
                       <td className="py-2 pr-3 whitespace-nowrap">{b.dateFrom ? `${b.dateFrom}${b.dateTo && b.dateTo !== b.dateFrom ? ` – ${b.dateTo}` : ''}` : '—'}</td>
                       <td className="py-2 pr-3 whitespace-nowrap">
@@ -1116,6 +1086,8 @@ Banking Core Cloud Migration,FinSecure Bank SE,Markus Weber,markus.weber@insight
                           <span className="text-slate-500">{t.impUndoUntil.replace('{date}', new Date(b.undoDeadline).toLocaleString())}</span>
                         ) : b.undoBlockedReason === 'PERIOD_LOCKED' ? (
                           <span className="text-amber-600">{t.impUndoLocked}</span>
+                        ) : b.undoBlockedReason === 'NOT_SUPPORTED' ? (
+                          <span className="text-slate-400">{t.impUndoNotSupported}</span>
                         ) : (
                           <span className="text-slate-400">{t.impUndoExpired}</span>
                         )}

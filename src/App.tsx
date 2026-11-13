@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import { AppProvider, useApp } from './context/AppContext';
 import { Header } from './components/Header';
 import { NavigationSidebar, NavViewId } from './components/NavigationSidebar';
@@ -9,7 +9,7 @@ import { ApprovalsAuditView } from './components/ApprovalsAuditView';
 import { RateHierarchyView } from './components/RateHierarchyView';
 import { ProjectsClientsView } from './components/ProjectsClientsView';
 import { ForecastView } from './components/ForecastView';
-import { ExportView } from './components/ExportView';
+import { normalizeNavId } from './utils/navigation';
 import { ClockifyMigrationView } from './components/ClockifyMigrationView';
 import { ApiDocsView } from './components/ApiDocsView';
 import { OrganizationsManagementView } from './components/OrganizationsManagementView';
@@ -17,7 +17,9 @@ import { Server } from 'lucide-react';
 
 const MainLayout: React.FC = () => {
   const { timeEntries, projects, organization, currentUser } = useApp();
-  const [activeNav, setActiveNav] = useState<NavViewId>('timeTracker');
+  const [activeNav, setActiveNavRaw] = useState<NavViewId>(() => normalizeNavId('timeTracker'));
+  // Alte Navigationsziele (z. B. das entfernte Menü „Exporte") landen auf der kombinierten Seite.
+  const setActiveNav = useCallback((id: NavViewId | string) => setActiveNavRaw(normalizeNavId(id)), []);
 
   const isSuperAdmin = currentUser?.role === 'SUPERADMIN' || currentUser?.id === 'u-1';
   const isAdmin = isSuperAdmin || currentUser?.role === 'ADMIN';
@@ -57,8 +59,7 @@ const MainLayout: React.FC = () => {
             {activeNav === 'projectsClients' && (isAdmin || isPM) && <ProjectsClientsView />}
             {activeNav === 'ratesTeam' && isAdmin && <RateHierarchyView />}
             {activeNav === 'forecast' && (isAdmin || isPM) && <ForecastView />}
-            {activeNav === 'export' && (isAdmin || isPM) && isInternal && <ExportView />}
-            {activeNav === 'clockifyMigration' && isAdmin && <ClockifyMigrationView />}
+            {activeNav === 'clockifyMigration' && (isAdmin || (isPM && isInternal)) && <ClockifyMigrationView />}
             {activeNav === 'apiDocs' && isAdmin && <ApiDocsView />}
             {activeNav === 'organizations' && isSuperAdmin && <OrganizationsManagementView />}
           </div>

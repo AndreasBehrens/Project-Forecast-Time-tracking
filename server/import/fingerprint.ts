@@ -56,15 +56,17 @@ export function fingerprintOfWorkingTime(e: { userId: string; date: string; star
 
 export const IMPORT_UNDO_WINDOW_DAYS = 5;
 
-export type UndoDenyReason = 'ALREADY_REVERTED' | 'EXPIRED' | 'PERIOD_LOCKED';
+export type UndoDenyReason = 'ALREADY_REVERTED' | 'EXPIRED' | 'PERIOD_LOCKED' | 'NOT_SUPPORTED';
 
 export function canUndoImportBatch(
-  batch: { createdAt: string; revertedAt?: string },
+  batch: { createdAt: string; revertedAt?: string; target?: string },
   entryDates: string[],
   isPeriodLocked: (date: string) => boolean,
   now: Date = new Date()
 ): { allowed: true } | { allowed: false; reason: UndoDenyReason; lockedDates?: string[] } {
   if (batch.revertedAt) return { allowed: false, reason: 'ALREADY_REVERTED' };
+  // Stammdaten-Importe (Mitarbeitende) werden nicht automatisch zurückgenommen – Personen ggf. manuell deaktivieren.
+  if (batch.target === 'MASTER_DATA') return { allowed: false, reason: 'NOT_SUPPORTED' };
   const ageMs = now.getTime() - new Date(batch.createdAt).getTime();
   if (!(ageMs <= IMPORT_UNDO_WINDOW_DAYS * 24 * 60 * 60 * 1000)) return { allowed: false, reason: 'EXPIRED' };
   const lockedDates = [...new Set(entryDates.filter(d => isPeriodLocked(d)))];

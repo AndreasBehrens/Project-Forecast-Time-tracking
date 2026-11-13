@@ -1,6 +1,6 @@
 # Konzept: Allgemeiner Datenimport aus unterschiedlichen Quellen
 
-Stand: 13.11.2026 · Status: abgestimmt (Entscheidungen siehe 12), Phase 1 umgesetzt · Bereich: Menüpunkt „Import & Export“
+Stand: 13.11.2026 · Status: abgestimmt (Entscheidungen siehe 12), Phasen 0–4 umgesetzt (Rest siehe 11) · Bereich: Menüpunkt „Import & Export“
 
 ---
 
@@ -245,7 +245,9 @@ Der Menüpunkt heißt **„Import & Export“** (umgesetzt, siehe 11). Im Import
 5. **Vorschau und Prüfung:** Tabelle mit Status-Filter (OK / Warnung / Duplikat / Fehler), Summen pro Person und Monat, Option „Duplikate überspringen“. Der Freigabestatus ist fest „zur Freigabe“ (siehe 7).
 6. **Import ausführen und Bericht anzeigen**, mit Download des Fehlerprotokolls als CSV.
 
-Ergänzend gibt es eine **Import-Historie**: Liste aller Batches mit Details und der Schaltfläche „Rückgängig machen“. Der Export-Bereich (rechte Spalte) bleibt unverändert. Alle Texte laufen über `translations.ts` (DE/EN).
+Ergänzend gibt es eine **Import-Historie**: Liste aller Batches mit Details und der Schaltfläche „Rückgängig machen“. Alle Texte laufen über `translations.ts` (DE/EN).
+
+**Export:** Der frühere eigene Menüpunkt „Exporte“ ist in „Import & Export“ aufgegangen (Tab „Export“, siehe 11). Es gibt nur noch einen Menüpunkt zum Thema Export.
 
 ---
 
@@ -253,17 +255,19 @@ Ergänzend gibt es eine **Import-Historie**: Liste aller Batches mit Details und
 
 | Methode | Pfad | Zweck |
 |---|---|---|
-| GET | `/api/import/sources` | Verfügbare Adapter und gespeicherte Profile |
-| POST | `/api/import/preview` | Multipart: Datei + `sourceId` + `target` + optional Zuordnungen → Probelauf-Ergebnis mit `previewId` (befristet zwischengespeichert, z. B. 30 Min.) |
-| PUT | `/api/import/preview/:previewId` | Zuordnungen ändern → neu prüfen |
-| POST | `/api/import/preview/:previewId/commit` | Import ausführen → Batch |
+| GET | `/api/import/sources` | Verfügbare Adapter und gespeicherte Profile *(nicht umgesetzt – ersetzt durch `GET /api/import/schemas`)* |
+| POST | `/api/import/preview` | *(nicht umgesetzt – ersetzt durch `parse` → `dry-run` → `execute`; die Zeilen werden vom Assistenten erneut gesendet, es gibt keinen serverseitigen Zwischenspeicher)* |
 | GET | `/api/import/batches` | Import-Historie |
 | DELETE | `/api/import/batches/:id` | Batch rückgängig machen (nur ≤ 5 Tage, kein gesperrter Zeitraum; sonst 409 mit Grund) |
 | POST | `/api/import/dry-run` | Probelauf mit Status je Zeile (`NEW`/`DUPLICATE`/`ERROR`/`WARNING`), schreibt nichts. Body: `{ rows }` oder `{ csv, schema }` |
 | POST | `/api/import/execute` | Import mit beliebigem (geprüftem) Schema ausführen → Batch |
 | POST | `/api/import/schemas` | Schema-Datei hochladen, prüfen und mandantenbezogen speichern |
 | POST | `/api/import/schemas/validate` | Schema-Datei nur prüfen (JSON Schema + fachliche Regeln) |
-| POST | `/api/import/schemas/derive` | Schema-Entwurf aus Musterdatei (CSV) ableiten |
+| POST | `/api/import/schemas/derive` | Schema-Entwurf aus Musterdatei (CSV oder XLSX) ableiten |
+| POST | `/api/import/parse` | Multipart: Datei (CSV/XLSX) + optional `delimiter`, `sheet` → Kopfzeile, Zeilen, SHA-256, erkanntes Schema, Spaltenzuordnung je Schema, Hinweis „Datei bereits importiert“ |
+| DELETE | `/api/import/schemas/:id` | Mandanten-Schema löschen |
+| POST | `/api/import/master-data` | Stammdaten-Abgleich: Mitarbeitende/Projekte/Kunden je Quellwert (exakt, per Alias, unbekannt) |
+| GET/DELETE | `/api/import/aliases` | Gemerkte Zuordnungen anzeigen bzw. löschen (`?kind=user|project|client&ref=`) |
 | GET | `/api/import/schemas` | Schemas des Mandanten und eingebaute Schemas |
 | GET | `/api/import/schemas/:id/download` | Schema-Datei herunterladen |
 | GET | `/api/import/schemas/template` | Vorlage herunterladen; `?format=jsonschema` liefert das JSON Schema |
@@ -303,10 +307,10 @@ Aufwand als grobe Größenordnung: S = bis 1 Tag, M = 2–4 Tage, L = 1–2 Woch
 |---|---|---|
 | **0 – Sofort** (erledigt) | Menüpunkt „Import & Export“, allgemeine Texte im CSV-Bereich (DE/EN) | S |
 | **1 – Fundament** (umgesetzt) | Kanonisches Format, Normalisierer, **stille Ersatzwerte entfernt**, Schema-Dateien (Prüfung, Anwenden, Entwurf aus Musterdatei, Vorlage, eingebautes Schema „Clockify CSV“), Probelauf, einheitlicher Fingerabdruck für CSV und PDF, Freigabestatus „zur Freigabe“, Anlegen von Mitarbeitenden nur durch Superadmins, **Batch und Rückgängig (5 Tage) teilweise** inkl. Import-Historie; Tests | M |
-| **2 – Assistent + Abwesenheiten** | Neue Oberfläche Schritte 1–6, Stammdaten-Zuordnung mit Aliasen, Schema-Verwaltung pro Mandant (`import_schemas`), **Abwesenheiten aus HR-Systemen** (Ziel `ABSENCE`, technisch in der Pipeline bereits vorhanden) | M–L |
-| **3 – Allgemeiner Import** | CSV/Excel (XLSX) mit freier Spaltenzuordnung, Schemas als Profile mit automatischer Erkennung | M |
-| **4 – Nachvollziehbarkeit** | Audit-Eintrag „IMPORT“ pro Batch in der Hash-Kette, SHA-256 der Datei, Fehlerprotokoll als CSV | S–M |
-| **5 – Weitere Quellen** | Toggl, Harvest, Tempo, je nach Bedarf | je S–M |
+| **2 – Assistent + Abwesenheiten** (umgesetzt) | Neue Oberfläche Schritte 1–6, Stammdaten-Zuordnung mit Aliasen, Schema-Verwaltung pro Mandant (`import_schemas`), **Abwesenheiten aus HR-Systemen** (Ziel `ABSENCE`, technisch in der Pipeline bereits vorhanden) | M–L |
+| **3 – Allgemeiner Import** (umgesetzt) | CSV/Excel (XLSX) mit freier Spaltenzuordnung, Schemas als Profile mit automatischer Erkennung | M |
+| **4 – Nachvollziehbarkeit** (umgesetzt, ohne Fehlerprotokoll-CSV) | Audit-Eintrag „IMPORT“ pro Batch in der Hash-Kette, SHA-256 der Datei, Fehlerprotokoll als CSV | S–M |
+| **5 – Weitere Quellen** (offen) | Toggl, Harvest, Tempo, je nach Bedarf | je S–M |
 
 Jede Phase wird gemäß Arbeitsweise auf dem Branch `test` entwickelt, nach GitHub gepusht und automatisch auf die Testumgebung deployt.
 
@@ -333,7 +337,40 @@ Jede Phase wird gemäß Arbeitsweise auf dem Branch `test` entwickelt, nach GitH
 - **Import-Batches**: `importBatchId`, `fingerprint` und `sourceRef` an jedem Eintrag; Historie `GET /api/import/batches`, Rückgängig `DELETE /api/import/batches/:id` (≤ 5 Tage, kein gesperrter Zeitraum); Tabelle „Import-Historie“ mit „Rückgängig machen“.
 - Importendpunkte sind auf Admins und Superadmins beschränkt.
 
-**Noch offen aus Phase 1** (bewusst verschoben): mandantenbezogenes Speichern von Schemas (`POST /api/import/schemas`, `GET /api/import/schemas`, `GET /api/import/schemas/:id/download`) – benötigt eine neue Tabelle mit Migration und wird zusammen mit der Schema-Verwaltung in Phase 2 umgesetzt; Audit-Eintrag „IMPORT“ pro Batch und SHA-256 der Datei (Phase 4); serverseitiges Parsen auch der CSV-Datei in der bestehenden Oberfläche (die Oberfläche schickt weiterhin Zeilen, der Server prüft sie über das Clockify-Schema).
+**Noch offen aus Phase 1** (bewusst verschoben, inzwischen in Phase 2–4 erledigt bis auf das serverseitige Parsen in der bestehenden CSV-Oberfläche): mandantenbezogenes Speichern von Schemas (`POST /api/import/schemas`, `GET /api/import/schemas`, `GET /api/import/schemas/:id/download`) – benötigt eine neue Tabelle mit Migration und wird zusammen mit der Schema-Verwaltung in Phase 2 umgesetzt; Audit-Eintrag „IMPORT“ pro Batch und SHA-256 der Datei (Phase 4); serverseitiges Parsen auch der CSV-Datei in der bestehenden Oberfläche (die Oberfläche schickt weiterhin Zeilen, der Server prüft sie über das Clockify-Schema).
+
+
+#### Phasen 2–4 (Assistent, Abwesenheiten, allgemeiner Import, Nachvollziehbarkeit)
+
+- **Import-Assistent** (`src/components/ImportWizard.tsx`, Tab „Import-Assistent“, nur Admins/Superadmins) mit sieben Schritten: Quelle → Datei → Spalten → Stammdaten → Probelauf → Ausführen → Bericht. Die bisherigen Tabs „CSV-Import (Clockify)“ und „PDF-Import (Clockify)“ bleiben unverändert erhalten.
+- **Quelle wählen:** Kacheln für die eingebauten Schemas (Clockify CSV, HR-Abwesenheiten, Mitarbeitende – letzteres nur für Superadmins sichtbar), für gespeicherte Mandanten-Schemas, „Automatisch erkennen“ und „Schema-Datei hochladen“ (JSON). Schemas lassen sich herunterladen und (Mandanten-Schemas) löschen.
+- **Datei einlesen auf dem Server** (`server/import/fileParser.ts`, `POST /api/import/parse`): CSV (UTF-8, automatischer Rückfall auf Latin-1, Trennzeichen-Erkennung) und **XLSX** (über das bereits vorhandene Paket `exceljs`, Auswahl des Tabellenblatts, Datums-/Uhrzeitzellen werden in Text umgewandelt). Höchstens 20 000 Zeilen, 10 MB.
+- **Automatische Schema-Erkennung** über die Spaltenköpfe: zuerst exakter Fingerabdruck gespeicherter Schemas, sonst das Schema, dessen Pflichtspalten vorhanden sind und das die meisten Spalten zuordnet.
+- **Spaltenzuordnung** mit Editor (kanonisches Feld ↔ Spalte mit Beispielwert, Importziel, Datumsformat), Schema speichern bzw. herunterladen.
+- **Schema-Verwaltung pro Mandant:** Tabelle `import_schemas` (`seq` + `data JSONB`, Migration `prisma/migrations/1_import_schemas`). Weil das Deployment keine Prisma-Migrationen ausführt, legt der Server die Tabelle beim Start zusätzlich mit `CREATE TABLE IF NOT EXISTS` an. Speichern mit gleicher ID erzeugt eine neue Version; bis zu 20 Vorversionen werden mitgespeichert. Endpunkte `GET/POST /api/import/schemas`, `GET /api/import/schemas/:id/download`, `DELETE /api/import/schemas/:id`.
+- **Stammdaten-Zuordnung mit Aliasen:** `POST /api/import/master-data` zeigt je Quellwert, ob Mitarbeitende/Projekte/Kunden exakt, per Alias oder gar nicht gefunden wurden. Im Assistenten wählbar: vorhandener Datensatz, „neu anlegen“ oder „Zeilen überspringen“ (Status `SKIPPED`). Mit „Zuordnungen merken“ werden sie als Aliase am Mandanten gespeichert und beim nächsten Import automatisch angewendet; Aliase lassen sich in der Quellenauswahl einsehen und löschen.
+- **HR-Abwesenheiten** (eingebautes Schema `builtin-hr-absences`, Ziel `ABSENCE`): Von-/Bis-Zeiträume werden auf Arbeitstage (ohne Wochenenden und Feiertage des Bundeslands) aufgeteilt, halbe Tage werden unterstützt, Tagesarten Urlaub, Krankheit, Sonderurlaub, Elternzeit. Bis vor Von, halbe Tage über Zeiträume und Zeiträume über ein Jahr sind Zeilenfehler.
+- **Mitarbeitenden-Import** (eingebautes Schema `builtin-employees`, Ziel `MASTER_DATA`): nur Superadmins (Server antwortet sonst mit 403); Personen werden mit Status `INVITED` und ohne Platzhalter-E-Mail angelegt, vorhandene Personen werden als Duplikat erkannt.
+- **Audit-Eintrag pro Batch:** `IMPORT` beim Ausführen (CSV, PDF, Assistent) und `REVERT_IMPORT` beim Rückgängigmachen, Entitätstyp `IMPORT_BATCH`, in der bestehenden Hash-Kette.
+- **SHA-256 der Datei** am Batch und im Audit-Eintrag; wurde dieselbe Datei bereits importiert (und nicht rückgängig gemacht), zeigen Einlesen und Probelauf einen Hinweis.
+
+#### Menü „Exporte“ in „Import & Export“ integriert
+
+- Der eigene Menüpunkt „Exporte“ (Desktop und mobil) und die Komponente `ExportView.tsx` sind entfernt. Alle Funktionen liegen jetzt im Tab **„Export“** der Seite „Import & Export“ (`src/components/ExportPanel.tsx`): Abrechnungs-Export (XLSX) und Stundennachweis (XLSX) sowie der Rohdaten-Export (CSV/JSON), der bisher in der rechten Spalte des CSV-Tabs lag.
+- Rollen wie bisher: Die Seite sehen Admins sowie **interne Projektleitende**. Imports, Import-Historie, Werksreset und Mandantenwechsel bleiben Admins vorbehalten; XLSX-Exporte für Admins und Projektleitende (jeweils intern); der Rohdaten-Export nur für Admins. Projektleitende landen direkt im Tab „Export“.
+- Alte Navigationsziele („export“) werden auf „Import & Export“ umgeleitet (`src/utils/navigation.ts`).
+
+#### Bewusst verschoben
+
+- **Weitere Quellen** (Toggl, Harvest, Tempo) und API-Anbindungen bzw. zeitgesteuerte Importe – Phase 5, Bedarf und Reihenfolge noch offen (siehe 12).
+- **Fehlerprotokoll als CSV-Download**, **Status-Filter** und **Summen pro Person und Monat** in der Vorschau – der Probelauf zeigt Zähler und alle Zeilen mit Meldungen; die Ergänzung ist klein, wurde aber zugunsten der Kernfunktionen zurückgestellt.
+- **Manuelle Wahl der Zeichenkodierung** in der Oberfläche – derzeit automatisch (UTF-8, sonst Latin-1).
+- **Automatisches Rückgängigmachen von Mitarbeitenden-Importen** – angelegte Personen können bereits Buchungen oder Logins haben; die Historie zeigt dafür „nicht unterstützt“, Personen werden bei Bedarf in der Benutzerverwaltung bearbeitet.
+- **Archivierung der Originaldatei** (GoBD-Volltext) – gespeichert wird nur die SHA-256-Prüfsumme an Batch und Audit-Eintrag; eine Dateiablage braucht Speicherplatz- und Aufbewahrungsregeln.
+- **Wiederherstellen alter Schema-Versionen** in der Oberfläche – Vorversionen werden gespeichert, aber noch nicht angezeigt.
+- **Eigene Tabellen `import_aliases`/`import_batches`** – Aliase und Batches liegen weiterhin im JSONB-Datensatz der Organisation; bei der aktuellen Datenmenge reicht das.
+- **Adapter-Struktur `server/import/adapters/`** und Umleitung der alten Endpunkte `/api/clockify/import` und `/api/import/clockify-pdf/*` – die alten Endpunkte bleiben bestehen, damit die Clockify-Abläufe unverändert funktionieren.
+- **Formale Migrationsausführung im Deployment** – die Tabelle `import_schemas` wird zur Laufzeit angelegt (siehe oben).
 
 ---
 
