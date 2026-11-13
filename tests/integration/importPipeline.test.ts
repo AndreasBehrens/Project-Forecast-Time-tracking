@@ -70,7 +70,7 @@ describe('Datenimport Phase 1: Probelauf, Ausführung, Batch, Rückgängig', () 
     const dry = await authenticated('post', '/api/import/dry-run').send({ rows });
     expect(dry.body.wouldCreate.users).toContain('Neue Person');
 
-    const res = await authenticated('post', '/api/clockify/import').send({ rows, fileName: 'test.csv' });
+    const res = await authenticated('post', '/api/import/execute').send({ schemaId: 'builtin-clockify-csv', rows, fileName: 'test.csv' });
     expect(res.status).toBe(200);
     expect(res.body.importedEntries).toBe(2);
     expect(res.body.skippedDuplicates).toBe(1);
@@ -101,7 +101,7 @@ describe('Datenimport Phase 1: Probelauf, Ausführung, Batch, Rückgängig', () 
   });
 
   it('nach 5 Tagen ist kein Rückgängigmachen mehr möglich', async () => {
-    const res = await authenticated('post', '/api/clockify/import').send({ rows: [row('Dr. Andreas Behrens', 'andreas.behrens@insightarcs.de', daysAgo(4), '06:10', '06:40', '0,5')] });
+    const res = await authenticated('post', '/api/import/execute').send({ schemaId: 'builtin-clockify-csv', rows: [row('Dr. Andreas Behrens', 'andreas.behrens@insightarcs.de', daysAgo(4), '06:10', '06:40', '0,5')] });
     expect(res.body.importedEntries).toBe(1);
     const entry = storage.getTimeEntries({ limit: 100000 } as any, 'u-1').data.find((e: any) => e.importBatchId === res.body.batchId);
     expect(entry?.approvalStatus).toBe('SUBMITTED');

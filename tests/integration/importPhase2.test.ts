@@ -143,6 +143,31 @@ describe('Datenimport Phase 2: Datei einlesen und Prüfsumme', () => {
     expect(third.body.fileAlreadyImported).toBeNull();
   });
 
+  it('Clockify-CSV läuft vollständig über den Assistenten (ersetzt den früheren CSV-Tab)', async () => {
+    const day = isoDaysAgo(3);
+    const csv = 'Project,Client,User,Email,Task,Description,Start Date,Start Time,End Date,End Time,Duration (h),Duration (decimal),Billable\n'
+      + `Assistent Clockify Test,Assistent Kunde,Dr. Andreas Behrens,andreas.behrens@insightarcs.de,Analyse,Wizard-Test,${day},07:00,${day},08:30,01:30,1.50,Yes\n`;
+    const parse = await authenticated('post', '/api/import/parse').attach('file', Buffer.from(csv, 'utf-8'), 'clockify.csv');
+    expect(parse.status).toBe(200);
+    expect(parse.body.detection).toMatchObject({ schemaId: 'builtin-clockify-csv' });
+
+    const dry = await authenticated('post', '/api/import/dry-run').send({ schemaId: 'builtin-clockify-csv', rows: parse.body.rows, fileChecksum: parse.body.checksum });
+    expect(dry.status).toBe(200);
+    expect(dry.body.counts.ERROR).toBe(0);
+    expect(dry.body.counts.NEW + dry.body.counts.WARNING).toBe(1);
+
+    const exec = await authenticated('post', '/api/import/execute').send({
+      schemaId: 'builtin-clockify-csv', rows: parse.body.rows, lineNumbers: parse.body.lineNumbers,
+      fileChecksum: parse.body.checksum, fileName: 'clockify.csv',
+    });
+    expect(exec.status).toBe(200);
+    const entry = storage.getTimeEntries({ limit: 100000 } as any, 'u-1').data.find((e: any) => e.importBatchId === exec.body.batchId);
+    expect(entry?.approvalStatus).toBe('SUBMITTED');
+    const batches = await authenticated('get', '/api/import/batches');
+    expect(batches.body.find((b: any) => b.id === exec.body.batchId)).toMatchObject({ canUndo: true, fileName: 'clockify.csv' });
+    expect((await authenticated('delete', `/api/import/batches/${exec.body.batchId}`)).status).toBe(200);
+  });
+
   it('meldet fehlende Datei mit 400', async () => {
     expect((await authenticated('post', '/api/import/parse')).status).toBe(400);
   });

@@ -1323,18 +1323,6 @@ export async function createApp(options: CreateAppOptions = {}): Promise<express
     res.json(summary);
   });
 
-  // Clockify CSV Import (Section 10)
-  app.post('/api/clockify/import', (req, res) => {
-    const actorId = resolveImportActor(req, res);
-    if (!actorId) return;
-    const { rows, fileName } = req.body;
-    if (!Array.isArray(rows) || rows.length === 0) {
-      return res.status(400).json({ error: 'Rows array is required' });
-    }
-    const report = storage.importClockifyData(rows, actorId, { fileName: typeof fileName === 'string' ? fileName : undefined });
-    res.json(report);
-  });
-
   // CSV & Excel Raw Data Export (Section 11)
   app.get('/api/export/time-entries', (req, res) => {
     const { from, to, format } = req.query as any;
